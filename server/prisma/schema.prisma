@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  permissions RolePermission[]
+}
+
+model User {
+  id                   Int                  @id @default(autoincrement())
+  username             String               @unique @db.VarChar(50)
+  email                String               @unique @db.VarChar(100)
+  password             String               @db.VarChar(255)
+  firstName            String               @db.VarChar(50)
+  lastName             String               @db.VarChar(50)
+  isActive             Boolean              @default(true)
+  lastLogin            DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  img                  String?              @db.VarChar(255)
+  amount               Int?
+  amounts             Decimal?             @default(0.00) @db.Decimal(15, 2)
+  roleId               Int
+  role                 Role                 @relation(fields: [roleId], references: [id])
+  sessions             UserSession[]
+  resetTokens          PasswordResetToken[]
+  activityLogs         UserActivityLog[]
+  smtpDetails          SmtpDetails?         @relation("UserToSmtpDetails")
+  contestParticipants  ContestParticipant[]
+  walletTransactions   WalletTransaction[]
+  contestWinners       ContestWinner[]
+  referralsMade        Referral[]           @relation("Referrer")
+  referralsReceived    Referral[]           @relation("Referred")
+}
+
+model Permission {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+}
+
+model UserSession {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  sessionToken String   @unique @db.VarChar(255)
+  ipAddress    String?  @db.VarChar(45)
+  userAgent    String?  @db.Text
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model UserActivityLog {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  activityType String   @db.VarChar(50)
+  description  String?  @db.Text
+  ipAddress    String?  @db.VarChar(45)
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  token      String   @unique @db.VarChar(255)
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model SmtpDetails {
+  id         Int        @id @default(autoincrement())
+  host       String
+  port       Int
+  username   String
+  password   String
+  encryption Encryption
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  userId     Int        @unique
+  user       User       @relation("UserToSmtpDetails", fields: [userId], references: [id])
+}
+
+enum Encryption {
+  TLS
+  SSL
+  NONE
+}
+
+// Contest model for trading contests
+model Contest {
+  id                  Int                  @id @default(autoincrement())
+  name                String               @db.VarChar(255)
+  start_time          DateTime
+  end_time            DateTime
+  maxTrade            Decimal?
+  entry_fee           Decimal              @db.Decimal(10, 2) @default(50.00)
+  status              ContestStatus        @default(upcoming)
+  trading_instrument  TradingInstrument    @default(BOTH)
+  created_at          DateTime             @default(now())
+  updated_at          DateTime             @updatedAt
+
+  contestParticipants ContestParticipant[]
+  contestWinners      ContestWinner[]
+}
+
+// Participants in each contest
+model ContestParticipant {
+  id              Int       @id @default(autoincrement())
+  user_id         Int
+  contest_id      Int
+  virtual_cash    Decimal   @db.Decimal(15, 2) @default(100000.00)
+  joined_at       DateTime  @default(now())
+
+  user            User      @relation(fields: [user_id], references: [id])
+  contest         Contest   @relation(fields: [contest_id], references: [id])
+  positions       Position[]
+  trades          Trade[]
+
+  @@unique([user_id, contest_id])
+}
+
+// Option market data
+model Option {
+  id           Int        @id @default(autoincrement())
+  symbol       Symbol
+  expiry_date  DateTime
+  strike_price Decimal    @db.Decimal(10, 2)
+  option_type  OptionType
+  ltp          Decimal    @db.Decimal(10, 2)
+  lot_size     Int
+  updated_at   DateTime   @updatedAt
+
+  positions    Position[]
+  trades       Trade[]
+}
+
+// Open positions held by participants
+model Position {
+  id                       Int                  @id @default(autoincrement())
+  contest_participant_id   Int
+  option_id                Int
+  net_quantity             Int
+  average_entry_price      Decimal              @db.Decimal(10, 2)
+  created_at               DateTime             @default(now())
+  updated_at               DateTime             @updatedAt
+
+  contestParticipant       ContestParticipant   @relation(fields: [contest_participant_id], references: [id])
+  option                   Option               @relation(fields: [option_id], references: [id])
+
+  @@unique([contest_participant_id, option_id])
+}
+
+// Trade history per participant
+model Trade {
+  id                     Int                  @id @default(autoincrement())
+  contest_participant_id Int
+  option_id              Int
+  action                 Action
+  quantity               Int
+  price                  Decimal              @db.Decimal(10, 2)
+  timestamp              DateTime             @default(now())
+  contestParticipant     ContestParticipant   @relation(fields: [contest_participant_id], references: [id])
+  option                 Option               @relation(fields: [option_id], references: [id])
+}
+
+// Deposits and withdrawals
+model WalletTransaction {
+  id           Int                 @id @default(autoincrement())
+  user_id      Int
+  amount       Decimal             @db.Decimal(15, 2)
+  type         TransactionType
+  status       TransactionStatus
+  created_at   DateTime            @default(now())
+  updated_at   DateTime            @updatedAt
+
+  user         User                @relation(fields: [user_id], references: [id])
+}
+
+// Winners and prizes
+model ContestWinner {
+  id           Int      @id @default(autoincrement())
+  contest_id   Int
+  user_id      Int
+  rank         Int
+  prize        Decimal  @db.Decimal(15, 2)
+  created_at   DateTime @default(now())
+
+  contest      Contest  @relation(fields: [contest_id], references: [id])
+  user         User     @relation(fields: [user_id], references: [id])
+}
+
+// Referral tracking
+model Referral {
+  id            Int      @id @default(autoincrement())
+  referrer_id   Int
+  referred_id   Int
+  reward_amount Decimal  @db.Decimal(15, 2) @default(0.00)
+  created_at    DateTime @default(now())
+
+  referrer      User     @relation("Referrer", fields: [referrer_id], references: [id])
+  referred      User     @relation("Referred", fields: [referred_id], references: [id])
+
+  @@unique([referrer_id, referred_id])
+}
+
+// Enums
+
+enum ContestStatus {
+  upcoming
+  ongoing
+  ended
+}
+
+enum TradingInstrument {
+  NIFTY50
+  BANKNIFTY
+  BOTH
+}
+
+enum Symbol {
+  NIFTY50
+  BANKNIFTY
+}
+
+enum OptionType {
+  CE
+  PE
+}
+
+enum Action {
+  buy
+  sell
+}
+
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  DEBIT
+}
+
+enum TransactionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
