@@ -106,21 +106,21 @@ router.get("/option-chain-stream", async (req, res) => {
         }
 
         // Save to file
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const filePath = path.join(__dirname, "data", `nifty_options_data_${timestamp}.json`);
-        const dataDir = path.join(__dirname, "data");
-        if (!fs.existsSync(dataDir)) {
-          fs.mkdirSync(dataDir, { recursive: true });
-        }
-        fs.writeFileSync(filePath, JSON.stringify(optionData, null, 2));
-        console.log(`✅ Data successfully saved to ${filePath}`);
+        // const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        // const filePath = path.join(__dirname, "data", `nifty_options_data_${timestamp}.json`);
+        // const dataDir = path.join(__dirname, "data");
+        // if (!fs.existsSync(dataDir)) {
+        //   fs.mkdirSync(dataDir, { recursive: true });
+        // }
+        // fs.writeFileSync(filePath, JSON.stringify(optionData, null, 2));
+        // console.log(`✅ Data successfully saved to ${filePath}`);
 
         // Send data to client
         res.write(
           `data: ${JSON.stringify({
             success: true,
             data: optionData,
-            message: `Option chain data fetched and saved to ${filePath}`,
+            // message: `Option chain data fetched and saved to ${filePath}`,
           })}\n\n`
         );
       } catch (error) {

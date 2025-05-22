@@ -19,6 +19,7 @@ import OptionChart from "@/component/admin/option/OptionChart";
 import ActiveContest from "@/component/admin/contest/ActiveContest";
 import Wallet from "@/component/admin/wallet/Wallet";
 import MyContest from "@/component/admin/contest/MyContest";
+import OptionDetails from "@/component/admin/option/OptionDetails";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -117,6 +118,10 @@ export const createAppRouter = (isAuthenticated) =>
         {
           path:"option-chain",
           element:<OptionChart/>
+        },
+         {
+          path:"option-details/:optionId",
+          element:<OptionDetails/>
         },
         {
           path:"admin",
