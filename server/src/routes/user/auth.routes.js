@@ -151,14 +151,14 @@ router.post('/login', [
     // console.error('Login error:', error);
 
     // Log system error
-    await prisma.userActivityLog.create({
-      data: {
-        userId: user?.id || null,
-        activityType: 'LOGIN_SYSTEM_ERROR',
-        description: 'Login system error',
-        ipAddress: req.ip
-      }
-    });
+    // await prisma.userActivityLog.create({
+    //   data: {
+    //     userId: user?.id || null,
+    //     activityType: 'LOGIN_SYSTEM_ERROR',
+    //     description: 'Login system error',
+    //     ipAddress: req.ip
+    //   }
+    // });
 
     res.status(500).json({
       error: 'Login failed',

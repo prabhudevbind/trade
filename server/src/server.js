@@ -1,7 +1,14 @@
 const express = require('express');
 const cors = require('cors');
+const UpstoxClient = require("upstox-js-sdk");
+const WebSocket = require("ws");
+const path = require('path');
+const protobuf = require("protobufjs");
 
+const fs = require('fs');
 const { errorHandler } = require('./middleware/error.middleware');
+
+const { router: optionDetailsRouter, updateMarketDataCache } = require('./routes/contest/optionDetails.router');
 
 
 const app = express();
@@ -12,6 +19,8 @@ app.use(express.json());
 
 app.use('/api/v1',require("./routes/chart/niftychart.router"));
 app.use('/api/v1',require('./routes/contest/payment.routes'));
+// Add the option details routes
+app.use('/api/v1', optionDetailsRouter);
 // Routes
 // const { authenticateToken } = require('./utils/verify');
 app.use('/api/v1/roles',  require('./routes/user/userRole.routes'));

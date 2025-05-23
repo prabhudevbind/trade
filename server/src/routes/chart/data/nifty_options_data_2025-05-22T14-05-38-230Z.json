@@ -89,7 +89,7 @@
     "instrument_type": "PE",
     "freeze_quantity": 600,
     "underlying_key": "NSE_INDEX|Nifty Bank",
-    "underlying_type": "INDEX", 
+    "underlying_type": "INDEX",
     "underlying_symbol": "BANKNIFTY",
     "strike_price": 42900,
     "minimum_lot": 30

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Calendar, BarChart3 } from "lucide-react";
+import { Calendar, BarChart3, TrendingUp, TrendingDown, Activity } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -11,15 +11,19 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useNavigate } from "react-router-dom";
-import { useGetOptionsQuery } from "@/store/api/options.api";// Import the RTK Query hook
+import { useGetOptionsQuery } from "@/store/api/options.api";
 
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty Bank");
   const [selectedExpiry, setSelectedExpiry] = useState("2025-05-29");
-  const [optionChainRows, setOptionChainRows] = useState([]);
+  const [optionChainData, setOptionChainData] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null);
   const navigate = useNavigate();
 
   // Fetch initial option chain data using RTK Query
@@ -28,108 +32,141 @@ const OptionChain = () => {
     instrument_key: selectedIndex,
   });
 
-  // Process data into rows for the option chain
-  const processOptionData = (optionData) => {
-    if (!optionData?.success || !optionData?.data?.length) {
-      setError(optionData?.message || "No option chain data available");
+  // Process data from the new API structure
+  const processOptionData = (apiResponse) => {
+    if (!apiResponse?.success || !apiResponse?.option_chain?.length) {
+      setError(apiResponse?.message || "No option chain data available");
       setIsLoading(false);
       return;
     }
 
-    const strikePrices = [...new Set(optionData.data.map((option) => option.strike_price))].sort(
-      (a, b) => a - b
-    );
-
-    const rows = strikePrices.map((strikePrice) => {
-      const callOption = optionData.data.find(
-        (option) => option.strike_price === strikePrice && option.instrument_type === "CE"
-      );
-      const putOption = optionData.data.find(
-        (option) => option.strike_price === strikePrice && option.instrument_type === "PE"
-      );
-
-      return {
-        strikePrice,
-        call: callOption || null,
-        put: putOption || null,
-        callOI: Math.floor(Math.random() * 100000), // Placeholder; replace with actual OI if available
-        callPrice: callOption ? Number.parseFloat((Math.random() * 1000).toFixed(2)) : 0,
-        callChange: Number.parseFloat((Math.random() * 100 - 50).toFixed(2)),
-        callChangePercent: Number.parseFloat((Math.random() * 20 - 10).toFixed(2)),
-        putOI: Math.floor(Math.random() * 100000),
-        putPrice: putOption ? Number.parseFloat((Math.random() * 1000).toFixed(2)) : 0,
-        putChange: Number.parseFloat((Math.random() * 100 - 50).toFixed(2)),
-        putChangePercent: Number.parseFloat((Math.random() * 20 - 10).toFixed(2)),
-      };
-    });
-
-    setOptionChainRows(rows);
+    setOptionChainData(apiResponse);
     setIsLoading(false);
     setError(null);
+    setLastUpdated(new Date(apiResponse.timestamp));
   };
 
   // Handle initial data from RTK Query
   useEffect(() => {
     if (queryLoading) {
       setIsLoading(true);
+      setConnectionStatus("loading");
     } else if (queryError) {
       setError(queryError?.data?.message || "Error fetching initial option chain data");
       setIsLoading(false);
+      setConnectionStatus("error");
     } else if (initialData) {
       processOptionData(initialData);
+      setConnectionStatus("connected");
     }
   }, [initialData, queryError, queryLoading]);
 
   // Set up EventSource for 1-second streaming updates
   useEffect(() => {
+    setIsLoading(true);
+    setConnectionStatus("connecting");
+
     const eventSource = new EventSource(
       `/api/v1/option-chain-stream?instrument_key=${encodeURIComponent(
         selectedIndex
       )}&expiry_date=${selectedExpiry}`
     );
 
+    eventSource.onopen = () => {
+      setConnectionStatus("connected");
+      console.log("✅ Connected to option chain stream");
+    };
+
     eventSource.onmessage = (event) => {
-      const optionData = JSON.parse(event.data);
-      processOptionData(optionData);
+      try {
+        const apiResponse = JSON.parse(event.data);
+        
+        if (apiResponse.success && apiResponse.option_chain) {
+          processOptionData(apiResponse);
+          setConnectionStatus("connected");
+        } else if (apiResponse.message && !apiResponse.success) {
+          setError(apiResponse.message);
+          setConnectionStatus("error");
+        }
+      } catch (err) {
+        console.error("Error parsing SSE data:", err);
+        setError("Error processing real-time data");
+      }
     };
 
     eventSource.onerror = (e) => {
       console.error("SSE Error:", e);
       setError("Connection to data stream lost. Trying to reconnect...");
-      // EventSource automatically attempts to reconnect
+      setConnectionStatus("reconnecting");
     };
 
     // Cleanup on component unmount or when dependencies change
     return () => {
       eventSource.close();
+      setConnectionStatus("disconnected");
     };
   }, [selectedIndex, selectedExpiry]);
 
-  const handleOptionClick = (option, type) => {
-    if (!option) return;
-    navigate(`/option-details/${option.instrument_key}?type=${type}`);
+  const handleOptionClick = (strikeData, type) => {
+    if (!strikeData) return;
+    
+    const optionData = type === "call" ? strikeData.call_option : strikeData.put_option;
+    if (!optionData?.instrument_key) return;
+    
+    navigate(`/option-details/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`);
   };
 
   const formatPrice = (price) => {
+    if (!price || price === 0) return "₹0.00";
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    })
-      .format(price)
-      .replace("₹", "₹");
+    }).format(price).replace("₹", "₹");
   };
 
   const formatOI = (oi) => {
+    if (!oi) return "0";
     return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(oi);
   };
 
+  const calculatePriceChange = (ltp, closePrice) => {
+    if (!ltp || !closePrice || closePrice === 0) return { change: 0, changePercent: 0 };
+    const change = ltp - closePrice;
+    const changePercent = (change / closePrice) * 100;
+    return { change: change.toFixed(2), changePercent: changePercent.toFixed(2) };
+  };
+
+  const getConnectionStatusColor = () => {
+    switch (connectionStatus) {
+      case "connected": return "bg-green-500";
+      case "connecting": 
+      case "reconnecting": return "bg-yellow-500";
+      case "error": return "bg-red-500";
+      default: return "bg-gray-500";
+    }
+  };
+
+  const getATMStrike = () => {
+    if (!optionChainData?.underlying_info?.spot_price) return null;
+    const spotPrice = optionChainData.underlying_info.spot_price;
+    
+    // Find the closest strike to spot price
+    const strikes = optionChainData.option_chain.map(item => item.strike_price);
+    return strikes.reduce((prev, curr) => 
+      Math.abs(curr - spotPrice) < Math.abs(prev - spotPrice) ? curr : prev
+    );
+  };
+
+  const atmStrike = getATMStrike();
+
   return (
-    <div className="grid grid-cols-8 mx-auto px-2 py-4">
-      <div className="col-span-6 justify-center items-center">
+    <div className="grid grid-cols-8 mx-auto px-2 py-4 gap-4">
+      <div className="col-span-6">
+        {/* Header Section */}
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-4">
             <Select value={selectedIndex} onValueChange={setSelectedIndex}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select Index" />
@@ -152,26 +189,101 @@ const OptionChain = () => {
                 <SelectItem value="2025-06-12">12 Jun 2025</SelectItem>
               </SelectContent>
             </Select>
+
+            {/* Connection Status */}
+            <div className="flex items-center space-x-2">
+              <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`} />
+              <span className="text-xs text-muted-foreground capitalize">
+                {connectionStatus}
+              </span>
+            </div>
           </div>
+
+          {/* Market Info */}
+          {optionChainData?.underlying_info && (
+            <div className="flex items-center space-x-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Spot: </span>
+                <span className="font-semibold">
+                  {formatPrice(optionChainData.underlying_info.spot_price)}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">PCR: </span>
+                <span className="font-semibold">
+                  {optionChainData.summary?.overall_pcr || "0.00"}
+                </span>
+              </div>
+              {lastUpdated && (
+                <div className="text-xs text-muted-foreground">
+                  Updated: {lastUpdated.toLocaleTimeString()}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Summary Cards */}
+        {optionChainData?.summary && (
+          <div className="grid grid-cols-3 gap-4 mb-4">
+            <Card className="p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Call OI</p>
+                  <p className="text-lg font-semibold">
+                    {formatOI(optionChainData.summary.total_call_oi_lots)} lots
+                  </p>
+                </div>
+                <TrendingUp className="h-5 w-5 text-green-500" />
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Put OI</p>
+                  <p className="text-lg font-semibold">
+                    {formatOI(optionChainData.summary.total_put_oi_lots)} lots
+                  </p>
+                </div>
+                <TrendingDown className="h-5 w-5 text-red-500" />
+              </div>
+            </Card>
+            <Card className="p-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-muted-foreground">Total Strikes</p>
+                  <p className="text-lg font-semibold">
+                    {optionChainData.summary.total_strikes}
+                  </p>
+                </div>
+                <Activity className="h-5 w-5 text-blue-500" />
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Option Chain Table */}
+        <div className="overflow-x-auto border rounded-lg">
           <div className="sticky top-0 bg-background z-10 border-b">
-            <div className="grid grid-cols-5 text-xs font-medium text-muted-foreground py-2">
-              <div className="text-center">OI (lots)</div>
-              <div className="text-center">CALL PRICE</div>
-              <div className="text-center">STRIKE</div>
-              <div className="text-center">PUT PRICE</div>
-              <div className="text-center">OI (lots)</div>
+            <div className="grid grid-cols-9 text-xs font-medium text-muted-foreground py-3 px-2">
+              <div className="text-center">Call OI</div>
+              <div className="text-center">Call Change</div>
+              <div className="text-center">Call LTP</div>
+              <div className="text-center">Call IV</div>
+              <div className="text-center font-bold">STRIKE</div>
+              <div className="text-center">Put IV</div>
+              <div className="text-center">Put LTP</div>
+              <div className="text-center">Put Change</div>
+              <div className="text-center">Put OI</div>
             </div>
           </div>
 
           {isLoading ? (
-            <div className="space-y-2 py-4">
+            <div className="space-y-2 p-4">
               {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="grid grid-cols-5 gap-1">
-                  {[1, 2, 3, 4, 5].map((j) => (
-                    <Skeleton key={j} className="h-10 w-full" />
+                <div key={i} className="grid grid-cols-9 gap-2">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                    <Skeleton key={j} className="h-12 w-full" />
                   ))}
                 </div>
               ))}
@@ -179,80 +291,201 @@ const OptionChain = () => {
           ) : error ? (
             <div className="py-8 text-center text-destructive">{error}</div>
           ) : (
-            <div className="space-y-1 py-2">
-              {optionChainRows.map((row, index) => (
-                <div
-                  key={index}
-                  className="grid grid-cols-5 text-xs border-b border-muted py-2"
-                >
-                  <div className="text-center">
-                    <div>{formatOI(row.callOI || 0)}</div>
-                    <div
-                      className={row.callChangePercent > 0 ? "text-green-500" : "text-red-500"}
-                    >
-                      {row.callChangePercent > 0 ? "+" : ""}
-                      {row.callChangePercent}%
-                    </div>
-                  </div>
+            <div className="max-h-96 overflow-y-auto">
+              {optionChainData?.option_chain?.map((strikeData, index) => {
+                const isATM = strikeData.strike_price === atmStrike;
+                const callChange = calculatePriceChange(
+                  strikeData.call_option?.ltp,
+                  strikeData.call_option?.close_price
+                );
+                const putChange = calculatePriceChange(
+                  strikeData.put_option?.ltp,
+                  strikeData.put_option?.close_price
+                );
 
+                return (
                   <div
-                    className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                    onClick={() => handleOptionClick(row.call, "call")}
+                    key={index}
+                    className={`grid grid-cols-9 text-xs border-b py-2 px-2 hover:bg-muted/50 ${
+                      isATM ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
+                    }`}
                   >
-                    <div className="font-medium">{formatPrice(row.callPrice || 0)}</div>
-                    <div className={row.callChange > 0 ? "text-green-500" : "text-red-500"}>
-                      {row.callChange > 0 ? "+" : ""}
-                      {row.callChange} ({Math.abs(row.callChangePercent || 0)}%)
+                    {/* Call OI */}
+                    <div className="text-center">
+                      <div className="font-medium">
+                        {formatOI(strikeData.call_option?.oi_lots || 0)}
+                      </div>
+                      <div className={`text-xs ${
+                        (strikeData.call_option?.oi_change_lots || 0) > 0 
+                          ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {(strikeData.call_option?.oi_change_lots || 0) > 0 ? "+" : ""}
+                        {strikeData.call_option?.oi_change_lots || 0}
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="text-center font-bold flex items-center justify-center">
-                    <div className="bg-muted px-2 py-1 rounded-md">
-                      {row.strikePrice.toLocaleString()}
+                    {/* Call Change */}
+                    <div className="text-center">
+                      <div className={`font-medium ${
+                        callChange.change > 0 ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {callChange.change > 0 ? "+" : ""}{callChange.change}
+                      </div>
+                      <div className={`text-xs ${
+                        callChange.changePercent > 0 ? "text-green-500" : "text-red-500"
+                      }`}>
+                        ({callChange.changePercent}%)
+                      </div>
                     </div>
-                  </div>
 
-                  <div
-                    className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                    onClick={() => handleOptionClick(row.put, "put")}
-                  >
-                    <div className="font-medium">{formatPrice(row.putPrice || 0)}</div>
-                    <div className={row.putChange > 0 ? "text-green-500" : "text-red-500"}>
-                      {row.putChange > 0 ? "+" : ""}
-                      {row.putChange} ({Math.abs(row.putChangePercent || 0)}%)
-                    </div>
-                  </div>
-
-                  <div className="text-center">
-                    <div>{formatOI(row.putOI || 0)}</div>
+                    {/* Call LTP */}
                     <div
-                      className={row.putChangePercent > 0 ? "text-green-500" : "text-red-500"}
+                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
+                      onClick={() => handleOptionClick(strikeData, "call")}
                     >
-                      {row.putChangePercent > 0 ? "+" : ""}
-                      {row.putChangePercent}%
+                      <div className="font-semibold">
+                        {formatPrice(strikeData.call_option?.ltp || 0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Vol: {formatOI(strikeData.call_option?.volume || 0)}
+                      </div>
+                    </div>
+
+                    {/* Call IV */}
+                    <div className="text-center">
+                      <div className="font-medium">
+                        {(strikeData.call_option?.greeks?.iv || 0).toFixed(1)}%
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Δ: {(strikeData.call_option?.greeks?.delta || 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Strike Price */}
+                    <div className="text-center font-bold flex items-center justify-center">
+                      <Badge variant={isATM ? "default" : "outline"} className="text-xs">
+                        {strikeData.strike_price.toLocaleString()}
+                      </Badge>
+                    </div>
+
+                    {/* Put IV */}
+                    <div className="text-center">
+                      <div className="font-medium">
+                        {(strikeData.put_option?.greeks?.iv || 0).toFixed(1)}%
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Δ: {(strikeData.put_option?.greeks?.delta || 0).toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Put LTP */}
+                    <div
+                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
+                      onClick={() => handleOptionClick(strikeData, "put")}
+                    >
+                      <div className="font-semibold">
+                        {formatPrice(strikeData.put_option?.ltp || 0)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Vol: {formatOI(strikeData.put_option?.volume || 0)}
+                      </div>
+                    </div>
+
+                    {/* Put Change */}
+                    <div className="text-center">
+                      <div className={`font-medium ${
+                        putChange.change > 0 ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {putChange.change > 0 ? "+" : ""}{putChange.change}
+                      </div>
+                      <div className={`text-xs ${
+                        putChange.changePercent > 0 ? "text-green-500" : "text-red-500"
+                      }`}>
+                        ({putChange.changePercent}%)
+                      </div>
+                    </div>
+
+                    {/* Put OI */}
+                    <div className="text-center">
+                      <div className="font-medium">
+                        {formatOI(strikeData.put_option?.oi_lots || 0)}
+                      </div>
+                      <div className={`text-xs ${
+                        (strikeData.put_option?.oi_change_lots || 0) > 0 
+                          ? "text-green-500" : "text-red-500"
+                      }`}>
+                        {(strikeData.put_option?.oi_change_lots || 0) > 0 ? "+" : ""}
+                        {strikeData.put_option?.oi_change_lots || 0}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
       </div>
-      <div className="mt-6 col-span-2 h-full items-center bg-muted/20 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Recommended Order</h3>
-          <BarChart3 className="h-5 w-5 text-primary" />
-        </div>
-        <div className="text-sm text-muted-foreground mt-2">
-          <p><strong>Instrument:</strong> BANKNIFTY 40500 CE</p>
-          <p><strong>Action:</strong> Buy</p>
-          <p><strong>Price:</strong> ₹450.25</p>
-          <p><strong>Quantity:</strong> 30 lots</p>
-          <p><strong>Stop Loss:</strong> ₹400.00</p>
-          <p><strong>Target:</strong> ₹500.00</p>
-          <p><strong>Rationale:</strong> Bullish trend detected based on recent OI and price movements.</p>
-        </div>
-        <Button className="w-full mt-4">Place Order</Button>
+
+      {/* Sidebar - Recommended Order */}
+      <div className="col-span-2">
+        <Card className="h-full">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center justify-between text-lg">
+              Recommended Order
+              <BarChart3 className="h-5 w-5 text-primary" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {optionChainData && (
+              <>
+                <div className="text-sm space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Instrument:</span>
+                    <span className="font-medium">
+                      {selectedIndex.includes("Bank") ? "BANKNIFTY" : "NIFTY"} {atmStrike} CE
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Action:</span>
+                    <Badge className="bg-green-100 text-green-800">Buy</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Price:</span>
+                    <span className="font-medium">
+                      {formatPrice(
+                        optionChainData.option_chain.find(s => s.strike_price === atmStrike)
+                          ?.call_option?.ltp || 0
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Recommended Qty:</span>
+                    <span className="font-medium">25 lots</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Stop Loss:</span>
+                    <span className="font-medium text-red-600">₹350.00</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Target:</span>
+                    <span className="font-medium text-green-600">₹550.00</span>
+                  </div>
+                </div>
+                
+                <div className="pt-2 border-t">
+                  <p className="text-xs text-muted-foreground">
+                    <strong>Rationale:</strong> High OI build-up in calls with positive PCR trend. 
+                    Spot price showing bullish momentum near ATM strike.
+                  </p>
+                </div>
+                
+                <Button className="w-full mt-4">
+                  Place Order
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

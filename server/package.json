@@ -17,7 +17,9 @@
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "mysql2": "^3.11.5",
+    "protobufjs": "^7.4.0",
     "razorpay": "^2.9.6",
+    "upstox-js-sdk": "^2.17.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

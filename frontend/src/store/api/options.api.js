@@ -18,7 +18,29 @@ export const optionApi = apiSlice.injectEndpoints({
       }),
       providesTags: ["Options"],
     }),
+    getOptionDetails: builder.query({
+      query: ({ instrument_key, interval = '1minute', days = 30, type = 'call', strike }) => ({
+        url: `/option-details/${instrument_key}`,
+        params: { interval, days, type, strike },
+      }),
+      providesTags: ['OptionDetails'],
+    }),
+
+    // Fetch available intervals and their limits
+    getIntervals: builder.query({
+      query: () => '/option-details/info/intervals',
+      providesTags: ['Intervals'],
+    }),
+
+    // Fetch current market data for an option
+    getCurrentMarketData: builder.query({
+      query: ({ instrument_key }) => `/option-details/${instrument_key}/current`,
+      providesTags: ['CurrentMarketData'],
+    }),
+    
   }),
 });
 
-export const { useGetOptionsQuery } = optionApi;
+export const { useGetOptionsQuery,useGetOptionDetailsQuery,
+  useGetIntervalsQuery,
+  useGetCurrentMarketDataQuery, } = optionApi;
