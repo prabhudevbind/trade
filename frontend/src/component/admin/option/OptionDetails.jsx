@@ -1,272 +1,210 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { useParams, useLocation } from 'react-router-dom';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
-import { Chart } from 'react-chartjs-2';
-import { useGetOptionDetailsQuery, useGetIntervalsQuery, useGetCurrentMarketDataQuery } from '@/store/api/options.api';
-import axios from 'axios';
-
-// Register Chart.js components
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { createChart } from 'lightweight-charts';
 
 export default function OptionDetails() {
-  const { optionId } = useParams(); // e.g., NSE_FO|58102
-  const location = useLocation();
-  const queryParams = new URLSearchParams(location.search);
-  const type = queryParams.get('type') || 'call';
-  const strike = queryParams.get('strike') || '42500';
-  const interval = queryParams.get('interval') || '1minute';
-  const days = queryParams.get('days') || '30';
-
-  const [realTimeData, setRealTimeData] = useState(null);
-  const [tradeForm, setTradeForm] = useState({
-    quantity: 1,
-    orderType: 'buy',
-    price: '',
+  const { optionId } = useParams();
+  
+  // State Management
+  const [state, setState] = useState({
+    interval: 'day',
+    days: 30,
+    chartData: [],
+    volumeData: [],
+    isLoading: false,
+    error: null,
+    dateRange: {
+      from: null,
+      to: null
+    }
   });
-  const [tradeError, setTradeError] = useState(null);
-  const [tradeSuccess, setTradeSuccess] = useState(null);
-  const eventSourceRef = useRef(null);
 
-  // Fetch historical and current market data
-  const {
-    data: optionDetails,
-    error: optionDetailsError,
-    isLoading: isLoadingOptionDetails,
-  } = useGetOptionDetailsQuery({ instrument_key: optionId, interval, days, type, strike });
+  // Refs
+  const chartContainerRef = useRef(null);
+  const chartRef = useRef(null);
+  const candleSeriesRef = useRef(null);
+  const volumeSeriesRef = useRef(null);
 
-  // Fetch available intervals
-  const { data: intervals, error: intervalsError } = useGetIntervalsQuery();
+  // Transform API data
+  const transformCandleData = (candles) => {
+    if (!Array.isArray(candles)) return { candleData: [], volumeData: [] };
+    
+    return candles.reduce((acc, candle) => {
+      const timestamp = Math.floor(new Date(candle.timestamp).getTime() / 1000);
+      
+      acc.candleData.push({
+        time: timestamp,
+        open: candle.open,
+        high: candle.high,
+        low: candle.low,
+        close: candle.close
+      });
 
-  // Fetch current market data
-  const { data: currentMarketData, error: currentMarketError } = useGetCurrentMarketDataQuery({ instrument_key: optionId });
+      acc.volumeData.push({
+        time: timestamp,
+        value: candle.volume,
+        color: candle.close >= candle.open ? '#26a69a' : '#ef5350'
+      });
 
-  // Set up SSE for real-time updates
-  useEffect(() => {
-    const connectSSE = () => {
-      const eventSource = new EventSource(
-        `http://localhost:5000/api/v1/option-details-stream/${optionId}?type=${type}&strike=${strike}&interval=${interval}&days=7`
-      );
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'market_data' && data.success) {
-            setRealTimeData(data.market_data);
-          } else if (data.type === 'error') {
-            console.error('SSE Error:', data.message);
-          }
-        } catch (err) {
-          console.error('Error parsing SSE data:', err);
-        }
-      };
-
-      eventSource.onerror = () => {
-        console.error('Error connecting to real-time stream');
-        eventSource.close();
-      };
-    };
-
-    connectSSE();
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        console.log('SSE connection closed');
-      }
-    };
-  }, [optionId, type, strike, interval]);
-
-  // Handle trade form input changes
-  const handleTradeInputChange = (e) => {
-    const { name, value } = e.target;
-    setTradeForm((prev) => ({ ...prev, [name]: value }));
+      return acc;
+    }, { candleData: [], volumeData: [] });
   };
 
-  // Handle trade submission
-  const handleTradeSubmit = async (e) => {
-    e.preventDefault();
-    setTradeError(null);
-    setTradeSuccess(null);
-
+  // Fetch Historical Data
+  const fetchHistoricalData = async () => {
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+    
     try {
-      const response = await axios.post(
-        'http://localhost:5000/api/v1/trade',
-        {
-          instrument_key: optionId,
-          type,
-          strike,
-          quantity: parseInt(tradeForm.quantity),
-          order_type: tradeForm.orderType,
-          price: parseFloat(tradeForm.price) || realTimeData?.ltp || currentMarketData?.market_data?.ltp,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('accessToken')}`, // Adjust based on your auth mechanism
-          },
-        }
+      const toDate = new Date();
+      const fromDate = new Date();
+      fromDate.setDate(fromDate.getDate() - state.days);
+      
+      const toDateStr = toDate.toISOString().split('T')[0];
+      const fromDateStr = fromDate.toISOString().split('T')[0];
+
+      const response = await fetch(
+        `http://localhost:5000/api/v1/historical-data/${encodeURIComponent(optionId)}?interval=${state.interval}&fromDate=${fromDateStr}&toDate=${toDateStr}`
       );
 
-      if (response.data.success) {
-        setTradeSuccess('Trade placed successfully!');
-        setTradeForm({ quantity: 1, orderType: 'buy', price: '' });
-      } else {
-        setTradeError(response.data.message || 'Failed to place trade');
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
       }
-    } catch (err) {
-      setTradeError(err.response?.data?.message || 'Error placing trade');
+
+      const data = await response.json();
+      
+      if (data.success && Array.isArray(data.data.candles)) {
+        const { candleData, volumeData } = transformCandleData(data.data.candles);
+        setState(prev => ({
+          ...prev,
+          chartData: candleData,
+          volumeData: volumeData,
+          dateRange: {
+            from: data.date_range.from,
+            to: data.date_range.to
+          }
+        }));
+      } else {
+        throw new Error('Invalid API response format');
+      }
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        error: `Failed to load data: ${error.message}`
+      }));
+    } finally {
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   };
 
-  // Prepare chart data
-  const historicalData = optionDetails?.historical_data?.candles || [];
-  const chartData = {
-    labels: historicalData
-      .map((candle) => new Date(candle.timestamp).toLocaleString())
-      .concat(realTimeData ? [new Date(realTimeData.timestamp).toLocaleString()] : []),
-    datasets: [
-      {
-        type: 'line',
-        label: 'Price (Historical + Real-Time)',
-        data: [
-          ...historicalData.map((candle) => candle.close),
-          realTimeData ? realTimeData.ltp : null,
-        ].filter((val) => val !== null),
-        borderColor: '#4CAF50',
-        backgroundColor: 'rgba(76, 175, 80, 0.2)',
-        fill: false,
-        tension: 0.1,
-        pointRadius: (ctx) => (ctx.dataIndex === historicalData.length && realTimeData ? 5 : 3),
-        pointBackgroundColor: (ctx) => (ctx.dataIndex === historicalData.length && realTimeData ? '#2196F3' : '#4CAF50'),
-      },
-    ],
-  };
+  // Initialize Chart
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
 
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { position: 'top' },
-      title: { display: true, text: `Price Chart for ${optionId} (${type}, Strike: ${strike})` },
-    },
-    scales: {
-      x: { title: { display: true, text: 'Time' } },
-      y: { title: { display: true, text: 'Price' } },
-    },
-  };
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { color: '#ffffff' },
+        textColor: '#333',
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: 500,
+      timeScale: {
+        timeVisible: true,
+        borderColor: '#D1D4DC',
+      },
+    });
+
+    const candleSeries = chart.addCandlestickSeries({
+      upColor: '#26a69a',
+      downColor: '#ef5350',
+      borderVisible: false,
+      wickUpColor: '#26a69a',
+      wickDownColor: '#ef5350',
+    });
+
+    const volumeSeries = chart.addHistogramSeries({
+      color: '#26a69a',
+      priceScaleId: 'volume',
+      scaleMargins: {
+        top: 0.8,
+        bottom: 0,
+      },
+    });
+
+    chartRef.current = chart;
+    candleSeriesRef.current = candleSeries;
+    volumeSeriesRef.current = volumeSeries;
+
+    window.addEventListener('resize', () => {
+      chart.applyOptions({
+        width: chartContainerRef.current.clientWidth,
+      });
+    });
+
+    fetchHistoricalData();
+
+    return () => {
+      chart.remove();
+    };
+  }, []);
+
+  // Update Chart Data
+  useEffect(() => {
+    if (!candleSeriesRef.current || !volumeSeriesRef.current) return;
+    
+    if (state.chartData.length > 0) {
+      candleSeriesRef.current.setData(state.chartData);
+      volumeSeriesRef.current.setData(state.volumeData);
+      chartRef.current?.timeScale().fitContent();
+    }
+  }, [state.chartData, state.volumeData]);
 
   return (
-    <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
-      <h2>Option Details</h2>
-      {isLoadingOptionDetails && <p>Loading...</p>}
-      {optionDetailsError && (
-        <p style={{ color: 'red' }}>
-          <strong>Error:</strong> {optionDetailsError?.data?.message || 'Failed to fetch option details'}
-        </p>
-      )}
-      {optionDetails && (
-        <>
-          <p><strong>Option ID:</strong> {optionDetails.instrument_info.instrument_key}</p>
-          <p><strong>Type:</strong> {optionDetails.instrument_info.type}</p>
-          <p><strong>Strike Price:</strong> {optionDetails.instrument_info.strike_price}</p>
-          <p><strong>Interval:</strong> {optionDetails.instrument_info.interval}</p>
-          <p><strong>Days Requested:</strong> {optionDetails.instrument_info.days_requested}</p>
-          <p><strong>Total Candles:</strong> {optionDetails.data_summary.total_candles}</p>
-          <p>
-            <strong>Date Range:</strong> {optionDetails.data_summary.date_range.from} to{' '}
-            {optionDetails.data_summary.date_range.to}
+    <div className="option-details-container">
+      <div className="chart-header">
+        <h2>Historical Data: {optionId}</h2>
+        {state.dateRange.from && (
+          <p className="date-range">
+            Period: {state.dateRange.from} to {state.dateRange.to}
           </p>
-        </>
-      )}
-      {currentMarketData?.success && (
-        <div>
-          <h3>Current Market Data</h3>
-          <p><strong>Last Traded Price:</strong> {currentMarketData.market_data.ltp}</p>
-          <p><strong>Volume:</strong> {currentMarketData.market_data.volume}</p>
-          <p><strong>Open Interest:</strong> {currentMarketData.market_data.open_interest}</p>
-          <p><strong>Last Updated:</strong> {new Date(currentMarketData.market_data.timestamp).toLocaleString()}</p>
-        </div>
-      )}
-      {currentMarketError && (
-        <p style={{ color: 'red' }}>
-          <strong>Error:</strong> {currentMarketError?.data?.message || 'Failed to fetch current market data'}
-        </p>
-      )}
-      {realTimeData && (
-        <div>
-          <h3>Real-Time Market Data</h3>
-          <p><strong>Last Traded Price:</strong> {realTimeData.ltp}</p>
-          <p><strong>Volume:</strong> {realTimeData.volume}</p>
-          <p><strong>Open Interest:</strong> {realTimeData.open_interest}</p>
-          <p><strong>Last Updated:</strong> {new Date(realTimeData.timestamp).toLocaleString()}</p>
-        </div>
-      )}
-      {intervals && (
-        <div>
-          <h3>Available Intervals</h3>
-          <ul>
-            {Object.entries(intervals.available_intervals).map(([key, value]) => (
-              <li key={key}>
-                {value.name}: {value.description} (Max {value.max_duration_days} days)
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-      {intervalsError && (
-        <p style={{ color: 'red' }}>
-          <strong>Error:</strong> {intervalsError?.data?.message || 'Failed to fetch intervals'}
-        </p>
-      )}
-      <h3>Trade</h3>
-      <form onSubmit={handleTradeSubmit} style={{ margin: '20px 0' }}>
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <div>
-            <label>Quantity:</label>
-            <input
-              type="number"
-              name="quantity"
-              value={tradeForm.quantity}
-              onChange={handleTradeInputChange}
-              min="1"
-              required
-              style={{ marginLeft: '10px', width: '100px' }}
-            />
-          </div>
-          <div>
-            <label>Order Type:</label>
-            <select
-              name="orderType"
-              value={tradeForm.orderType}
-              onChange={handleTradeInputChange}
-              style={{ marginLeft: '10px', width: '100px' }}
-            >
-              <option value="buy">Buy</option>
-              <option value="sell">Sell</option>
-            </select>
-          </div>
-          <div>
-            <label>Price (optional):</label>
-            <input
-              type="number"
-              name="price"
-              value={tradeForm.price}
-              onChange={handleTradeInputChange}
-              placeholder={realTimeData?.ltp || currentMarketData?.market_data?.ltp || 'Market Price'}
-              step="0.01"
-              style={{ marginLeft: '10px', width: '120px' }}
-            />
-          </div>
-          <button type="submit" style={{ padding: '5px 20px' }}>
-            Place Trade
-          </button>
-        </div>
-      </form>
-      {tradeSuccess && <p style={{ color: 'green' }}>{tradeSuccess}</p>}
-      {tradeError && <p style={{ color: 'red' }}>{tradeError}</p>}
-      <h3>Price Chart</h3>
-      <div style={{ height: '400px' }}>
-        <Chart type="line" data={chartData} options={chartOptions} />
+        )}
       </div>
+      
+      {state.isLoading && <div className="loading">Loading historical data...</div>}
+      {state.error && <div className="error">{state.error}</div>}
+      
+      <div ref={chartContainerRef} className="chart-container" />
+      
+      <style jsx>{`
+        .option-details-container {
+          padding: 20px;
+          background: #fff;
+          border-radius: 8px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .chart-header {
+          margin-bottom: 20px;
+        }
+        
+        .date-range {
+          color: #666;
+          font-size: 14px;
+        }
+        
+        .chart-container {
+          height: 500px;
+          width: 100%;
+        }
+        
+        .loading, .error {
+          text-align: center;
+          padding: 20px;
+        }
+        
+        .error {
+          color: #dc3545;
+        }
+      `}</style>
     </div>
   );
 }
