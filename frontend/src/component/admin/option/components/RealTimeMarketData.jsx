@@ -121,7 +121,7 @@ export function RealTimeMarketData({ instrumentKey }) {
             </CardTitle>
             <div className="flex items-center gap-2">
               <Badge className={`${getMarketStatusColor()} text-white`}>{getMarketStatusText()}</Badge>
-              <Button variant="outline" size="sm" onClick={fetchMarketData} disabled={loading}>
+              <Button variant="outline" size="sm"  disabled={loading}>
                 <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />
                 Refresh
               </Button>
