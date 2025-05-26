@@ -1,35 +1,18 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertCircle, RefreshCw, TrendingUp, TrendingDown } from "lucide-react"
 import { AddTradeDialog } from "./components/AddTradeDialog.jsx"
-
-const formatIndianDateTime = (dateString) => {
-  const date = new Date(dateString);
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Kolkata'
-  });
-}
-
-// Helper function to convert IST timestamp to Unix timestamp for chart
-const convertToUnixTimestamp = (istTimestamp) => {
-  const date = new Date(istTimestamp);
-  return Math.floor(date.getTime() / 1000);
-}
+import { Badge } from "@/components/ui/badge.jsx"
 
 export function TradingChart({ instrumentKey, trades, onAddTrade }) {
   const chartContainerRef = useRef(null)
   const chart = useRef(null)
   const lineSeries = useRef(null)
   const volumeSeries = useRef(null)
+  const eventSourceRef = useRef(null);
 
   const [data, setData] = useState([])
   const [volumeData, setVolumeData] = useState([])
@@ -40,6 +23,7 @@ export function TradingChart({ instrumentKey, trades, onAddTrade }) {
   const [lastUpdated, setLastUpdated] = useState(null)
   const [showAddTrade, setShowAddTrade] = useState(false)
   const [chartReady, setChartReady] = useState(false)
+  const [isStreamConnected, setIsStreamConnected] = useState(false);
 
   const timeframes = {
     intraday: {
@@ -358,6 +342,100 @@ export function TradingChart({ instrumentKey, trades, onAddTrade }) {
     }
   }, [timeframe, instrumentKey]);
 
+  // Add new function to handle real-time updates
+  const handleRealTimeUpdate = (marketData) => {
+    if (!marketData?.data?.ff?.marketFF) return;
+    
+    const { marketFF } = marketData.data.ff;
+    const timestamp = convertToIndianTime(parseInt(marketFF.ltpc.ltt));
+    
+    // Create new candlestick data point
+    const newData = {
+      time: timestamp,
+      value: parseFloat(marketFF.ltpc.ltp),
+      open: parseFloat(marketFF.marketOHLC.ohlc[2].open),
+      high: parseFloat(marketFF.marketOHLC.ohlc[2].high),
+      low: parseFloat(marketFF.marketOHLC.ohlc[2].low),
+      close: parseFloat(marketFF.ltpc.ltp)
+    };
+
+    // Create new volume data point
+    const newVolumeData = {
+      time: timestamp,
+      value: parseFloat(marketFF.eFeedDetails.vtt),
+      color: marketFF.ltpc.ltp >= marketFF.ltpc.cp ? "#4caf50" : "#f44336"
+    };
+
+    // Update chart with new data
+    if (chartReady && lineSeries.current) {
+      lineSeries.current.update(newData);
+      if (volumeSeries.current) {
+        volumeSeries.current.update(newVolumeData);
+      }
+    }
+
+    // Update last price info
+    setData(prevData => {
+      const newDataArray = [...prevData];
+      const lastIndex = newDataArray.length - 1;
+      
+      if (lastIndex >= 0 && newDataArray[lastIndex].time === timestamp) {
+        newDataArray[lastIndex] = newData;
+      } else {
+        newDataArray.push(newData);
+      }
+      
+      return newDataArray;
+    });
+
+    setLastUpdated(new Date());
+  };
+
+  // Modify the existing useEffect for data fetching to include streaming
+  useEffect(() => {
+    const setupStream = async () => {
+      if (!instrumentKey) return;
+
+      // First fetch historical data
+      await fetchHistoricalData(timeframe);
+
+      // Then set up real-time stream
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+      }
+
+      const encodedKey = encodeURIComponent(instrumentKey);
+      eventSourceRef.current = new EventSource(`http://localhost:5001/stream/${encodedKey}`);
+
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleRealTimeUpdate(data);
+          setIsStreamConnected(true);
+          setError(null);
+        } catch (err) {
+          console.error('Stream parsing error:', err);
+          setError('Failed to parse stream data');
+        }
+      };
+
+      eventSourceRef.current.onerror = (error) => {
+        console.error('Stream connection error:', error);
+        setIsStreamConnected(false);
+        setError('Stream connection lost. Reconnecting...');
+      };
+
+      return () => {
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          setIsStreamConnected(false);
+        }
+      };
+    };
+
+    setupStream();
+  }, [instrumentKey, timeframe]);
+
   const getCurrentPriceInfo = () => {
     if (data.length === 0) return null;
 
@@ -378,15 +456,24 @@ export function TradingChart({ instrumentKey, trades, onAddTrade }) {
 
   const priceInfo = getCurrentPriceInfo();
 
+  // Add stream status indicator in the UI
+  const StreamStatus = () => (
+    <Badge
+      className={`${isStreamConnected ? 'bg-green-500' : 'bg-red-500'} text-white`}
+    >
+      {isStreamConnected ? 'Live' : 'Disconnected'}
+    </Badge>
+  );
+
   return (
     <div className="w-full space-y-6">
       {/* Debug Info */}
      
       {/* Header with Price Info */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-        <div>
+        <div className="flex items-center gap-2">
           <h3 className="text-xl font-semibold text-gray-800">Price Chart</h3>
-          <p className="text-sm text-gray-600">Instrument: {instrumentKey}</p>
+          <StreamStatus />
         </div>
 
         {priceInfo && (
