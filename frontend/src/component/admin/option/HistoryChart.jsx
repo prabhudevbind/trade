@@ -38,7 +38,6 @@ export default function TradingDashboard() {
             <TabsTrigger value="chart">Chart Analysis</TabsTrigger>
             <TabsTrigger value="realtime">Real-time Data</TabsTrigger>
             <TabsTrigger value="trades">Trade Manager</TabsTrigger>
-            
           </TabsList>
 
           <TabsContent value="chart" className="space-y-6">

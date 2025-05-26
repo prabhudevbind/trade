@@ -14,96 +14,66 @@ export function RealTimeMarketData({ instrumentKey }) {
   const [error, setError] = useState(null)
   const [lastUpdate, setLastUpdate] = useState(null)
 
-  // Check if market is open (9:15 AM to 3:15 PM IST)
-  const checkMarketStatus = () => {
-    const now = new Date()
-    const istTime = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
-    const hours = istTime.getHours()
-    const minutes = istTime.getMinutes()
-    const currentTime = hours * 60 + minutes
-
-    // Market hours: 9:15 AM (555 minutes) to 3:15 PM (915 minutes)
-    const marketOpen = 9 * 60 + 15 // 555 minutes
-    const marketClose = 15 * 60 + 15 // 915 minutes
-
-    // Check if it's a weekday (Monday = 1, Sunday = 0)
-    const dayOfWeek = istTime.getDay()
-    const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5
-
-    return isWeekday && currentTime >= marketOpen && currentTime <= marketClose
-  }
-
-  // Generate mock real-time data
-  const generateMockMarketData = () => {
-    const basePrice = 100 + Math.random() * 50
-    const change = (Math.random() - 0.5) * 10
-    const open = basePrice - change
-
-    return {
-      ltp: basePrice,
-      change: change,
-      changePercent: (change / open) * 100,
-      volume: Math.floor(Math.random() * 1000000) + 100000,
-      high: basePrice + Math.random() * 5,
-      low: basePrice - Math.random() * 5,
-      open: open,
-      close: basePrice - 0.5 + Math.random(),
-      timestamp: new Date().toISOString(),
-    }
-  }
-
-  // Fetch real-time market data
-  const fetchMarketData = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      // Mock API call - replace with actual Upstox API
-      // const response = await fetch(`/api/market-data/${encodeURIComponent(instrumentKey)}`)
-
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      const mockData = generateMockMarketData()
-      setMarketData(mockData)
-      setLastUpdate(new Date())
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch market data")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Auto-refresh data during market hours
   useEffect(() => {
-    const marketOpen = checkMarketStatus()
-    setIsMarketOpen(marketOpen)
+    let eventSource;
 
-    if (marketOpen) {
-      // Initial fetch
-      fetchMarketData()
+    const connectToStream = () => {
+      if (eventSource) {
+        eventSource.close();
+      }
 
-      // Set up auto-refresh every 5 seconds during market hours
-      const interval = setInterval(() => {
-        if (checkMarketStatus()) {
-          fetchMarketData()
-        } else {
-          setIsMarketOpen(false)
+      eventSource = new EventSource(`http://localhost:5001/stream/${encodeURIComponent(instrumentKey)}`);
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.data?.ff?.marketFF) {
+            const marketFF = data.data.ff.marketFF;
+            
+            setMarketData({
+              ltp: marketFF.ltpc.ltp,
+              change: marketFF.ltpc.ltp - marketFF.ltpc.cp,
+              changePercent: ((marketFF.ltpc.ltp - marketFF.ltpc.cp) / marketFF.ltpc.cp) * 100,
+              volume: parseInt(marketFF.eFeedDetails.vtt),
+              high: marketFF.marketOHLC.ohlc[0].high,
+              low: marketFF.marketOHLC.ohlc[0].low,
+              open: marketFF.marketOHLC.ohlc[0].open,
+              close: marketFF.ltpc.cp,
+              timestamp: new Date(parseInt(marketFF.ltpc.ltt)).toISOString(),
+              bidAsk: marketFF.marketLevel.bidAskQuote,
+              greeks: marketFF.optionGreeks,
+              oi: marketFF.eFeedDetails.oi,
+              prevOI: marketFF.eFeedDetails.poi,
+            });
+            
+            setLastUpdate(new Date());
+            setIsMarketOpen(true);
+            setError(null);
+          }
+        } catch (err) {
+          console.error('Error parsing market data:', err);
+          setError('Failed to parse market data');
         }
-      }, 5000)
+      };
 
-      return () => clearInterval(interval)
-    }
+      eventSource.onerror = (error) => {
+        console.error('EventSource error:', error);
+        setError('Connection error. Retrying...');
+        eventSource.close();
+        setTimeout(connectToStream, 5000);
+      };
+    };
+
+    connectToStream();
+
+    return () => {
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [instrumentKey])
 
-  // Check market status every minute
-  useEffect(() => {
-    const statusInterval = setInterval(() => {
-      setIsMarketOpen(checkMarketStatus())
-    }, 60000)
-
-    return () => clearInterval(statusInterval)
-  }, [])
+  // ... keep existing helper functions (formatTime, formatCurrency, formatVolume)
 
   const getMarketStatusColor = () => {
     return isMarketOpen ? "bg-green-500" : "bg-red-500"
@@ -194,10 +164,42 @@ export function RealTimeMarketData({ instrumentKey }) {
                   }`}
                 >
                   {marketData.change >= 0 ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-                  {marketData.change >= 0 ? "+" : ""}
-                  {marketData.change.toFixed(2)}({marketData.changePercent >= 0 ? "+" : ""}
-                  {marketData.changePercent.toFixed(2)}%)
+                  {marketData.change.toFixed(2)} ({marketData.changePercent.toFixed(2)}%)
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bid-Ask Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Bid-Ask Spread</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {marketData.bidAsk.slice(0, 3).map((quote, index) => (
+                  <div key={index} className="flex justify-between text-sm">
+                    <span className="text-green-600">Bid: {quote.bp} ({quote.bq})</span>
+                    <span className="text-red-600">Ask: {quote.ap} ({quote.aq})</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Greeks Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Option Greeks</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>Delta: {marketData.greeks.delta.toFixed(4)}</div>
+                <div>Theta: {marketData.greeks.theta.toFixed(4)}</div>
+                <div>Gamma: {marketData.greeks.gamma.toFixed(4)}</div>
+                <div>Vega: {marketData.greeks.vega.toFixed(4)}</div>
+                <div>IV: {(marketData.greeks.iv * 100).toFixed(2)}%</div>
+                <div>Rho: {marketData.greeks.rho.toFixed(4)}</div>
               </div>
             </CardContent>
           </Card>

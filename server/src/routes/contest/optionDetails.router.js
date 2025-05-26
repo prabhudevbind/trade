@@ -129,55 +129,8 @@ router.get("/historical-data-auto/:instrument_key/:interval/:period", async (req
   }
 });
 
-module.exports = router;
 
-// Updated fetchHistoricalData function for your React component
-const fetchHistoricalData = async (selectedTimeframe) => {
-  setLoading(true);
-  setError(null);
-  
-  try {
-    const { toDate, fromDate } = getDateRange(selectedTimeframe);
-    const interval = timeframes[selectedTimeframe].interval;
-    const instrumentKey = encodeURIComponent(optionId); // URL encode the instrument key
-    
-    // Use the backend API endpoint
-    const url = `http://localhost:5000/api/v1/historical-data/${instrumentKey}/${interval}/${toDate}/${fromDate}`;
-    
-    console.log('Fetching from:', url);
-    
-    const response = await fetch(url);
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.success && result.data?.data?.candles) {
-      // Transform data for lightweight-charts
-      const transformedData = result.data.data.candles.map(candle => ({
-        time: new Date(candle[0]).getTime() / 1000, // Convert to Unix timestamp
-        open: parseFloat(candle[1]),
-        high: parseFloat(candle[2]),
-        low: parseFloat(candle[3]),
-        close: parseFloat(candle[4]),
-        volume: candle[5] ? parseFloat(candle[5]) : 0 // Include volume if available
-      })).sort((a, b) => a.time - b.time); // Sort by time ascending
-      
-      setData(transformedData);
-      console.log(`Loaded ${transformedData.length} data points`);
-    } else {
-      throw new Error('Invalid data format received from API');
-    }
-  } catch (err) {
-    setError(err.message);
-    console.error('Error fetching data:', err);
-  } finally {
-    setLoading(false);
-  }
-};
+
 // API endpoint for real-time market data only
 router.get("/market-data/:instrument_key", (req, res) => {
   try {
@@ -212,17 +165,6 @@ router.get("/market-data/:instrument_key", (req, res) => {
 });
 
 
-// Function to update market data cache (called from WebSocket data)
-function updateMarketDataCache(instrumentKey, marketData) {
-  const processedData = {
-    ...marketData,
-    timestamp: new Date().toISOString(),
-    last_update: Date.now()
-  };
-  
-  marketDataCache.set(instrumentKey, processedData);
-  console.log(`✅ Updated market data cache for ${instrumentKey}`);
-}
 
 // Export the router and update function
 module.exports = router
