@@ -153,12 +153,16 @@ model ContestParticipant {
 // Option market data
 model Option {
   id           Int        @id @default(autoincrement())
-  symbol       Symbol
+  symbol       String
   expiry_date  DateTime
   strike_price Decimal    @db.Decimal(10, 2)
   option_type  OptionType
   ltp          Decimal    @db.Decimal(10, 2)
   lot_size     Int
+  bid_price    Decimal?  @db.Decimal(10, 2)
+  ask_price    Decimal?  @db.Decimal(10, 2)
+  bid_quantity Int?
+  ask_quantity Int?
   updated_at   DateTime   @updatedAt
 
   positions    Position[]

@@ -7,16 +7,22 @@ import { AlertCircle, RefreshCw, TrendingUp, TrendingDown, Play, Pause, ZoomIn, 
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
+import { useCreateOptionMutation,useCreatePositionMutation,useCreateTradeMutation } from "@/store/api/contest"
+import { useParams } from "react-router-dom"
 export  function TradingChart({instrumentKey}) {
   const chartContainerRef = useRef(null)
   const chart = useRef(null)
   const lineSeries = useRef(null)
   const volumeSeries = useRef(null)
   const eventSourceRef = useRef(null)
+  const {id}=useParams();
+
 
   // Use your original instrument key
   // const instrumentKey = "NSE_FO|58571"
+   const [createOption] = useCreateOptionMutation();
+  const [createPosition] = useCreatePositionMutation();
+  const [createTrade] = useCreateTradeMutation();
 
   // Chart and data states
   const [data, setData] = useState([])
@@ -53,6 +59,23 @@ export  function TradingChart({instrumentKey}) {
     cp: 0
   })
 
+  // Add new state for last known values
+  const [lastKnownData, setLastKnownData] = useState({
+    ltp: 0,
+    change: 0,
+    changePercent: 0,
+    high: 0,
+    low: 0,
+    volume: 0,
+    oi: 0,
+    bidPrice: 0,
+    askPrice: 0,
+    bidQty: 0,
+    askQty: 0,
+    cp: 0,
+    timestamp: null
+  });
+
   const timeframes = {
     intraday: {
       label: "1D",
@@ -62,7 +85,7 @@ export  function TradingChart({instrumentKey}) {
     },
     week: {
       label: "1W",
-      interval: "30minute",
+      interval: "30minute", // Changed to 30minute for weekly view
       days: 7,
       description: "Weekly 30-minute data",
     },
@@ -130,7 +153,6 @@ export  function TradingChart({instrumentKey}) {
   const fetchHistoricalData = async (selectedTimeframe) => {
     setLoading(true)
     setError(null)
-    
     try {
       const { toDate, fromDate } = getDateRange(selectedTimeframe)
       const interval = timeframes[selectedTimeframe].interval
@@ -159,57 +181,63 @@ export  function TradingChart({instrumentKey}) {
 
       const candles = responseData.data.data.candles
 
-      if (!Array.isArray(candles) || candles.length === 0) {
-        throw new Error('No data available for this timeframe')
-      }
-
-      // Create formatted data with proper timestamp handling for Indian market hours
+      // Format candle data based on timeframe
       const formattedData = candles.map(candle => {
-        const timestamp = convertToIndianTime(candle[0])
-        
-        // Only include data between market hours (9:15 AM to 3:30 PM IST)
+        const timestamp = convertToIndianTime(new Date(candle[0]).getTime())
         const date = new Date(candle[0])
         const hours = date.getHours()
         const minutes = date.getMinutes()
         const timeInMinutes = hours * 60 + minutes
         
-        // Market hours: 9:15 AM (555 minutes) to 3:30 PM (930 minutes)
-        if (timeInMinutes >= 555 && timeInMinutes <= 930) {
+        // For weekly data, we don't need to filter by market hours
+        if (selectedTimeframe === 'week') {
           return {
             time: timestamp,
-            value: parseFloat(candle[4]), // close price
             open: parseFloat(candle[1]),
             high: parseFloat(candle[2]),
             low: parseFloat(candle[3]),
-            close: parseFloat(candle[4])
+            close: parseFloat(candle[4]),
+            value: parseFloat(candle[4])
           }
         }
-        return null
-      }).filter(Boolean) // Remove null values
-
-      // Ensure ascending order by timestamp
-      formattedData.sort((a, b) => a.time - b.time)
-
-      // Create volume data with the same time filtering
-      const formattedVolumeData = candles.map(candle => {
-        const timestamp = convertToIndianTime(candle[0])
         
-        const date = new Date(candle[0])
-        const hours = date.getHours()
-        const minutes = date.getMinutes()
-        const timeInMinutes = hours * 60 + minutes
-        
+        // For intraday, keep the market hours filter
         if (timeInMinutes >= 555 && timeInMinutes <= 930) {
           return {
             time: timestamp,
-            value: parseFloat(candle[5]),
-            color: parseFloat(candle[4]) >= parseFloat(candle[1]) ? "#4caf50" : "#f44336"
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            value: parseFloat(candle[4])
           }
         }
         return null
       }).filter(Boolean)
 
-      // Sort volume data in the same order
+      // Create volume data with the same time filtering
+      const formattedVolumeData = candles.map(candle => {
+        const timestamp = convertToIndianTime(new Date(candle[0]).getTime())
+        const date = new Date(candle[0])
+        const hours = date.getHours()
+        const minutes = date.getMinutes()
+        const timeInMinutes = hours * 60 + minutes
+        
+        if (selectedTimeframe === 'week' || 
+            (timeInMinutes >= 555 && timeInMinutes <= 930)) {
+          return {
+            time: timestamp,
+            value: parseFloat(candle[5]),
+            color: parseFloat(candle[4]) >= parseFloat(candle[1]) 
+              ? "#4caf50" 
+              : "#f44336"
+          }
+        }
+        return null
+      }).filter(Boolean)
+
+      // Sort data
+      formattedData.sort((a, b) => a.time - b.time)
       formattedVolumeData.sort((a, b) => a.time - b.time)
 
       setData(formattedData)
@@ -266,28 +294,77 @@ export  function TradingChart({instrumentKey}) {
 
       const candles = responseData.data.data.candles;
       
-      // Format candle data
-      const formattedData = candles
-        .map(candle => {
-          const timestamp = convertToIndianTime(new Date(candle[0]).getTime());
-          
-          // Market hours check (9:15 AM to 3:30 PM IST)
-          const date = new Date(candle[0]);
-          const timeInMinutes = date.getHours() * 60 + date.getMinutes();
-          
-          if (timeInMinutes >= 555 && timeInMinutes <= 930) {
-            return {
-              time: timestamp,
-              open: parseFloat(candle[1]),
-              high: parseFloat(candle[2]),
-              low: parseFloat(candle[3]),
-              close: parseFloat(candle[4]),
-              value: parseFloat(candle[4]), // Close price for line series
-            };
+      // Get the last valid candle
+        // Get the first valid candle
+    const firstValidCandle = candles.find(candle => {
+      const date = new Date(candle[0]);
+      const timeInMinutes = date.getHours() * 60 + date.getMinutes();
+      return timeInMinutes >= 555 && timeInMinutes <= 930;
+    });
+      if (firstValidCandle) {
+        // Update market data with last known values
+        const lastKnownValues = {
+          ltp: parseFloat(firstValidCandle[4]), // Close price
+          cp: parseFloat(firstValidCandle[1]), // Open price
+          high: parseFloat(firstValidCandle[2]),
+          low: parseFloat(firstValidCandle[3]),
+          volume: parseFloat(firstValidCandle[5]),
+          timestamp: new Date(firstValidCandle[0]),
+          lastCandle: {
+            open: parseFloat(firstValidCandle[1]),
+            high: parseFloat(firstValidCandle[2]),
+            low: parseFloat(firstValidCandle[3]),
+            close: parseFloat(firstValidCandle[4])
           }
-          return null;
-        })
-        .filter(Boolean);
+        };
+
+        setLastKnownData(prev => ({
+          ...prev,
+          ...lastKnownValues
+        }));
+
+        if (!isMarketOpen()) {
+          setMarketData(prev => ({
+            ...prev,
+            ...lastKnownValues
+          }));
+        }
+      }
+
+      // Continue with existing formatting logic...
+      const formattedData = candles.map(candle => {
+        const timestamp = convertToIndianTime(new Date(candle[0]).getTime())
+        
+        // For weekly data, we don't need to filter by market hours
+        if (timeframe === 'week') {
+          return {
+            time: timestamp,
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            value: parseFloat(candle[4]) // Close price for line series
+          }
+        }
+        
+        // For intraday, keep the market hours filter
+        const date = new Date(candle[0])
+        const hours = date.getHours()
+        const minutes = date.getMinutes()
+        const timeInMinutes = hours * 60 + minutes
+        
+        if (timeInMinutes >= 555 && timeInMinutes <= 930) {
+          return {
+            time: timestamp,
+            open: parseFloat(candle[1]),
+            high: parseFloat(candle[2]),
+            low: parseFloat(candle[3]),
+            close: parseFloat(candle[4]),
+            value: parseFloat(candle[4])
+          }
+        }
+        return null
+      }).filter(Boolean) // Remove null values
 
       // Format volume data
       const formattedVolumeData = candles
@@ -317,23 +394,35 @@ export  function TradingChart({instrumentKey}) {
 
   // Modify the setupStream function to combine data
   useEffect(() => {
+    let isSubscribed = true; // Add flag to prevent race conditions
     const setupStream = async () => {
-      if (!instrumentKey) return;
+      if (!instrumentKey || !isSubscribed) return;
 
       try {
         setLoading(true);
         
-        // First fetch today's intraday data
-        const { formattedData: intradayData, formattedVolumeData: intradayVolume } = await fetchTodayIntraday();
+        // Clean up existing connection first
+        if (eventSourceRef.current) {
+          console.log('Closing existing connection');
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
         
-        // Then fetch historical data
-        await fetchHistoricalData(timeframe);
+        // Fetch both historical and intraday data
+        const [intradayResult, historicalResult] = await Promise.all([
+          fetchTodayIntraday(),
+          fetchHistoricalData(timeframe)
+        ]);
+
+        if (!isSubscribed) return; // Check if component is still mounted
+
+        const { formattedData: intradayData, formattedVolumeData: intradayVolume } = intradayResult;
         
-        // Combine historical and intraday data
-        const combinedData = [...data];
-        const combinedVolume = [...volumeData];
+        // Combine data
+        const combinedData = [];
+        const combinedVolume = [];
         
-        // Only add intraday data points that don't exist in historical data
+        // Add intraday data without duplicates
         intradayData.forEach(candleData => {
           if (!combinedData.some(d => d.time === candleData.time)) {
             combinedData.push(candleData);
@@ -346,37 +435,21 @@ export  function TradingChart({instrumentKey}) {
           }
         });
 
-        // Sort combined data by timestamp
+        // Sort combined data
         combinedData.sort((a, b) => a.time - b.time);
         combinedVolume.sort((a, b) => a.time - b.time);
 
-        // Update state with combined data
+        // Update state
         setData(combinedData);
         setVolumeData(combinedVolume);
 
-        // Update market data from latest candle
-        if (combinedData.length > 0) {
-          const lastCandle = combinedData[combinedData.length - 1];
-          setOrderPrice(lastCandle.value);
-          
-          setMarketData(prev => ({
-            ...prev,
-            ltp: lastCandle.value,
-            high: Math.max(...combinedData.slice(-20).map(d => d.high || d.value)),
-            low: Math.min(...combinedData.slice(-20).map(d => d.low || d.value)),
-            volume: combinedVolume.reduce((sum, vol) => sum + vol.value, 0)
-          }));
-        }
-
-        // Set up real-time stream
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close();
-        }
-
+        // Set up single EventSource connection
         const encodedKey = encodeURIComponent(instrumentKey);
+        console.log('Setting up new EventSource connection');
         eventSourceRef.current = new EventSource(`http://localhost:5001/stream/${encodedKey}`);
 
         eventSourceRef.current.onmessage = (event) => {
+          if (!isSubscribed) return;
           try {
             const streamData = JSON.parse(event.data);
             handleRealTimeUpdate(streamData);
@@ -389,6 +462,7 @@ export  function TradingChart({instrumentKey}) {
         };
 
         eventSourceRef.current.onerror = (error) => {
+          if (!isSubscribed) return;
           console.error('Stream connection error:', error);
           setIsStreamConnected(false);
           setError('Stream connection lost. Reconnecting...');
@@ -398,6 +472,7 @@ export  function TradingChart({instrumentKey}) {
         setError(null);
 
       } catch (error) {
+        if (!isSubscribed) return;
         console.error('Setup error:', error);
         setError('Failed to initialize data');
         setLoading(false);
@@ -406,13 +481,17 @@ export  function TradingChart({instrumentKey}) {
 
     setupStream();
 
+    // Cleanup function
     return () => {
+      isSubscribed = false;
       if (eventSourceRef.current) {
+        console.log('Cleaning up EventSource connection');
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
         setIsStreamConnected(false);
       }
     };
-  }, [instrumentKey, timeframe])
+  }, [instrumentKey, timeframe]); // Add required dependencies
 
   // Add helper function to check for duplicate candles
   const isDuplicateCandle = (existingData, newCandle) => {
@@ -422,47 +501,15 @@ export  function TradingChart({instrumentKey}) {
     );
   };
 
-  // Your original real-time update handler
+  // Modify the handleRealTimeUpdate function
   const handleRealTimeUpdate = (marketDataUpdate) => {
-    if (!marketDataUpdate?.data?.ff?.marketFF) return
+    if (!marketDataUpdate?.data?.ff?.marketFF) return;
     
-    const { marketFF } = marketDataUpdate.data.ff
-    const timestamp = convertToIndianTime(parseInt(marketFF.ltpc.ltt))
+    const { marketFF } = marketDataUpdate.data.ff;
+    const timestamp = convertToIndianTime(parseInt(marketFF.ltpc.ltt));
     
-    // Create new candlestick data point
-    const newData = {
-      time: timestamp,
-      value: parseFloat(marketFF.ltpc.ltp),
-      open: parseFloat(marketFF.marketOHLC.ohlc[2].open),
-      high: parseFloat(marketFF.marketOHLC.ohlc[2].high),
-      low: parseFloat(marketFF.marketOHLC.ohlc[2].low),
-      close: parseFloat(marketFF.ltpc.ltp)
-    }
-
-    // Create new volume data point
-    const newVolumeData = {
-      time: timestamp,
-      value: parseFloat(marketFF.eFeedDetails.vtt),
-      color: marketFF.ltpc.ltp >= marketFF.ltpc.cp ? "#4caf50" : "#f44336"
-    }
-
-    // Update chart data avoiding duplicates
-    setData(prevData => {
-      if (!isDuplicateCandle(prevData, newData)) {
-        return [...prevData, newData].sort((a, b) => a.time - b.time);
-      }
-      return prevData;
-    })
-
-    setVolumeData(prevVolume => {
-      if (!isDuplicateCandle(prevVolume, newVolumeData)) {
-        return [...prevVolume, newVolumeData].sort((a, b) => a.time - b.time);
-      }
-      return prevVolume;
-    })
-
-    // Update market data state
-    setMarketData({
+    // Store last known good values
+    const updatedMarketData = {
       ltp: parseFloat(marketFF.ltpc.ltp),
       change: parseFloat(marketFF.ltpc.ltp) - parseFloat(marketFF.ltpc.cp),
       changePercent: ((parseFloat(marketFF.ltpc.ltp) - parseFloat(marketFF.ltpc.cp)) / parseFloat(marketFF.ltpc.cp)) * 100,
@@ -474,43 +521,56 @@ export  function TradingChart({instrumentKey}) {
       askPrice: marketFF.marketLevel?.bidAskQuote?.[0]?.ap || 0,
       bidQty: marketFF.marketLevel?.bidAskQuote?.[0]?.bq || 0,
       askQty: marketFF.marketLevel?.bidAskQuote?.[0]?.aq || 0,
-      cp: parseFloat(marketFF.ltpc.cp)
-    })
+      cp: parseFloat(marketFF.ltpc.cp),
+      timestamp: new Date(),
+      // Add OHLC data for the last candle
+      lastCandle: {
+        open: parseFloat(marketFF.marketOHLC.ohlc[2].open),
+        high: parseFloat(marketFF.marketOHLC.ohlc[2].high),
+        low: parseFloat(marketFF.marketOHLC.ohlc[2].low),
+        close: parseFloat(marketFF.ltpc.ltp)
+      }
+    };
 
-    // Update order price for market orders
-    if (orderType === "market") {
-      setOrderPrice(parseFloat(marketFF.ltpc.ltp))
-    }
+    // Always update last known data
+    setLastKnownData(updatedMarketData);
+    setMarketData(updatedMarketData);
+    
+    // Create new candle data
+    const newData = {
+      time: timestamp,
+      value: updatedMarketData.ltp,
+      open: updatedMarketData.lastCandle.open,
+      high: updatedMarketData.lastCandle.high,
+      low: updatedMarketData.lastCandle.low,
+      close: updatedMarketData.ltp
+    };
 
-    // Update data arrays
+    const newVolumeData = {
+      time: timestamp,
+      value: updatedMarketData.volume,
+      color: updatedMarketData.ltp >= updatedMarketData.cp ? "#4caf50" : "#f44336"
+    };
+
+    // Always update chart data with latest values
     setData(prevData => {
-      const newDataArray = [...prevData]
-      const lastIndex = newDataArray.length - 1
-      
-      if (lastIndex >= 0 && newDataArray[lastIndex].time === timestamp) {
-        newDataArray[lastIndex] = newData
-      } else {
-        newDataArray.push(newData)
+      if (!isDuplicateCandle(prevData, newData)) {
+        const filteredData = prevData.filter(d => d.time !== newData.time);
+        return [...filteredData, newData].sort((a, b) => a.time - b.time);
       }
-      
-      return newDataArray
-    })
+      return prevData;
+    });
 
-    setVolumeData(prevVolumeData => {
-      const newVolumeArray = [...prevVolumeData]
-      const lastIndex = newVolumeArray.length - 1
-      
-      if (lastIndex >= 0 && newVolumeArray[lastIndex].time === timestamp) {
-        newVolumeArray[lastIndex] = newVolumeData
-      } else {
-        newVolumeArray.push(newVolumeData)
+    setVolumeData(prevVolume => {
+      if (!isDuplicateCandle(prevVolume, newVolumeData)) {
+        const filteredVolume = prevVolume.filter(v => v.time !== newVolumeData.time);
+        return [...filteredVolume, newVolumeData].sort((a, b) => a.time - b.time);
       }
-      
-      return newVolumeArray
-    })
+      return prevVolume;
+    });
 
-    setLastUpdated(new Date())
-  }
+    setLastUpdated(new Date());
+  };
 
   // Initialize chart
   useEffect(() => {
@@ -650,76 +710,128 @@ export  function TradingChart({instrumentKey}) {
     }
   }, [data, volumeData, chartReady, trades, isAutoScrollEnabled])
 
-  // Your original data fetching and streaming setup
-  useEffect(() => {
-    const setupStream = async () => {
-      if (!instrumentKey) return
-
-      // First fetch historical data
-      await fetchHistoricalData(timeframe)
-
-      // Then set up real-time stream
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-
-      const encodedKey = encodeURIComponent(instrumentKey)
-      eventSourceRef.current = new EventSource(`http://localhost:5001/stream/${encodedKey}`)
-
-      eventSourceRef.current.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          handleRealTimeUpdate(data)
-          setIsStreamConnected(true)
-          setError(null)
-        } catch (err) {
-          console.error('Stream parsing error:', err)
-          setError('Failed to parse stream data')
-        }
-      }
-
-      eventSourceRef.current.onerror = (error) => {
-        console.error('Stream connection error:', error)
-        setIsStreamConnected(false)
-        setError('Stream connection lost. Reconnecting...')
-      }
-    };
-
-    setupStream();
-
-    return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        setIsStreamConnected(false);
-      }
-    };
-  }, [instrumentKey])
-
   // Trading functions
-  const placeBuyOrder = () => {
-    const price = orderType === "market" ? marketData.ltp : orderPrice
-    const newTrade = {
-      id: Date.now(),
-      time: Math.floor(Date.now() / 1000),
-      type: "buy",
-      quantity: orderQuantity,
-      price: price,
-      timestamp: new Date()
-    }
-    setTrades(prevTrades => [...prevTrades, newTrade])
-  }
+  const placeBuyOrder = async () => {
+    try {
+      // Check if ask price is available
+      // if (!marketData.askPrice || marketData.askPrice === 0) {
+      //   setError("No ask price available");
+      //   return;
+      // }
 
-  const placeSellOrder = () => {
-    const price = orderType === "market" ? marketData.ltp : orderPrice
-    const newTrade = {
-      id: Date.now(),
-      time: Math.floor(Date.now() / 1000),
-      type: "sell",
-      quantity: orderQuantity,
-      price: price,
-      timestamp: new Date()
+      const price = orderType === "market" ? marketData.askPrice : orderPrice;
+
+      // Create option record first
+      const optionData = {
+        symbol: instrumentKey.split('|')[1], // Extract symbol from instrumentKey
+        strikePrice: price || marketData.ltp, // Use market data if price is not set
+        expiryDate: new Date(), // Set appropriate expiry date
+        optionType: "CE", // or "PE" based on your needs
+        lotSize: selectedLotSize,
+        ltp: marketData.ltp
+      };
+
+      const option = await createOption(optionData).unwrap();
+
+      // Create trade record
+      const tradeData = {
+        contestId:id,
+        optionId: option.id,
+        action: "buy",
+        quantity: orderQuantity,
+        price: price,
+        timestamp: new Date()
+      };
+
+      const trade = await createTrade(tradeData).unwrap();
+
+      // Create or update position
+      const positionData = {
+        optionId: option.id,
+        netQuantity: orderQuantity,
+        averageEntryPrice: price
+      };
+
+      await createPosition(positionData).unwrap();
+
+      // Update local state
+      const newTrade = {
+        id: trade.id,
+        time: Math.floor(Date.now() / 1000),
+        type: "buy",
+        quantity: orderQuantity,
+        price: price,
+        timestamp: new Date()
+      };
+
+      setTrades(prevTrades => [...prevTrades, newTrade]);
+      setError(null);
+
+    } catch (err) {
+      console.error('Failed to place buy order:', err);
+      setError(err.error || 'Failed to place buy order');
     }
-    setTrades(prevTrades => [...prevTrades, newTrade])
+  };
+
+  const placeSellOrder = async () => {
+    try {
+      // Check if bid price is available  
+      if (!marketData.bidPrice || marketData.bidPrice === 0) {
+        setError("No bid price available");
+        return;
+      }
+
+      const price = orderType === "market" ? marketData.bidPrice : orderPrice;
+
+      // Create option record first
+      const optionData = {
+        symbol: instrumentKey.split('|')[1],
+        strikePrice: price,
+        expiryDate: new Date(),
+        optionType: "CE", // or "PE" based on your needs
+        lotSize: selectedLotSize,
+        ltp: marketData.ltp
+      };
+
+      const option = await createOption(optionData).unwrap();
+
+      // Create trade record
+      const tradeData = {
+        optionId: option.id,
+        action: "sell",
+        quantity: orderQuantity,
+        price: price,
+        timestamp: new Date()
+      };
+
+      const trade = await createTrade(tradeData).unwrap();
+
+      // Create or update position
+      const positionData = {
+        optionId: option.id,
+        netQuantity: -orderQuantity, // Negative for sell
+        averageEntryPrice: price
+      };
+
+      await createPosition(positionData).unwrap();
+
+      // Update local state
+      const newTrade = {
+        id: trade.id,
+        time: Math.floor(Date.now() / 1000),
+        type: "sell",
+        quantity: orderQuantity,
+        price: price,
+        timestamp: new Date()
+      };
+
+      setTrades(prevTrades => [...prevTrades, newTrade]);
+      setError(null);
+
+    } catch (err) {
+      console.error('Failed to place sell order:', err);
+      setError(err.message || 'Failed to place sell order');
+    }
   }
 
   const handleLotSizeChange = (lotSize) => {
@@ -768,6 +880,18 @@ export  function TradingChart({instrumentKey}) {
     setIsAutoScrollEnabled(!isAutoScrollEnabled)
   }
 
+  // Add these functions near the top of your file
+  const isMarketOpen = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const timeInMinutes = hours * 60 + minutes;
+    return timeInMinutes >= 555 && timeInMinutes <= 915; // 9:15 AM to 3:15 PM
+  };
+
+  // Add state for environment
+  const [isProduction, setIsProduction] = useState(false);
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -789,12 +913,33 @@ export  function TradingChart({instrumentKey}) {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           <Card>
             <CardContent className="p-4">
-              <div className="text-sm text-gray-600">LTP</div>
-              <div className="text-xl font-bold">₹{marketData.ltp.toFixed(2)}</div>
-              <div className={`text-sm flex items-center gap-1 ${marketData.change >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {marketData.change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {marketData.change >= 0 ? '+' : ''}{marketData.change.toFixed(2)} ({marketData.changePercent >= 0 ? '+' : ''}{marketData.changePercent.toFixed(2)}%)
+              <div className="text-sm text-gray-600">
+                LTP
+                <Badge className={`ml-2 ${isMarketOpen() ? 'bg-green-500' : 'bg-red-500'}`}>
+                  {isMarketOpen() ? 'LIVE' : 'CLOSED'}
+                </Badge>
               </div>
+              <div className="text-xl font-bold">
+                ₹{(isMarketOpen() ? marketData.ltp : lastKnownData.ltp).toFixed(2)}
+              </div>
+              <div className={`text-sm flex items-center gap-1 ${
+                (isMarketOpen() ? marketData.change : lastKnownData.change) >= 0 
+                  ? 'text-green-600' 
+                  : 'text-red-600'
+              }`}>
+                {(isMarketOpen() ? marketData.change : lastKnownData.change) >= 0 
+                  ? <TrendingUp className="w-3 h-3" /> 
+                  : <TrendingDown className="w-3 h-3" />
+                }
+                {(isMarketOpen() ? marketData.change : lastKnownData.change) >= 0 ? '+' : ''}
+                {(isMarketOpen() ? marketData.change : lastKnownData.change).toFixed(2)} 
+                ({(isMarketOpen() ? marketData.changePercent : lastKnownData.changePercent).toFixed(2)}%)
+              </div>
+              {!isMarketOpen() && lastKnownData.timestamp && (
+                <div className="text-xs text-gray-500 mt-1">
+                  Last Update: {lastKnownData.timestamp.toLocaleTimeString()}
+                </div>
+              )}
             </CardContent>
           </Card>
 

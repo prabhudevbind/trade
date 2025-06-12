@@ -166,6 +166,140 @@ const contestParticipantController = {
       res.status(400).json({ error: 'Failed to delete participant', details: error.message });
     }
   },
+
+  // Get user trading data
+  async getUserTradingData(req, res) {
+    try {
+      const userId = parseInt(req.user.userId);
+
+      // Get current active contests data
+      const currentContestData = await prisma.contestParticipant.findMany({
+        where: {
+          user_id: userId,
+          contest: {
+            status: 'ongoing'
+          }
+        },
+        include: {
+          contest: true,
+          trades: {
+            include: {
+              option: true
+            },
+            orderBy: {
+              timestamp: 'desc'
+            }
+          },
+          positions: {
+            include: {
+              option: true
+            }
+          }
+        }
+      });
+
+      // Get historical/past contests data
+      const historicalContestData = await prisma.contestParticipant.findMany({
+        where: {
+          user_id: userId,
+          contest: {
+            status: {
+              in: ['ended']
+            }
+          }
+        },
+        include: {
+          contest: true,
+          trades: {
+            include: {
+              option: true
+            },
+            orderBy: {
+              timestamp: 'desc'
+            }
+          },
+          positions: {
+            include: {
+              option: true
+            }
+          }
+        }
+      });
+
+      // Format response data
+      const response = {
+        currentTrading: currentContestData.map(participant => ({
+          contestId: participant.contest_id,
+          contestName: participant.contest.name,
+          virtualCash: parseFloat(participant.virtual_cash),
+          maxTrades: parseInt(participant.contest.maxTrade),
+          usedTrades: participant.trades.length,
+          positions: participant.positions.map(pos => ({
+            id: pos.id,
+            symbol: pos.option.symbol,
+            strikePrice: parseFloat(pos.option.strike_price),
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            currentPrice: parseFloat(pos.option.ltp),
+            pnl: (pos.option.ltp - pos.average_entry_price) * pos.net_quantity
+          })),
+          recentTrades: participant.trades.slice(0, 5).map(trade => ({
+            id: trade.id,
+            timestamp: trade.timestamp,
+            action: trade.action,
+            symbol: trade.option.symbol,
+            strikePrice: parseFloat(trade.option.strike_price),
+            quantity: trade.quantity,
+            price: parseFloat(trade.price)
+          }))
+        })),
+
+        tradingHistory: historicalContestData.map(participant => ({
+          contestId: participant.contest_id,
+          contestName: participant.contest.name,
+          endedAt: participant.contest.end_time,
+          finalCash: parseFloat(participant.virtual_cash),
+          totalTrades: participant.trades.length,
+          positions: participant.positions.map(pos => ({
+            symbol: pos.option.symbol,
+            strikePrice: parseFloat(pos.option.strike_price),
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            lastPrice: parseFloat(pos.option.ltp),
+            realizedPnl: (pos.option.ltp - pos.average_entry_price) * pos.net_quantity
+          })),
+          tradeHistory: participant.trades.map(trade => ({
+            timestamp: trade.timestamp,
+            action: trade.action,
+            symbol: trade.option.symbol,
+            strikePrice: parseFloat(trade.option.strike_price),
+            quantity: trade.quantity,
+            price: parseFloat(trade.price)
+          }))
+        })),
+
+        summary: {
+          activeContests: currentContestData.length,
+          completedContests: historicalContestData.length,
+          totalTradesAllTime: [...currentContestData, ...historicalContestData]
+            .reduce((sum, contest) => sum + contest.trades.length, 0),
+          currentTotalValue: currentContestData
+            .reduce((sum, contest) => sum + parseFloat(contest.virtual_cash), 0)
+        }
+      };
+
+      res.status(200).json(response);
+
+    } catch (error) {
+      console.error('Error fetching user trading data:', error);
+      res.status(500).json({
+        error: 'Failed to fetch trading data',
+        details: error.message
+      });
+    }
+  }
 };
 
 // Option Controller
@@ -173,15 +307,15 @@ const optionController = {
   // Create a new option
   async createOption(req, res) {
     try {
-      const { symbol, expiry_date, strike_price, option_type, ltp, lot_size } = req.body;
+      const { symbol, expiryDate, strikePrice, optionType, ltp, lotSize } = req.body;
       const option = await prisma.option.create({
         data: {
           symbol,
-          expiry_date: new Date(expiry_date),
-          strike_price: parseFloat(strike_price),
-          option_type,
+          expiry_date: expiryDate,
+          strike_price: parseFloat(strikePrice),
+          option_type:optionType,
           ltp: parseFloat(ltp),
-          lot_size: parseInt(lot_size),
+          lot_size: parseInt(lotSize),
         },
       });
       res.status(201).json(option);
@@ -260,18 +394,54 @@ const positionController = {
   // Create a new position
   async createPosition(req, res) {
     try {
-      const { contest_participant_id, option_id, net_quantity, average_entry_price } = req.body;
+      const { optionId, netQuantity, averageEntryPrice } = req.body;
+      let contest_participant_id=req.user.userId;
+      // Validate inputs
+      if (!contest_participant_id || !optionId || !netQuantity || !averageEntryPrice) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Parse values
+      const parsedParticipantId = parseInt(contest_participant_id);
+      const parsedOptionId = parseInt(optionId);
+      const parsedQuantity = parseInt(netQuantity);
+      const parsedPrice = parseFloat(averageEntryPrice);
+
+      // Validate parsed values
+      if (isNaN(parsedParticipantId) || isNaN(parsedOptionId) || 
+          isNaN(parsedQuantity) || isNaN(parsedPrice)) {
+        return res.status(400).json({ error: 'Invalid input values' });
+      }
+
+      // Create position with proper relations
       const position = await prisma.position.create({
         data: {
-          contest_participant_id: parseInt(contest_participant_id),
-          option_id: parseInt(option_id),
-          net_quantity: parseInt(net_quantity),
-          average_entry_price: parseFloat(average_entry_price),
+          net_quantity: parsedQuantity,
+          average_entry_price: parsedPrice,
+          contestParticipant: {
+            connect: {
+              id: parsedParticipantId
+            }
+          },
+          option: {
+            connect: {
+              id: parsedOptionId
+            }
+          }
         },
+        include: {
+          contestParticipant: true,
+          option: true
+        }
       });
+
       res.status(201).json(position);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create position', details: error.message });
+      console.error('Position creation error:', error);
+      res.status(400).json({ 
+        error: 'Failed to create position', 
+        details: error.message 
+      });
     }
   },
 
@@ -341,19 +511,126 @@ const tradeController = {
   // Create a new trade
   async createTrade(req, res) {
     try {
-      const { contest_participant_id, option_id, action, quantity, price } = req.body;
+      const { optionId, contestId, action, quantity, price } = req.body;
+      const userId = parseInt(req.user.userId);
+
+      // Find specific contest participation
+      const contestParticipant = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest_id: parseInt(contestId),
+          contest: {
+            status: 'ongoing'
+          }
+        },
+        include: {
+          contest: true,
+          trades: {
+            where: {
+              contestParticipant: {
+                contest_id: parseInt(contestId)
+              }
+            }
+          }
+        }
+      });
+
+      // Check if participant exists in this contest
+      if (!contestParticipant) {
+        return res.status(400).json({
+          error: 'You are not participating in this contest'
+        });
+      }
+
+      // Check if contest is active
+      if (contestParticipant.contest.status !== 'ongoing') {
+        return res.status(400).json({
+          error: 'Contest is not active'
+        });
+      }
+
+      // Check trade limits for this specific contest
+      const contestTrades = contestParticipant.trades;
+      if (contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)) {
+        return res.status(400).json({
+          error: `Maximum trades limit (${contestParticipant.contest.maxTrade}) reached for contest ${contestId}`,
+          currentTrades: contestTrades.length,
+          maxAllowed: contestParticipant.contest.maxTrade
+        });
+      }
+
+      // Calculate trade value
+      const tradeValue = parseFloat(price) * parseInt(quantity);
+      
+      // For buy orders, check virtual cash limit for this contest
+      if (action === 'buy') {
+        const currentVirtualCash = parseFloat(contestParticipant.virtual_cash);
+        if (tradeValue > currentVirtualCash) {
+          return res.status(400).json({
+            error: 'Insufficient virtual cash for this trade',
+            contestId: contestId,
+            available: currentVirtualCash,
+            required: tradeValue,
+            deficit: tradeValue - currentVirtualCash
+          });
+        }
+      }
+
+      // Create the trade
       const trade = await prisma.trade.create({
         data: {
-          contest_participant_id: parseInt(contest_participant_id),
-          option_id: parseInt(option_id),
+          contestParticipant: {
+            connect: {
+              id: contestParticipant.id
+            }
+          },
+          option: {
+            connect: {
+              id: parseInt(optionId)
+            }
+          },
           action,
           quantity: parseInt(quantity),
           price: parseFloat(price),
         },
+        include: {
+          contestParticipant: true,
+          option: true
+        }
       });
-      res.status(201).json(trade);
+
+      // Update virtual cash for this specific contest
+      const cashUpdate = action === 'buy' ? -tradeValue : tradeValue;
+      await prisma.contestParticipant.update({
+        where: {
+          id: contestParticipant.id
+        },
+        data: {
+          virtual_cash: {
+            increment: cashUpdate
+          }
+        }
+      });
+
+      // Return detailed response
+      res.status(201).json({
+        trade,
+        contestStatus: {
+          contestId: contestId,
+          tradesUsed: contestTrades.length + 1,
+          tradesRemaining: parseInt(contestParticipant.contest.maxTrade) - (contestTrades.length + 1),
+          virtualCashBefore: parseFloat(contestParticipant.virtual_cash),
+          virtualCashAfter: parseFloat(contestParticipant.virtual_cash) + cashUpdate,
+          tradeValue: tradeValue
+        }
+      });
+
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create trade', details: error.message });
+      console.error('Trade creation error:', error);
+      res.status(400).json({
+        error: 'Failed to create trade',
+        details: error.message
+      });
     }
   },
 

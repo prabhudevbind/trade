@@ -34,18 +34,24 @@ router.put('/options/:id', optionController.updateOption);
 router.delete('/options/:id', optionController.deleteOption);
 
 // Position Routes
-router.post('/positions', positionController.createPosition);
-router.get('/positions', positionController.getAllPositions);
+router.post('/positions',authenticateToken, positionController.createPosition);
+router.get('/positions',authenticateToken, positionController.getAllPositions);
 router.get('/positions/:id', positionController.getPositionById);
-router.put('/positions/:id', positionController.updatePosition);
+router.put('/positions/:id',authenticateToken, positionController.updatePosition);
 router.delete('/positions/:id', positionController.deletePosition);
 
+router.get(
+  '/trading-data',
+  authenticateToken,
+  contestParticipantController.getUserTradingData
+);
+
 // Trade Routes
-router.post('/trades', tradeController.createTrade);
-router.get('/trades', tradeController.getAllTrades);
-router.get('/trades/:id', tradeController.getTradeById);
-router.put('/trades/:id', tradeController.updateTrade);
-router.delete('/trades/:id', tradeController.deleteTrade);
+router.post('/trades',authenticateToken, tradeController.createTrade);
+router.get('/trades',authenticateToken, tradeController.getAllTrades);
+router.get('/trades/:id',authenticateToken, tradeController.getTradeById);
+router.put('/trades/:id',authenticateToken, tradeController.updateTrade);
+router.delete('/trades/:id',authenticateToken, tradeController.deleteTrade);
 
 // WalletTransaction Routes
 router.post('/wallet-transactions', walletTransactionController.createWalletTransaction);

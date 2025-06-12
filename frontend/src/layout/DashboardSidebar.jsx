@@ -84,12 +84,12 @@ const navigation = [
   {
     title: "Trading",
     items: [
-      {
-        title: "Option Chain",
-        icon: LineChart,
-        url: "/option-chain",
-        permission: "access-trading",
-      },
+      // {
+      //   title: "Option Chain",
+      //   icon: LineChart,
+      //   url: "/option-chain",
+      //   permission: "access-trading",
+      // },
       {
         title: "My Positions",
         icon: Briefcase,

@@ -21,6 +21,7 @@ import Wallet from "@/component/admin/wallet/Wallet";
 import MyContest from "@/component/admin/contest/MyContest";
 import OptionDetails from "@/component/admin/option/OptionDetails";
 import HistoryChart from "@/component/admin/option/HistoryChart";
+import Positions from "@/component/admin/positions/Positions";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -121,8 +122,13 @@ export const createAppRouter = (isAuthenticated) =>
           element:<OptionChart/>
         },
          {
-          path:"option-details/:optionId",
+          path:"option-details/:id/:optionId",
           element:<HistoryChart/>
+        },
+        {
+          path:"positions",
+          element:<Positions/>
+
         },
         {
           path:"admin",

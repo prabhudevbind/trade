@@ -136,6 +136,11 @@ export const contestApi = apiSlice.injectEndpoints({
       query: () => '/trades',
       providesTags: ['Trade'],
     }),
+
+    getMarketData: builder.query({
+      query: () => '/trading-data',
+      providesTags: ['MarketData'],
+    }),
     getTradeById: builder.query({
       query: (id) => `/trades/${id}`,
       providesTags: ['Trade'],
@@ -296,6 +301,8 @@ export const {
   useCreateTradeMutation,
   useUpdateTradeMutation,
   useDeleteTradeMutation,
+
+  useGetMarketDataQuery,
   // WalletTransaction Hooks
   useGetWalletTransactionsQuery,
   useGetWalletTransactionByIdQuery,

@@ -36,6 +36,7 @@ import {
   Wallet,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { Link } from "react-router-dom"
 
 export default function ActiveContests() {
   const userId = 1 // Replace with actual user_id from auth context/store
@@ -44,6 +45,9 @@ export default function ActiveContests() {
   const [showAddMoneyModal, setShowAddMoneyModal] = useState(false)
   const [selectedContest, setSelectedContest] = useState(null)
   const [amountToAdd, setAmountToAdd] = useState("")
+
+  // Add this state near other useState declarations
+  const [processingContestId, setProcessingContestId] = useState(null);
 
   // Fetch data
   const { data: activeData, isLoading, error: contestError } = useGetContestsQuery()
@@ -94,6 +98,7 @@ export default function ActiveContests() {
   const handleJoinContest = async (contestId, entryFee) => {
     setTransactionError(null)
     setTransactionSuccess(null)
+    setProcessingContestId(contestId); // Set processing contest
 
     if (userBalance < entryFee) {
       const shortfall = entryFee - userBalance
@@ -127,6 +132,8 @@ export default function ActiveContests() {
     } catch (err) {
       setTransactionError(err?.data?.message || "Failed to join contest. Please try again.")
       console.error("Join contest error:", err)
+    } finally {
+      setProcessingContestId(null); // Clear processing contest
     }
   }
 
@@ -207,13 +214,30 @@ export default function ActiveContests() {
           <h1 className="text-2xl font-bold tracking-tight">Available Contests</h1>
           <p className="text-muted-foreground">Join trading contests and compete with others</p>
         </div>
-        <Card className="bg-green-50 border-green-200 shadow-sm p-3 flex items-center gap-3">
-          <Wallet className="h-5 w-5 text-green-600" />
-          <div>
-            <p className="text-sm text-green-800">Wallet Balance</p>
-            <p className="font-semibold text-green-700">{formatCurrency(userBalance)}</p>
-          </div>
-        </Card>
+        <div className="flex items-center gap-3">
+          <Card className="bg-green-50 border-green-200 shadow-sm p-3 flex items-center gap-3">
+            <Wallet className="h-5 w-5 text-green-600" />
+            <div>
+              <p className="text-sm text-green-800">Wallet Balance</p>
+              <p className="font-semibold text-green-700">{formatCurrency(userBalance)}</p>
+            </div>
+          </Card>
+          
+            <Link to="/wallet" className="flex items-center gap-2">
+            <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => window.location.href = '/wallet'}
+          >
+              <Wallet className="h-4 w-4" />
+               Add Money
+                     </Button>
+            </Link>
+    
+        
+           
+         
+        </div>
       </div>
 
       {transactionSuccess && (
@@ -329,7 +353,7 @@ export default function ActiveContests() {
                         contest={contest}
                         userBalance={userBalance}
                         handleJoinContest={handleJoinContest}
-                        isLoading={isTransactionLoading || isParticipantLoading}
+                        isLoading={processingContestId === contest.id}
                       />
                     ))}
                   </div>
@@ -349,7 +373,7 @@ export default function ActiveContests() {
                         contest={contest}
                         userBalance={userBalance}
                         handleJoinContest={handleJoinContest}
-                        isLoading={isTransactionLoading || isParticipantLoading}
+                        isLoading={processingContestId === contest.id}
                       />
                     ))}
                   </div>
@@ -502,10 +526,10 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading }) {
             variant={canAfford ? "default" : "secondary"}
           >
             {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Processing...
-              </>
+              <div className="flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Joining...
+              </div>
             ) : canAfford ? (
               "Join Contest"
             ) : (

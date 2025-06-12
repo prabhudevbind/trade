@@ -197,7 +197,7 @@ const OptionChain = () => {
     if (!optionData?.instrument_key) return;
 
     navigate(
-      `/option-details/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
+      `/option-details/${id}/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
     );
   };
 
