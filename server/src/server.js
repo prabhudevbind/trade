@@ -27,6 +27,7 @@ app.use(cors());
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 
+
 // Routes
 app.use('/api/v1', require("./routes/chart/niftychart.router"));
 app.use('/api/v1', require('./routes/contest/payment.routes'));
@@ -343,5 +344,15 @@ process.on('SIGINT', () => {
     if (upstoxWs) upstoxWs.close();
     process.exit(0);
   });
+});
+
+
+
+// Serve static files from dist directory
+app.use(express.static(path.join(__dirname, '../dist')));
+
+// Handle React router
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
 module.exports = app;
