@@ -247,6 +247,181 @@ export  function TradingChart({instrumentKey}) {
     }
   }
 
+  // Add this new function to fetch today's intraday data
+  const fetchTodayIntraday = async () => {
+    try {
+      const encodedInstrumentKey = encodeURIComponent(instrumentKey);
+      const url = `/api/v1/today-intraday/${encodedInstrumentKey}/1minute`;
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      
+      if (!responseData.success || !responseData.data?.data?.candles) {
+        throw new Error('Invalid intraday API response');
+      }
+
+      const candles = responseData.data.data.candles;
+      
+      // Format candle data
+      const formattedData = candles
+        .map(candle => {
+          const timestamp = convertToIndianTime(new Date(candle[0]).getTime());
+          
+          // Market hours check (9:15 AM to 3:30 PM IST)
+          const date = new Date(candle[0]);
+          const timeInMinutes = date.getHours() * 60 + date.getMinutes();
+          
+          if (timeInMinutes >= 555 && timeInMinutes <= 930) {
+            return {
+              time: timestamp,
+              open: parseFloat(candle[1]),
+              high: parseFloat(candle[2]),
+              low: parseFloat(candle[3]),
+              close: parseFloat(candle[4]),
+              value: parseFloat(candle[4]), // Close price for line series
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      // Format volume data
+      const formattedVolumeData = candles
+        .map(candle => {
+          const timestamp = convertToIndianTime(new Date(candle[0]).getTime());
+          
+          const date = new Date(candle[0]);
+          const timeInMinutes = date.getHours() * 60 + date.getMinutes();
+          
+          if (timeInMinutes >= 555 && timeInMinutes <= 930) {
+            return {
+              time: timestamp,
+              value: parseFloat(candle[5]),
+              color: parseFloat(candle[4]) >= parseFloat(candle[1]) ? "#4caf50" : "#f44336"
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+
+      return { formattedData, formattedVolumeData };
+    } catch (error) {
+      console.error('Error fetching intraday data:', error);
+      throw error;
+    }
+  };
+
+  // Modify the setupStream function to combine data
+  useEffect(() => {
+    const setupStream = async () => {
+      if (!instrumentKey) return;
+
+      try {
+        setLoading(true);
+        
+        // First fetch today's intraday data
+        const { formattedData: intradayData, formattedVolumeData: intradayVolume } = await fetchTodayIntraday();
+        
+        // Then fetch historical data
+        await fetchHistoricalData(timeframe);
+        
+        // Combine historical and intraday data
+        const combinedData = [...data];
+        const combinedVolume = [...volumeData];
+        
+        // Only add intraday data points that don't exist in historical data
+        intradayData.forEach(candleData => {
+          if (!combinedData.some(d => d.time === candleData.time)) {
+            combinedData.push(candleData);
+          }
+        });
+
+        intradayVolume.forEach(volumeData => {
+          if (!combinedVolume.some(v => v.time === volumeData.time)) {
+            combinedVolume.push(volumeData);
+          }
+        });
+
+        // Sort combined data by timestamp
+        combinedData.sort((a, b) => a.time - b.time);
+        combinedVolume.sort((a, b) => a.time - b.time);
+
+        // Update state with combined data
+        setData(combinedData);
+        setVolumeData(combinedVolume);
+
+        // Update market data from latest candle
+        if (combinedData.length > 0) {
+          const lastCandle = combinedData[combinedData.length - 1];
+          setOrderPrice(lastCandle.value);
+          
+          setMarketData(prev => ({
+            ...prev,
+            ltp: lastCandle.value,
+            high: Math.max(...combinedData.slice(-20).map(d => d.high || d.value)),
+            low: Math.min(...combinedData.slice(-20).map(d => d.low || d.value)),
+            volume: combinedVolume.reduce((sum, vol) => sum + vol.value, 0)
+          }));
+        }
+
+        // Set up real-time stream
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+        }
+
+        const encodedKey = encodeURIComponent(instrumentKey);
+        eventSourceRef.current = new EventSource(`http://localhost:5001/stream/${encodedKey}`);
+
+        eventSourceRef.current.onmessage = (event) => {
+          try {
+            const streamData = JSON.parse(event.data);
+            handleRealTimeUpdate(streamData);
+            setIsStreamConnected(true);
+            setError(null);
+          } catch (err) {
+            console.error('Stream parsing error:', err);
+            setError('Failed to parse stream data');
+          }
+        };
+
+        eventSourceRef.current.onerror = (error) => {
+          console.error('Stream connection error:', error);
+          setIsStreamConnected(false);
+          setError('Stream connection lost. Reconnecting...');
+        };
+
+        setLoading(false);
+        setError(null);
+
+      } catch (error) {
+        console.error('Setup error:', error);
+        setError('Failed to initialize data');
+        setLoading(false);
+      }
+    };
+
+    setupStream();
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        setIsStreamConnected(false);
+      }
+    };
+  }, [instrumentKey, timeframe])
+
+  // Add helper function to check for duplicate candles
+  const isDuplicateCandle = (existingData, newCandle) => {
+    return existingData.some(candle => 
+      candle.time === newCandle.time && 
+      candle.value === newCandle.value
+    );
+  };
+
   // Your original real-time update handler
   const handleRealTimeUpdate = (marketDataUpdate) => {
     if (!marketDataUpdate?.data?.ff?.marketFF) return
@@ -271,24 +446,20 @@ export  function TradingChart({instrumentKey}) {
       color: marketFF.ltpc.ltp >= marketFF.ltpc.cp ? "#4caf50" : "#f44336"
     }
 
-    // Update chart with new data - PRESERVE ZOOM LEVEL
-    if (chartReady && lineSeries.current) {
-      // Get current visible range before updating
-      const timeScale = chart.current.timeScale()
-      const visibleRange = timeScale.getVisibleRange()
-      
-      lineSeries.current.update(newData)
-      if (volumeSeries.current) {
-        volumeSeries.current.update(newVolumeData)
+    // Update chart data avoiding duplicates
+    setData(prevData => {
+      if (!isDuplicateCandle(prevData, newData)) {
+        return [...prevData, newData].sort((a, b) => a.time - b.time);
       }
-      
-      // Restore zoom level unless auto-scroll is enabled
-      if (!isAutoScrollEnabled && visibleRange) {
-        setTimeout(() => {
-          timeScale.setVisibleRange(visibleRange)
-        }, 50)
+      return prevData;
+    })
+
+    setVolumeData(prevVolume => {
+      if (!isDuplicateCandle(prevVolume, newVolumeData)) {
+        return [...prevVolume, newVolumeData].sort((a, b) => a.time - b.time);
       }
-    }
+      return prevVolume;
+    })
 
     // Update market data state
     setMarketData({
@@ -512,17 +683,17 @@ export  function TradingChart({instrumentKey}) {
         setIsStreamConnected(false)
         setError('Stream connection lost. Reconnecting...')
       }
+    };
 
-      return () => {
-        if (eventSourceRef.current) {
-          eventSourceRef.current.close()
-          setIsStreamConnected(false)
-        }
+    setupStream();
+
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close();
+        setIsStreamConnected(false);
       }
-    }
-
-    setupStream()
-  }, [instrumentKey, timeframe])
+    };
+  }, [instrumentKey])
 
   // Trading functions
   const placeBuyOrder = () => {
@@ -809,8 +980,7 @@ export  function TradingChart({instrumentKey}) {
 
                 {/* Quantity */}
                 <div>
-                  <label className="text-sm font
-                    medium text-gray-700 block mb-2">Quantity</label>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
                   <Input
                     type="number"
                     value={orderQuantity}

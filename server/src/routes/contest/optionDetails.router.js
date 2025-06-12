@@ -164,6 +164,75 @@ router.get("/market-data/:instrument_key", (req, res) => {
   }
 });
 
+// New endpoint specifically for today's complete intraday data
+router.get("/today-intraday/:instrument_key/:interval", async (req, res) => {
+  try {
+    const { instrument_key, interval } = req.params;
+    
+    // Validate interval for intraday
+    const validIntradayIntervals = ['1minute', '30minute'];
+    if (!validIntradayIntervals.includes(interval)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid interval for intraday. Valid intervals: 1minute, 30minute",
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Get today's date
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    // For intraday data, we need to use from_date parameter to get complete data
+    const url = `https://api.upstox.com/v2/historical-candle/intraday/${instrument_key}/${interval}`;
+    
+    console.log('Fetching today\'s intraday data from URL:', url);
+    
+    const response = await axios.get(url, {
+      headers: { 
+        'Accept': 'application/json'
+      },
+      timeout: 10000
+    });
+    
+    // Combine with real-time data if available
+    const decodedInstrumentKey = decodeURIComponent(instrument_key);
+    const realTimeData = marketDataCache.get(decodedInstrumentKey);
+    
+    res.status(200).json({
+      success: true,
+      data: response.data,
+      real_time_data: realTimeData || null,
+      url: url,
+      params: {
+        instrument_key,
+        interval,
+        date: todayStr
+      },
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('Error fetching today\'s intraday data:', error.message);
+    
+    let statusCode = 500;
+    let errorMessage = "Error fetching today's intraday data";
+    
+    if (error.response) {
+      statusCode = error.response.status;
+      errorMessage = error.response.data?.message || error.message;
+    } else if (error.request) {
+      errorMessage = "No response from API server";
+    }
+    
+    res.status(statusCode).json({
+      success: false,
+      message: errorMessage,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
 
 
 // Export the router and update function

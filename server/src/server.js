@@ -6,6 +6,7 @@ const protobuf = require("protobufjs");
 const UpstoxClient = require("upstox-js-sdk");
 const { errorHandler } = require('./middleware/error.middleware');
 const { initializeMarketDataService } = require('./services/marketData.service');
+const os = require('os');
 
 // Create Express app
 const app = express();
@@ -17,7 +18,7 @@ let protobufRoot = null;
 let defaultClient = UpstoxClient.ApiClient.instance;
 let apiVersion = "2.0";
 let OAUTH2 = defaultClient.authentications["OAUTH2"];
-OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODMzZTlmMjRlOWRkNzVmNjYwODNhMWUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc0ODIzMjY5MCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzQ4Mjk2ODAwfQ.8LD1EfOv2c6DkfDOfvB9yOtvHUHvBgIxks5nCLg7eq0"; // Replace with your actual token
+OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODRhNTc5MGFmMGEzZTVhN2I3ODE1ZTQiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc0OTcwMjU0NCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzQ5NzY1NjAwfQ.PvXzozJp9KnoPG7uS8THjvocDp9Prje2BPHDMz-EYnI"; // Replace with your actual token
 let upstoxWs = null;
 const streamingResponses = new Map();
 
@@ -45,6 +46,34 @@ app.use('/api/v1', require('./utils/profileupload'));
 // Error handling middleware
 app.use(errorHandler);
 
+// Add this function to format memory sizes
+function formatMemoryUsage(bytes) {
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+}
+
+// Add this function to log memory stats
+function logMemoryUsage() {
+    const memoryUsage = process.memoryUsage();
+    const systemMemory = {
+        total: os.totalmem(),
+        free: os.freemem(),
+        used: os.totalmem() - os.freemem()
+    };
+
+    console.log('\n📊 Memory Usage Statistics:');
+    console.log('─────────────────────────');
+    console.log('🔸 Process Memory:');
+    console.log(`   • Heap Used: ${formatMemoryUsage(memoryUsage.heapUsed)}`);
+    console.log(`   • Heap Total: ${formatMemoryUsage(memoryUsage.heapTotal)}`);
+    console.log(`   • RSS: ${formatMemoryUsage(memoryUsage.rss)}`);
+    console.log('🔸 System Memory:');
+    console.log(`   • Total: ${formatMemoryUsage(systemMemory.total)}`);
+    console.log(`   • Free: ${formatMemoryUsage(systemMemory.free)}`);
+    console.log(`   • Used: ${formatMemoryUsage(systemMemory.used)}`);
+    console.log(`   • Usage: ${((systemMemory.used / systemMemory.total) * 100).toFixed(2)}%`);
+    console.log('─────────────────────────');
+}
+
 // Start server
 server.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
@@ -54,6 +83,10 @@ server.listen(PORT, async () => {
         await initProtobuf();
         await initUpstoxConnection();
         console.log('All services initialized successfully');
+
+        // Start memory monitoring
+        setInterval(logMemoryUsage, 5 * 60 * 1000); // Log every 5 minutes
+        logMemoryUsage(); // Initial log
     } catch (error) {
         console.error('Failed to initialize services:', error);
     }
@@ -62,6 +95,9 @@ server.listen(PORT, async () => {
 // Graceful shutdown handler
 process.on('SIGINT', () => {
     console.log('Shutting down...');
+    console.log('Final Memory Usage:');
+    logMemoryUsage();
+    
     streamingResponses.forEach((responses, instrumentKey) => {
         responses.forEach(res => {
             if (!res.writableEnded) {
@@ -292,6 +328,9 @@ app.get('/stream/:instrumentKey', (req, res) => {
 // Handle shutdown
 process.on('SIGINT', () => {
   console.log('Shutting down...');
+  console.log('Final Memory Usage:');
+  logMemoryUsage();
+  
   streamingResponses.forEach((responses, instrumentKey) => {
     responses.forEach(res => {
       if (!res.writableEnded) {

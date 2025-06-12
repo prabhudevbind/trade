@@ -24,16 +24,16 @@ export default function TradingDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 sm:p-4">
-      <div className=" w-full mx-auto space-y-2">
+    <>
+      {/* <div className=" w-full mx-auto space-y-2"> */}
         {/* Header */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Trading Dashboard</h1>
+          {/* <h1 className="text-3xl font-bold text-gray-900 mb-2">Trading Dashboard</h1> */}
           {/* <p className="text-gray-600">Advanced charting with real-time market data</p> */}
         </div>
 
         {/* Main Content */}
-        <Tabs defaultValue="chart" className="w-full">
+        {/* <Tabs defaultValue="chart" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="chart">Chart Analysis</TabsTrigger>
             <TabsTrigger value="realtime">Real-time Data</TabsTrigger>
@@ -58,8 +58,9 @@ export default function TradingDashboard() {
           </TabsContent>
 
          
-        </Tabs>
-      </div>
-    </div>
+        </Tabs> */}
+         <TradingChart instrumentKey={selectedInstrument} trades={trades} onAddTrade={addTrade} />
+      {/* </div> */}
+    </>
   )
 }

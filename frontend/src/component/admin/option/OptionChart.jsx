@@ -1,7 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Calendar, BarChart3, TrendingUp, TrendingDown, Activity } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  Calendar,
+  BarChart3,
+  TrendingUp,
+  TrendingDown,
+  Activity,
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -13,21 +19,42 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useGetOptionsQuery } from "@/store/api/options.api";
-
+import { useGetContestByIdQuery } from "@/store/api/contest";
+import { formatDistanceToNow } from 'date-fns';
+import {  TimerIcon, Trophy, Users } from 'lucide-react';
+import { CurrencyIcon } from "lucide-react";
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty Bank");
-  const [selectedExpiry, setSelectedExpiry] = useState("2025-05-29");
+  const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12");
   const [optionChainData, setOptionChainData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [expiryDates, setExpiryDates] = useState([]);
+  const [tradesTaken, setTradesTaken] = useState(0);
   const navigate = useNavigate();
+  const atmRowRef = useRef(null);
+  const { id } = useParams();
 
+  const {
+    data: contestData,
+    error: contestError,
+    isLoading: contestLoading,
+  } = useGetContestByIdQuery(id, {
+    skip: !id, // Skip if no contest ID is provided
+    refetchOnMountOrArgChange: true, // Refetch when component mounts or ID changes
+    refetchOnFocus: true, // Refetch when the tab gains focus
+    refetchOnReconnect: true, // Refetch when the network reconnect
+  });
   // Fetch initial option chain data using RTK Query
-  const { data: initialData, error: queryError, isLoading: queryLoading } = useGetOptionsQuery({
+  const {
+    data: initialData,
+    error: queryError,
+    isLoading: queryLoading,
+  } = useGetOptionsQuery({
     expiry_date: selectedExpiry,
     instrument_key: selectedIndex,
   });
@@ -52,12 +79,24 @@ const OptionChain = () => {
       setIsLoading(true);
       setConnectionStatus("loading");
     } else if (queryError) {
-      setError(queryError?.data?.message || "Error fetching initial option chain data");
+      setError(
+        queryError?.data?.message || "Error fetching initial option chain data"
+      );
       setIsLoading(false);
       setConnectionStatus("error");
     } else if (initialData) {
       processOptionData(initialData);
       setConnectionStatus("connected");
+
+      // Add small delay to ensure DOM is updated
+      setTimeout(() => {
+        if (atmRowRef.current) {
+          atmRowRef.current.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+        }
+      }, 100);
     }
   }, [initialData, queryError, queryLoading]);
 
@@ -80,7 +119,7 @@ const OptionChain = () => {
     eventSource.onmessage = (event) => {
       try {
         const apiResponse = JSON.parse(event.data);
-        
+
         if (apiResponse.success && apiResponse.option_chain) {
           processOptionData(apiResponse);
           setConnectionStatus("connected");
@@ -107,13 +146,59 @@ const OptionChain = () => {
     };
   }, [selectedIndex, selectedExpiry]);
 
+  // Fetch expiry dates when instrument changes
+  useEffect(() => {
+    const fetchExpiryDates = async () => {
+      try {
+        const response = await fetch(
+          `/api/v1/available-expiry-dates?instrument_key=${selectedIndex}`
+        );
+        const data = await response.json();
+
+        if (data.success && data.expiry_dates) {
+          // Filter out past dates
+          const today = new Date();
+          today.setHours(0, 0, 0, 0); // Set to start of day for accurate comparison
+
+          const filteredDates = data.expiry_dates.filter((date) => {
+            const expiryDate = new Date(date);
+            return expiryDate >= today;
+          });
+
+          // Sort dates in ascending order
+          filteredDates.sort((a, b) => new Date(a) - new Date(b));
+
+          setExpiryDates(filteredDates);
+
+          // If current selection is in past or not in filtered list, select first available date
+          const currentExpiryDate = new Date(selectedExpiry);
+          if (
+            currentExpiryDate < today ||
+            !filteredDates.includes(selectedExpiry)
+          ) {
+            setSelectedExpiry(filteredDates[0]);
+          }
+
+          console.log(`✅ Loaded ${filteredDates.length} valid expiry dates`);
+        }
+      } catch (error) {
+        console.error("Error fetching expiry dates:", error);
+      }
+    };
+
+    fetchExpiryDates();
+  }, [selectedIndex]);
+
   const handleOptionClick = (strikeData, type) => {
     if (!strikeData) return;
-    
-    const optionData = type === "call" ? strikeData.call_option : strikeData.put_option;
+
+    const optionData =
+      type === "call" ? strikeData.call_option : strikeData.put_option;
     if (!optionData?.instrument_key) return;
-    
-    navigate(`/option-details/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`);
+
+    navigate(
+      `/option-details/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
+    );
   };
 
   const formatPrice = (price) => {
@@ -123,38 +208,52 @@ const OptionChain = () => {
       currency: "INR",
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(price).replace("₹", "₹");
+    })
+      .format(price)
+      .replace("₹", "₹");
   };
 
   const formatOI = (oi) => {
     if (!oi) return "0";
-    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(oi);
+    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(
+      oi
+    );
   };
 
   const calculatePriceChange = (ltp, closePrice) => {
-    if (!ltp || !closePrice || closePrice === 0) return { change: 0, changePercent: 0 };
+    if (!ltp || !closePrice || closePrice === 0)
+      return { change: 0, changePercent: 0 };
     const change = ltp - closePrice;
     const changePercent = (change / closePrice) * 100;
-    return { change: change.toFixed(2), changePercent: changePercent.toFixed(2) };
+    return {
+      change: change.toFixed(2),
+      changePercent: changePercent.toFixed(2),
+    };
   };
 
   const getConnectionStatusColor = () => {
     switch (connectionStatus) {
-      case "connected": return "bg-green-500";
-      case "connecting": 
-      case "reconnecting": return "bg-yellow-500";
-      case "error": return "bg-red-500";
-      default: return "bg-gray-500";
+      case "connected":
+        return "bg-green-500";
+      case "connecting":
+      case "reconnecting":
+        return "bg-yellow-500";
+      case "error":
+        return "bg-red-500";
+      default:
+        return "bg-gray-500";
     }
   };
 
   const getATMStrike = () => {
     if (!optionChainData?.underlying_info?.spot_price) return null;
     const spotPrice = optionChainData.underlying_info.spot_price;
-    
+
     // Find the closest strike to spot price
-    const strikes = optionChainData.option_chain.map(item => item.strike_price);
-    return strikes.reduce((prev, curr) => 
+    const strikes = optionChainData.option_chain.map(
+      (item) => item.strike_price
+    );
+    return strikes.reduce((prev, curr) =>
       Math.abs(curr - spotPrice) < Math.abs(prev - spotPrice) ? curr : prev
     );
   };
@@ -165,6 +264,79 @@ const OptionChain = () => {
     <div className="grid grid-cols-8 mx-auto px-2 py-4 gap-4">
       <div className="col-span-6">
         {/* Header Section */}
+
+          {contestData && (
+        <Card className="mb-4">
+          <CardContent className="p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold mb-2">{contestData.name}</h2>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center gap-2">
+                    <TimerIcon className="h-4 w-4 text-muted-foreground" />
+                    <span>Ends in: {formatDistanceToNow(new Date(contestData.end_time))}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CurrencyIcon className="h-4 w-4 text-muted-foreground" />
+                    <span>Entry Fee: ₹{contestData.entry_fee}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Trophy className="h-4 w-4 text-muted-foreground" />
+                    <span>Max Trades: {contestData.maxTrade}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span>Participants: {contestData.contestParticipants.length}</span>
+                  </div>
+                </div>
+              </div>
+              <Badge variant={
+                contestData.status === 'upcoming' ? 'outline' : 
+                contestData.status === 'active' ? 'default' : 
+                'secondary'
+              }>
+                {contestData.status.toUpperCase()}
+              </Badge>
+            </div>
+            
+            {/* Trade and Money Info */}
+            {contestData.contestParticipants?.length > 0 && (
+              <div className="mt-4 pt-4 border-t space-y-4">
+                {/* Virtual Cash Info */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <CurrencyIcon className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Available Balance:</span>
+                  </div>
+                  <span className="text-xl font-bold text-green-600">
+                    ₹{parseInt(contestData.contestParticipants[0].virtual_cash).toLocaleString()}
+                  </span>
+                </div>
+                
+                {/* Trades Info */}
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-muted-foreground">Trades:</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">
+                      {contestData.contestParticipants[0].trades_taken || 0}/{contestData.maxTrade}
+                    </span>
+                    <Badge variant={contestData.contestParticipants[0].trades_taken >= contestData.maxTrade ? "destructive" : "outline"}>
+                      {contestData.contestParticipants[0].trades_taken >= contestData.maxTrade 
+                        ? "Limit Reached" 
+                        : `${contestData.maxTrade - (contestData.contestParticipants[0].trades_taken || 0)} Remaining`}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-4">
             <Select value={selectedIndex} onValueChange={setSelectedIndex}>
@@ -174,7 +346,9 @@ const OptionChain = () => {
               <SelectContent>
                 <SelectItem value="NSE_INDEX|Nifty Bank">BANKNIFTY</SelectItem>
                 <SelectItem value="NSE_INDEX|Nifty 50">NIFTY</SelectItem>
-                <SelectItem value="NSE_INDEX|Nifty Fin Service">FINNIFTY</SelectItem>
+                <SelectItem value="NSE_INDEX|Nifty Fin Service">
+                  FINNIFTY
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -184,15 +358,23 @@ const OptionChain = () => {
                 <SelectValue placeholder="Expiry" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="2025-05-29">29 May 2025</SelectItem>
-                <SelectItem value="2025-06-05">05 Jun 2025</SelectItem>
-                <SelectItem value="2025-06-12">12 Jun 2025</SelectItem>
+                {expiryDates.map((date) => (
+                  <SelectItem key={date} value={date}>
+                    {new Date(date).toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                    })}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
             {/* Connection Status */}
             <div className="flex items-center space-x-2">
-              <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`} />
+              <div
+                className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}
+              />
               <span className="text-xs text-muted-foreground capitalize">
                 {connectionStatus}
               </span>
@@ -306,6 +488,7 @@ const OptionChain = () => {
                 return (
                   <div
                     key={index}
+                    ref={isATM ? atmRowRef : null} // Add this ref
                     className={`grid grid-cols-9 text-xs border-b py-2 px-2 hover:bg-muted/50 ${
                       isATM ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
                     }`}
@@ -315,25 +498,39 @@ const OptionChain = () => {
                       <div className="font-medium">
                         {formatOI(strikeData.call_option?.oi_lots || 0)}
                       </div>
-                      <div className={`text-xs ${
-                        (strikeData.call_option?.oi_change_lots || 0) > 0 
-                          ? "text-green-500" : "text-red-500"
-                      }`}>
-                        {(strikeData.call_option?.oi_change_lots || 0) > 0 ? "+" : ""}
+                      <div
+                        className={`text-xs ${
+                          (strikeData.call_option?.oi_change_lots || 0) > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {(strikeData.call_option?.oi_change_lots || 0) > 0
+                          ? "+"
+                          : ""}
                         {strikeData.call_option?.oi_change_lots || 0}
                       </div>
                     </div>
 
                     {/* Call Change */}
                     <div className="text-center">
-                      <div className={`font-medium ${
-                        callChange.change > 0 ? "text-green-500" : "text-red-500"
-                      }`}>
-                        {callChange.change > 0 ? "+" : ""}{callChange.change}
+                      <div
+                        className={`font-medium ${
+                          callChange.change > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {callChange.change > 0 ? "+" : ""}
+                        {callChange.change}
                       </div>
-                      <div className={`text-xs ${
-                        callChange.changePercent > 0 ? "text-green-500" : "text-red-500"
-                      }`}>
+                      <div
+                        className={`text-xs ${
+                          callChange.changePercent > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
                         ({callChange.changePercent}%)
                       </div>
                     </div>
@@ -357,13 +554,19 @@ const OptionChain = () => {
                         {(strikeData.call_option?.greeks?.iv || 0).toFixed(1)}%
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Δ: {(strikeData.call_option?.greeks?.delta || 0).toFixed(2)}
+                        Δ:{" "}
+                        {(strikeData.call_option?.greeks?.delta || 0).toFixed(
+                          2
+                        )}
                       </div>
                     </div>
 
                     {/* Strike Price */}
                     <div className="text-center font-bold flex items-center justify-center">
-                      <Badge variant={isATM ? "default" : "outline"} className="text-xs">
+                      <Badge
+                        variant={isATM ? "default" : "outline"}
+                        className="text-xs"
+                      >
                         {strikeData.strike_price.toLocaleString()}
                       </Badge>
                     </div>
@@ -374,7 +577,8 @@ const OptionChain = () => {
                         {(strikeData.put_option?.greeks?.iv || 0).toFixed(1)}%
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Δ: {(strikeData.put_option?.greeks?.delta || 0).toFixed(2)}
+                        Δ:{" "}
+                        {(strikeData.put_option?.greeks?.delta || 0).toFixed(2)}
                       </div>
                     </div>
 
@@ -393,14 +597,23 @@ const OptionChain = () => {
 
                     {/* Put Change */}
                     <div className="text-center">
-                      <div className={`font-medium ${
-                        putChange.change > 0 ? "text-green-500" : "text-red-500"
-                      }`}>
-                        {putChange.change > 0 ? "+" : ""}{putChange.change}
+                      <div
+                        className={`font-medium ${
+                          putChange.change > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {putChange.change > 0 ? "+" : ""}
+                        {putChange.change}
                       </div>
-                      <div className={`text-xs ${
-                        putChange.changePercent > 0 ? "text-green-500" : "text-red-500"
-                      }`}>
+                      <div
+                        className={`text-xs ${
+                          putChange.changePercent > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
                         ({putChange.changePercent}%)
                       </div>
                     </div>
@@ -410,11 +623,16 @@ const OptionChain = () => {
                       <div className="font-medium">
                         {formatOI(strikeData.put_option?.oi_lots || 0)}
                       </div>
-                      <div className={`text-xs ${
-                        (strikeData.put_option?.oi_change_lots || 0) > 0 
-                          ? "text-green-500" : "text-red-500"
-                      }`}>
-                        {(strikeData.put_option?.oi_change_lots || 0) > 0 ? "+" : ""}
+                      <div
+                        className={`text-xs ${
+                          (strikeData.put_option?.oi_change_lots || 0) > 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {(strikeData.put_option?.oi_change_lots || 0) > 0
+                          ? "+"
+                          : ""}
                         {strikeData.put_option?.oi_change_lots || 0}
                       </div>
                     </div>
@@ -442,7 +660,8 @@ const OptionChain = () => {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Instrument:</span>
                     <span className="font-medium">
-                      {selectedIndex.includes("Bank") ? "BANKNIFTY" : "NIFTY"} {atmStrike} CE
+                      {selectedIndex.includes("Bank") ? "BANKNIFTY" : "NIFTY"}{" "}
+                      {atmStrike} CE
                     </span>
                   </div>
                   <div className="flex justify-between">
@@ -450,16 +669,21 @@ const OptionChain = () => {
                     <Badge className="bg-green-100 text-green-800">Buy</Badge>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Current Price:</span>
+                    <span className="text-muted-foreground">
+                      Current Price:
+                    </span>
                     <span className="font-medium">
                       {formatPrice(
-                        optionChainData.option_chain.find(s => s.strike_price === atmStrike)
-                          ?.call_option?.ltp || 0
+                        optionChainData.option_chain.find(
+                          (s) => s.strike_price === atmStrike
+                        )?.call_option?.ltp || 0
                       )}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Recommended Qty:</span>
+                    <span className="text-muted-foreground">
+                      Recommended Qty:
+                    </span>
                     <span className="font-medium">25 lots</span>
                   </div>
                   <div className="flex justify-between">
@@ -471,17 +695,16 @@ const OptionChain = () => {
                     <span className="font-medium text-green-600">₹550.00</span>
                   </div>
                 </div>
-                
+
                 <div className="pt-2 border-t">
                   <p className="text-xs text-muted-foreground">
-                    <strong>Rationale:</strong> High OI build-up in calls with positive PCR trend. 
-                    Spot price showing bullish momentum near ATM strike.
+                    <strong>Rationale:</strong> High OI build-up in calls with
+                    positive PCR trend. Spot price showing bullish momentum near
+                    ATM strike.
                   </p>
                 </div>
-                
-                <Button className="w-full mt-4">
-                  Place Order
-                </Button>
+
+                <Button className="w-full mt-4">Place Order</Button>
               </>
             )}
           </CardContent>

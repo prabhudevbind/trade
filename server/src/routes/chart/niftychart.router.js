@@ -4,6 +4,13 @@ const fs = require("fs");
 const path = require("path");
 const router = express.Router();
 
+// Constants for instrument keys
+const INSTRUMENTS = [
+  "NSE_INDEX|Nifty 50",
+  "NSE_INDEX|Nifty Bank",
+  "NSE_INDEX|Nifty Fin Service",
+];
+
 // API endpoint for streaming option chain data (1-second updates)
 router.get("/option-chain-stream", async (req, res) => {
   try {
@@ -374,6 +381,99 @@ router.get("/option-chain", async (req, res) => {
       success: false,
       message: errorMessage,
       error: error.message,
+    });
+  }
+});
+
+// Add this function to find available expiry dates
+async function findAvailableExpiryDates(instrumentKey) {
+  const expiryDates = [];
+  const today = new Date();
+  
+  // Try next 6 months of weekly expiries
+  for (let i = 0; i < 250; i++) {
+    // Add 7 days for each iteration
+    const testDate = new Date(today);
+    testDate.setDate(today.getDate() + (i * 1));
+    
+    // Format date as YYYY-MM-DD
+    const formattedDate = testDate.toISOString().split('T')[0];
+    
+    try {
+      const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(
+        instrumentKey
+      )}&expiry_date=${formattedDate}`;
+      
+      const headers = {
+        Accept: "application/json",
+        Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
+      };
+
+      const response = await axios.get(url, { headers });
+      
+      // If we get data, this is a valid expiry date
+      if (response.data.data && response.data.data.length > 0) {
+        expiryDates.push(formattedDate);
+      }
+    } catch (error) {
+      // Skip failed requests
+      continue;
+    }
+  }
+  
+  return expiryDates;
+}
+
+// Add this new endpoint to get expiry dates
+router.get("/available-expiry-dates", async (req, res) => {
+  try {
+    const { instrument_key = "NSE_INDEX|Nifty 50" } = req.query;
+    
+    // Create the storage directory if it doesn't exist
+    const storageDir = path.join(__dirname, './datas');
+    if (!fs.existsSync(storageDir)) {
+      fs.mkdirSync(storageDir, { recursive: true });
+    }
+    
+    const cacheFile = path.join(storageDir, `expiry_dates_${instrument_key.split('|')[1].toLowerCase().replace(/\s/g, '_')}.json`);
+    
+    // Check if we have cached data from today
+    if (fs.existsSync(cacheFile)) {
+      const cachedData = JSON.parse(fs.readFileSync(cacheFile));
+      const cacheDate = new Date(cachedData.timestamp);
+      const today = new Date();
+      
+      // Use cache if it's from today
+      if (cacheDate.toDateString() === today.toDateString()) {
+        return res.json({
+          success: true,
+          instrument_key: instrument_key,
+          expiry_dates: cachedData.expiry_dates
+        });
+      }
+    }
+    
+    // Find available expiry dates
+    const expiryDates = await findAvailableExpiryDates(instrument_key);
+    
+    // Cache the results
+    fs.writeFileSync(cacheFile, JSON.stringify({
+      timestamp: new Date().toISOString(),
+      expiry_dates: expiryDates
+    }));
+    
+    res.json({
+      success: true,
+      instrument_key: instrument_key,
+      expiry_dates: expiryDates
+    });
+
+  } catch (error) {
+    console.error("❌ Error fetching expiry dates:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch expiry dates",
+      error: error.message
     });
   }
 });

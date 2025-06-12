@@ -117,7 +117,7 @@ export const createAppRouter = (isAuthenticated) =>
           element: <NotFound />,
         },
         {
-          path:"option-chain",
+          path:"option-chain/:id",
           element:<OptionChart/>
         },
          {

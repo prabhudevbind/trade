@@ -28,9 +28,8 @@ export default function MyContests() {
         ? [contestParticipant]
         : []
 
-  const handleTrade = (contest) => {
-    setSelectedContest(contest)
-    setShowTradingModal(true)
+  const handleTrade = (participant) => {
+    router(`/option-chain/${participant.contest.id}`);
   }
 
   if (isLoading) {
