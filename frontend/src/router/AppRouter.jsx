@@ -22,6 +22,7 @@ import MyContest from "@/component/admin/contest/MyContest";
 import OptionDetails from "@/component/admin/option/OptionDetails";
 import HistoryChart from "@/component/admin/option/HistoryChart";
 import Positions from "@/component/admin/positions/Positions";
+import StockverseLogin from "../component/welcome/login/Login";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -148,6 +149,6 @@ export const createAppRouter = (isAuthenticated) =>
     },
     {
       path: "/login",
-      element: !isAuthenticated ? <Login /> : <Navigate to="/" />,
+      element: !isAuthenticated ? <StockverseLogin /> : <Navigate to="/" />,
     },
   ]);

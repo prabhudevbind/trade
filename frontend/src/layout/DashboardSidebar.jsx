@@ -45,7 +45,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo1.png";
 import {
   Collapsible,
   CollapsibleContent,

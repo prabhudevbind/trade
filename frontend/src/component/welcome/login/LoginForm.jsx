@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Mail, Lock, Loader2 } from 'lucide-react'
-import { ToastContainer } from "react-toastify";
+
 import 'react-toastify/dist/ReactToastify.css';
 import { fetchUserDetails } from '@/store/reducer/userDetailsSlice'
 

@@ -134,6 +134,113 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Generate unique username from name
+async function generateUniqueUsername(firstName, lastName) {
+  // Create base username from first name and last name
+  let baseUsername = `${firstName.toLowerCase()}${lastName.toLowerCase()}`;
+  baseUsername = baseUsername.replace(/[^a-z0-9]/g, ''); // Remove special characters
+
+  let username = baseUsername;
+  let counter = 1;
+  
+  // Keep checking until we find a unique username
+  while (true) {
+    const existingUser = await prisma.user.findUnique({
+      where: { username }
+    });
+    
+    if (!existingUser) {
+      return username;
+    }
+    
+    // If username exists, add number at the end
+    username = `${baseUsername}${counter}`;
+    counter++;
+  }
+}
+
+// Register new user
+router.post('/register', async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { firstName, lastName, email, password } = req.body;
+
+    // Check if email already exispts
+    const existingEmail = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingEmail) {
+      return res.status(409).json({
+        message: 'Email already registered',
+        field: 'email'
+      });
+    }
+
+    // Generate unique username
+    const username = await generateUniqueUsername(firstName, lastName);
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
+    // Create user with default role (assuming 1 is the user role)
+    const newUser = await prisma.user.create({
+      data: {
+        username,
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        roleId: 1, // Default user role
+        isActive: true,
+        amount: 0, // Initial wallet amount
+        lastLogin: null
+      },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        isActive: true,
+        role: {
+          select: {
+            name: true
+          }
+        },
+        createdAt: true
+      }
+    });
+
+    // Log user creation
+    await prisma.userActivityLog.create({
+      data: {
+        userId: newUser.id,
+        activityType: 'USER_REGISTRATION',
+        description: `New user registration with username ${username}`,
+        ipAddress: req.ip
+      }
+    });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      user: newUser
+    });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({
+      message: 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'An unexpected error occurred'
+    });
+  }
+});
+
 // Get All Users with Advanced Filtering and Sorting
 router.get('/all', async (req, res) => {
   try {
