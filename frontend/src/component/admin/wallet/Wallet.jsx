@@ -50,7 +50,7 @@ export default function Wallet() {
 
   // Fetch wallet transactions
   const {
-    data: transactions,
+    data: transactionsData,
     isLoading: transactionsLoading,
     error: transactionsError,
   } = useGetWalletTransactionsQuery(userId)
@@ -143,10 +143,26 @@ export default function Wallet() {
     await displayRazorpay()
   }
 
-  // Group transactions by type
-  const depositTransactions = transactions?.filter((tx) => tx.type === "DEPOSIT") || []
-  const withdrawalTransactions = transactions?.filter((tx) => tx.type === "WITHDRAWAL") || []
-  const contestTransactions = transactions?.filter((tx) => tx.type === "DEBIT" || tx.type === "CREDIT") || []
+  // Update the transaction grouping logic
+  const groupTransactions = (transactions = []) => {
+    // If transactions is falsy or not an array, use empty array
+    const transactionArray = Array.isArray(transactions?.transactions) ? transactions.transactions : [];
+    
+    return {
+      all: transactionArray,
+      deposits: transactionArray.filter((tx) => tx.type === "DEPOSIT"),
+      withdrawals: transactionArray.filter((tx) => tx.type === "WITHDRAWAL"),
+      contests: transactionArray.filter((tx) => tx.type === "DEBIT" || tx.type === "CREDIT")
+    };
+  };
+
+  // Group transactions
+  const {
+    all: allTransactions,
+    deposits: depositTransactions,
+    withdrawals: withdrawalTransactions,
+    contests: contestTransactions
+  } = groupTransactions(transactionsData);
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-8 max-w-6xl">
@@ -277,7 +293,7 @@ export default function Wallet() {
                 Failed to load transactions: {transactionsError?.data?.message || "Unknown error"}
               </AlertDescription>
             </Alert>
-          ) : transactions?.length === 0 ? (
+          ) : allTransactions?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               No transactions found. Add funds to get started.
             </div>
@@ -287,7 +303,7 @@ export default function Wallet() {
                 <TabsTrigger value="all">
                   All
                   <Badge variant="secondary" className="ml-2">
-                    {transactions?.length || 0}
+                    {allTransactions.length}
                   </Badge>
                 </TabsTrigger>
                 <TabsTrigger value="deposits">
@@ -311,7 +327,7 @@ export default function Wallet() {
               </TabsList>
 
               <TabsContent value="all" className="space-y-4">
-                <TransactionTable transactions={transactions} />
+                <TransactionTable transactions={allTransactions} />
               </TabsContent>
 
               <TabsContent value="deposits" className="space-y-4">

@@ -701,13 +701,13 @@ const walletTransactionController = {
   // Create a new wallet transaction
  async createWalletTransaction(req, res) {
   try {
-    const { user_id, amount, type, status } = req.body;
+    const {  amount, type, status } = req.body;
 
     // Validate input
-    if (!user_id || !amount || !type || !status) {
+    if ( !amount || !type || !status) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-    const parsedUserId = parseInt(user_id);
+    const parsedUserId = parseInt(req.user.userId);
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedUserId) || isNaN(parsedAmount) || parsedAmount <= 0) {
       return res.status(400).json({ error: 'Invalid user_id or amount' });
@@ -762,16 +762,56 @@ const walletTransactionController = {
 },
 
   // Get all wallet transactions
-  async getAllWalletTransactions(req, res) {
-    try {
-      const transactions = await prisma.walletTransaction.findMany({
-        include: { user: true },
-      });
-      res.status(200).json(transactions);
-    } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch transactions', details: error.message });
-    }
-  },
+async getAllWalletTransactions(req, res) {
+  try {
+    const userId = parseInt(req.user.userId);
+
+    const transactions = await prisma.walletTransaction.findMany({
+      where: {
+        user_id: userId
+      },
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true
+          }
+        }
+      },
+      orderBy: {
+        created_at: 'desc'
+      }
+    });
+
+    // Format the response
+    const formattedTransactions = transactions.map(transaction => ({
+      id: transaction.id,
+      amount: parseFloat(transaction.amount),
+      type: transaction.type,
+      status: transaction.status,
+      created_at: transaction.created_at,
+      user: {
+        name: `${transaction.user.firstName} ${transaction.user.lastName}`,
+        email: transaction.user.email
+      }
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: transactions.length,
+      transactions: formattedTransactions
+    });
+
+  } catch (error) {
+    console.error('Error fetching transactions:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch transactions', 
+      details: error.message 
+    });
+  }
+},
 
   // Get a single wallet transaction by ID
   async getWalletTransactionById(req, res) {

@@ -54,11 +54,11 @@ router.put('/trades/:id',authenticateToken, tradeController.updateTrade);
 router.delete('/trades/:id',authenticateToken, tradeController.deleteTrade);
 
 // WalletTransaction Routes
-router.post('/wallet-transactions', walletTransactionController.createWalletTransaction);
-router.get('/wallet-transactions', walletTransactionController.getAllWalletTransactions);
-router.get('/wallet-transactions/:id', walletTransactionController.getWalletTransactionById);
-router.put('/wallet-transactions/:id', walletTransactionController.updateWalletTransaction);
-router.delete('/wallet-transactions/:id', walletTransactionController.deleteWalletTransaction);
+router.post('/wallet-transactions',authenticateToken, walletTransactionController.createWalletTransaction);
+router.get('/wallet-transactions',authenticateToken, walletTransactionController.getAllWalletTransactions);
+router.get('/wallet-transactions/:id',authenticateToken, walletTransactionController.getWalletTransactionById);
+router.put('/wallet-transactions/:id',authenticateToken, walletTransactionController.updateWalletTransaction);
+router.delete('/wallet-transactions/:id',authenticateToken, walletTransactionController.deleteWalletTransaction);
 
 // ContestWinner Routes
 router.post('/contest-winners', contestWinnerController.createContestWinner);
