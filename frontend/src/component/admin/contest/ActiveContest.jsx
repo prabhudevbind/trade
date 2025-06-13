@@ -183,7 +183,7 @@ export default function ActiveContests() {
             <Button
             variant="outline"
             className="flex items-center gap-2"
-            onClick={() => window.location.href = '/wallet'}
+            
           >
               <Wallet className="h-4 w-4" />
                Add Money

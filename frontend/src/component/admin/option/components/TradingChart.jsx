@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useCreateOptionMutation,useCreatePositionMutation,useCreateTradeMutation } from "@/store/api/contest"
 import { useParams } from "react-router-dom"
+import { toast } from "react-toastify"
+
 export  function TradingChart({instrumentKey}) {
   const chartContainerRef = useRef(null)
   const chart = useRef(null)
@@ -698,24 +700,22 @@ export  function TradingChart({instrumentKey}) {
 
   // Trading functions
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [tradeLimitReached, setTradeLimitReached] = useState(false);
 
   const placeBuyOrder = async () => {
     setIsPlacingOrder(true);
+    setError(null);
+    
     try {
-      // Check if ask price is available
-      // if (!marketData.askPrice || marketData.askPrice === 0) {
-      //   setError("No ask price available");
-      //   return;
-      // }
-
-      const price = orderType === "market" ? marketData.askPrice : orderPrice;
+      // Get the price based on order type
+      const executionPrice = orderType === "market" ? marketData.ltp : orderPrice;
 
       // Create option record first
       const optionData = {
-        symbol: instrumentKey.split('|')[1], // Extract symbol from instrumentKey
-        strikePrice: price || marketData.ltp, // Use market data if price is not set
-        expiryDate: new Date(), // Set appropriate expiry date
-        optionType: "CE", // or "PE" based on your needs
+        symbol: instrumentKey.split('|')[1],
+        strikePrice: executionPrice,
+        expiryDate: new Date(),
+        optionType: "CE",
         lotSize: selectedLotSize,
         ltp: marketData.ltp
       };
@@ -724,41 +724,43 @@ export  function TradingChart({instrumentKey}) {
 
       // Create trade record
       const tradeData = {
-        contestId:id,
-        optionId: option.id,
+        contestId: id,
+        optionId: option.option.id,
         action: "buy",
         quantity: orderQuantity,
-        price: price,
+        price: executionPrice,
         timestamp: new Date()
       };
 
       const trade = await createTrade(tradeData).unwrap();
 
-      // Create or update position
-      const positionData = {
-        contestId:id,
-        optionId: option.id,
-        netQuantity: orderQuantity,
-        averageEntryPrice: price
-      };
-
-      await createPosition(positionData).unwrap();
-
-      // Update local state
+      // Update local state and show success message
       const newTrade = {
         id: trade.id,
         time: Math.floor(Date.now() / 1000),
         type: "buy",
         quantity: orderQuantity,
-        price: price,
+        price: executionPrice,
         timestamp: new Date()
       };
 
       setTrades(prevTrades => [...prevTrades, newTrade]);
-      setError(null);
+      toast.success("Trade executed successfully");
 
     } catch (err) {
       console.error('Failed to place buy order:', err);
+      
+      // Handle trade limit error specifically
+      if (err?.data?.error?.includes("Maximum trades limit")) {
+        setTradeLimitReached(true);
+        toast.error("Trade limit reached", {
+          description: `You've used all ${err.data.maxAllowed} allowed trades for this contest.`
+        });
+      } else {
+        toast.error("Failed to place trade", {
+          description: err.error || "Something went wrong"
+        });
+      }
       setError(err.error || 'Failed to place buy order');
     } finally {
       setIsPlacingOrder(false);
@@ -789,7 +791,8 @@ export  function TradingChart({instrumentKey}) {
 
       // Create trade record
       const tradeData = {
-        optionId: option.id,
+        contestId: id,
+        optionId: option.option.id,
         action: "sell",
         quantity: orderQuantity,
         price: price,
@@ -800,7 +803,8 @@ export  function TradingChart({instrumentKey}) {
 
       // Create or update position
       const positionData = {
-        optionId: option.id,
+        contestId:id,
+        optionId: option.option.id,
         netQuantity: -orderQuantity, // Negative for sell
         averageEntryPrice: price
       };
@@ -1082,103 +1086,121 @@ export  function TradingChart({instrumentKey}) {
           <div className="space-y-4">
             <Card>
               <CardHeader className="p-3 sm:p-4">
-                <CardTitle className="text-base sm:text-lg">Quick Trade</CardTitle>
+                <CardTitle className="flex items-center justify-between text-base sm:text-lg">
+                  Quick Trade
+                  {tradeLimitReached && (
+                    <Badge variant="destructive" className="ml-2">
+                      Trade Limit Reached
+                    </Badge>
+                  )}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-4 space-y-3">
-                {/* Trading Form */}
-                <div className="space-y-3">
-                  {/* Lot Size Selection */}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">Lot Size</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {lotSizes.map((size) => (
-                        <Button
-                          key={size}
-                          variant={selectedLotSize === size ? "default" : "outline"}
-                          size="sm"
-                          onClick={() => handleLotSizeChange(size)}
-                        >
-                          {size}
-                        </Button>
-                      ))}
-                    </div>
+                {tradeLimitReached ? (
+                  <div className="flex flex-col items-center justify-center p-4 text-center">
+                    <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+                    <h3 className="font-semibold text-destructive">Trade Limit Reached</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      You've used all available trades for this contest.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    {/* Trading Form */}
+                    <div className="space-y-3">
+                      {/* Lot Size Selection */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 block mb-2">Lot Size</label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {lotSizes.map((size) => (
+                            <Button
+                              key={size}
+                              variant={selectedLotSize === size ? "default" : "outline"}
+                              size="sm"
+                              onClick={() => handleLotSizeChange(size)}
+                            >
+                              {size}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
 
-                  {/* Order Type */}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">Order Type</label>
-                    <Select value={orderType} onValueChange={setOrderType}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="market">Market</SelectItem>
-                        <SelectItem value="limit">Limit</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                      {/* Order Type */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 block mb-2">Order Type</label>
+                        <Select value={orderType} onValueChange={setOrderType}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="market">Market</SelectItem>
+                            <SelectItem value="limit">Limit</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-                  {/* Quantity */}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
-                    <Input
-                      type="number"
-                      value={orderQuantity}
-                      onChange={(e) => setOrderQuantity(Number(e.target.value))}
-                      min={1}
-                      className="w-full"
-                      placeholder="Enter quantity"
-                    />
-                  </div>
-                  {/* Price (for limit orders) */}  
-                  {orderType === "limit" && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 block mb-2">Price</label>
-                      <Input
-                        type="number"
-                        value={orderPrice}
-                        onChange={(e) => setOrderPrice(Number(e.target.value))}
-                        min={0}
-                        className="w-full"
-                        placeholder="Enter limit price"
-                      />
-                    </div>
-                  )}
-
-                  {/* Action Buttons with Loading State */}
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="primary" 
-                      onClick={placeBuyOrder} 
-                      disabled={isPlacingOrder || loading || orderQuantity <= 0}
-                      className="flex-1"
-                    >
-                      {isPlacingOrder ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Buying...
-                        </>
-                      ) : (
-                        'Buy'
+                      {/* Quantity */}
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
+                        <Input
+                          type="number"
+                          value={orderQuantity}
+                          onChange={(e) => setOrderQuantity(Number(e.target.value))}
+                          min={1}
+                          className="w-full"
+                          placeholder="Enter quantity"
+                        />
+                      </div>
+                      {/* Price (for limit orders) */}  
+                      {orderType === "limit" && (
+                        <div>
+                          <label className="text-sm font-medium text-gray-700 block mb-2">Price</label>
+                          <Input
+                            type="number"
+                            value={orderPrice}
+                            onChange={(e) => setOrderPrice(Number(e.target.value))}
+                            min={0}
+                            className="w-full"
+                            placeholder="Enter limit price"
+                          />
+                        </div>
                       )}
-                    </Button>
-                    <Button 
-                      variant="destructive" 
-                      onClick={placeSellOrder} 
-                      disabled={isPlacingOrder || loading || orderQuantity <= 0}
-                      className="flex-1"
-                    >
-                      {isPlacingOrder ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                          Selling...
-                        </>
-                      ) : (
-                        'Sell'
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                    </div>
+                    {/* Action Buttons with Loading State */}
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="primary" 
+                        onClick={placeBuyOrder} 
+                        disabled={isPlacingOrder || loading || orderQuantity <= 0 || tradeLimitReached}
+                        className="flex-1"
+                      >
+                        {isPlacingOrder ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Buying...
+                          </>
+                        ) : (
+                          'Buy'
+                        )}
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        onClick={placeSellOrder} 
+                        disabled={isPlacingOrder || loading || orderQuantity <= 0 || tradeLimitReached}
+                        className="flex-1"
+                      >
+                        {isPlacingOrder ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                            Selling...
+                          </>
+                        ) : (
+                          'Sell'
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 

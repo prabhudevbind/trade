@@ -889,11 +889,34 @@ const tradeController = {
       const { optionId, contestId, action, quantity, price } = req.body;
       const userId = parseInt(req.user.userId);
 
+      // Validate required fields
+      if (!optionId || !contestId || !action || !quantity || !price) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          details: "All fields are required: optionId, contestId, action, quantity, price"
+        });
+      }
+
+      // Parse inputs safely
+      const parsedOptionId = parseInt(optionId);
+      const parsedContestId = parseInt(contestId);
+      const parsedQuantity = parseInt(quantity);
+      const parsedPrice = parseFloat(price);
+
+      // Validate parsed values
+      if (isNaN(parsedOptionId) || isNaN(parsedContestId) || 
+          isNaN(parsedQuantity) || isNaN(parsedPrice)) {
+        return res.status(400).json({
+          error: "Invalid input values",
+          details: "All numeric fields must be valid numbers"
+        });
+      }
+
       // Find specific contest participation
       const contestParticipant = await prisma.contestParticipant.findFirst({
         where: {
           user_id: userId,
-          contest_id: parseInt(contestId),
+          contest_id: parsedContestId,
           contest: {
             status: "ongoing",
           },
@@ -903,14 +926,14 @@ const tradeController = {
           trades: {
             where: {
               contestParticipant: {
-                contest_id: parseInt(contestId),
+                contest_id: parsedContestId,
               },
             },
           },
         },
       });
 
-      // Check if participant exists in this contest
+      // Validate contest participation
       if (!contestParticipant) {
         return res.status(400).json({
           error: "You are not participating in this contest",
@@ -924,28 +947,25 @@ const tradeController = {
         });
       }
 
-      // Check trade limits for this specific contest
+      // Check trade limits
       const contestTrades = contestParticipant.trades;
-      if (
-        contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)
-      ) {
+      if (contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)) {
         return res.status(400).json({
-          error: `Maximum trades limit (${contestParticipant.contest.maxTrade}) reached for contest ${contestId}`,
+          error: `Maximum trades limit (${contestParticipant.contest.maxTrade}) reached`,
           currentTrades: contestTrades.length,
           maxAllowed: contestParticipant.contest.maxTrade,
         });
       }
 
       // Calculate trade value
-      const tradeValue = parseFloat(price) * parseInt(quantity);
+      const tradeValue = parsedPrice * parsedQuantity;
 
-      // For buy orders, check virtual cash limit for this contest
+      // Check virtual cash for buy orders
       if (action === "buy") {
         const currentVirtualCash = parseFloat(contestParticipant.virtual_cash);
         if (tradeValue > currentVirtualCash) {
           return res.status(400).json({
-            error: "Insufficient virtual cash for this trade",
-            contestId: contestId,
+            error: "Insufficient virtual cash",
             available: currentVirtualCash,
             required: tradeValue,
             deficit: tradeValue - currentVirtualCash,
@@ -953,62 +973,61 @@ const tradeController = {
         }
       }
 
-      // Create the trade
+      // Create the trade with validated data
       const trade = await prisma.trade.create({
         data: {
           contestParticipant: {
             connect: {
-              id: contestParticipant.id,
-            },
+              id: contestParticipant.id
+            }
           },
           option: {
             connect: {
-              id: parseInt(optionId),
-            },
+              id: parsedOptionId // Now properly parsed
+            }
           },
-          action,
-          quantity: parseInt(quantity),
-          price: parseFloat(price),
+          action: action,
+          quantity: parsedQuantity,
+          price: parsedPrice
         },
         include: {
           contestParticipant: true,
-          option: true,
-        },
+          option: true
+        }
       });
 
-      // Update virtual cash for this specific contest
+      // Update virtual cash
       const cashUpdate = action === "buy" ? -tradeValue : tradeValue;
       await prisma.contestParticipant.update({
         where: {
-          id: contestParticipant.id,
+          id: contestParticipant.id
         },
         data: {
           virtual_cash: {
-            increment: cashUpdate,
-          },
-        },
+            increment: cashUpdate
+          }
+        }
       });
 
-      // Return detailed response
+      // Return success response
       res.status(201).json({
-        trade,
+        success: true,
+        trade: trade,
         contestStatus: {
-          contestId: contestId,
+          contestId: parsedContestId,
           tradesUsed: contestTrades.length + 1,
-          tradesRemaining:
-            parseInt(contestParticipant.contest.maxTrade) -
-            (contestTrades.length + 1),
+          tradesRemaining: parseInt(contestParticipant.contest.maxTrade) - (contestTrades.length + 1),
           virtualCashBefore: parseFloat(contestParticipant.virtual_cash),
-          virtualCashAfter:
-            parseFloat(contestParticipant.virtual_cash) + cashUpdate,
-          tradeValue: tradeValue,
-        },
+          virtualCashAfter: parseFloat(contestParticipant.virtual_cash) + cashUpdate,
+          tradeValue: tradeValue
+        }
       });
+
     } catch (error) {
       console.error("Trade creation error:", error);
       res.status(400).json({
         error: "Failed to create trade",
-        details: error.message,
+        details: error.message
       });
     }
   },

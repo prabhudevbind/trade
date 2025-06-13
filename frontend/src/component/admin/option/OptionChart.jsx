@@ -25,6 +25,8 @@ import { useGetContestByIdQuery } from "@/store/api/contest";
 import { formatDistanceToNow } from 'date-fns';
 import {  TimerIcon, Trophy, Users } from 'lucide-react';
 import { CurrencyIcon } from "lucide-react";
+import { MobileOptionChain } from "./option-chain/MobileOptionChain";
+import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty Bank");
   const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12");
@@ -503,166 +505,37 @@ const OptionChain = () => {
         )}
 
         {/* Option Chain Table */}
-        <div className="overflow-x-auto border rounded-lg">
-          <div className="sticky top-0 bg-background z-10 border-b">
-            <div className={`grid ${mobileColumns} text-xs font-medium text-muted-foreground py-3 px-2`}>
-              {/* Only show these columns on mobile */}
-              <div className="text-center md:block">Call OI</div>
-              <div className="hidden md:block text-center">Call Change</div>
-              <div className="text-center">Call LTP</div>
-              <div className="hidden md:block text-center">Call IV</div>
-              <div className="text-center font-bold">STRIKE</div>
-              <div className="hidden md:block text-center">Put IV</div>
-              <div className="text-center">Put LTP</div>
-              <div className="hidden md:block text-center">Put Change</div>
-              <div className="text-center md:block">Put OI</div>
-            </div>
+        {isLoading ? (
+          <div className="space-y-2 p-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="grid grid-cols-9 gap-2">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+                  <Skeleton key={j} className="h-12 w-full" />
+                ))}
+              </div>
+            ))}
           </div>
-
-          {isLoading ? (
-            <div className="space-y-2 p-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="grid grid-cols-9 gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
-                    <Skeleton key={j} className="h-12 w-full" />
-                  ))}
-                </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="py-8 text-center text-destructive">{error}</div>
-          ) : (
-            <div className="max-h-96 overflow-y-auto">
-              {optionChainData?.option_chain?.map((strikeData, index) => {
-                const isATM = strikeData.strike_price === atmStrike;
-                const callChange = calculatePriceChange(
-                  strikeData.call_option?.ltp,
-                  strikeData.call_option?.close_price
-                );
-                const putChange = calculatePriceChange(
-                  strikeData.put_option?.ltp,
-                  strikeData.put_option?.close_price
-                );
-
-                return (
-                  <div
-                    key={index}
-                    ref={isATM ? atmRowRef : null}
-                    className={`grid ${mobileColumns} text-xs border-b py-2 px-2 hover:bg-muted/50 ${
-                      isATM ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
-                    }`}
-                  >
-                    {/* Call LTP - Mobile & Desktop */}
-                    <div
-                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                      onClick={() => handleOptionClick(strikeData, "call")}
-                    >
-                      <div className="font-semibold">
-                        {formatPrice(strikeData.call_option?.ltp || 0)}
-                      </div>
-                    </div>
-
-                    {/* OI - Mobile */}
-                    <div className="text-center md:hidden">
-                      <div className="font-medium text-xs">
-                        {formatOI(strikeData.call_option?.oi_lots || 0)}
-                        <span className="text-muted-foreground"> / </span>
-                        {formatOI(strikeData.put_option?.oi_lots || 0)}
-                      </div>
-                    </div>
-
-                    {/* Strike Price - Mobile & Desktop */}
-                    <div className="text-center font-bold">
-                      <Badge
-                        variant={isATM ? "default" : "outline"}
-                        className="text-xs whitespace-nowrap"
-                      >
-                        {strikeData.strike_price.toLocaleString()}
-                      </Badge>
-                    </div>
-
-                    {/* Put LTP - Mobile & Desktop */}
-                    <div
-                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                      onClick={() => handleOptionClick(strikeData, "put")}
-                    >
-                      <div className="font-semibold">
-                        {formatPrice(strikeData.put_option?.ltp || 0)}
-                      </div>
-                    </div>
-
-                    {/* Desktop-only columns */}
-                    <div className="hidden md:block text-center">
-                      {formatOI(strikeData.call_option?.oi_lots || 0)}
-                    </div>
-                    <div className="hidden md:block text-center">
-                      <div
-                        className={`font-medium ${
-                          callChange.change > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {callChange.change > 0 ? "+" : ""}
-                        {callChange.change}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          callChange.changePercent > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        ({callChange.changePercent}%)
-                      </div>
-                    </div>
-                    <div className="hidden md:block text-center">
-                      <div className="font-medium">
-                        {(strikeData.call_option?.greeks?.iv || 0).toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Δ:{" "}
-                        {(strikeData.call_option?.greeks?.delta || 0).toFixed(
-                          2
-                        )}
-                      </div>
-                    </div>
-                    <div className="hidden md:block text-center">
-                      <div className="font-medium">
-                        {(strikeData.put_option?.greeks?.iv || 0).toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Δ:{" "}
-                        {(strikeData.put_option?.greeks?.delta || 0).toFixed(2)}
-                      </div>
-                    </div>
-                    <div className="hidden md:block text-center">
-                      <div
-                        className={`font-medium ${
-                          putChange.change > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {putChange.change > 0 ? "+" : ""}
-                        {putChange.change}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          putChange.changePercent > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        ({putChange.changePercent}%)
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        ) : error ? (
+          <div className="py-8 text-center text-destructive">{error}</div>
+        ) : (
+          <>
+            <MobileOptionChain 
+              data={optionChainData}
+              onOptionClick={handleOptionClick}
+              formatPrice={formatPrice}
+              formatOI={formatOI}
+              atmStrike={atmStrike}
+            />
+            <DesktopOptionChain 
+              data={optionChainData}
+              onOptionClick={handleOptionClick}
+              formatPrice={formatPrice}
+              formatOI={formatOI}
+              atmStrike={atmStrike}
+              calculatePriceChange={calculatePriceChange}
+            />
+          </>
+        )}
       </div>
 
       {/* Sidebar - Recommended Order */}

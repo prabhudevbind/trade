@@ -196,7 +196,7 @@ router.post('/register', async (req, res) => {
         password: hashedPassword,
         firstName,
         lastName,
-        roleId: 1, // Default user role
+        roleId: 3, // Default user role
         isActive: true,
         amount: 0, // Initial wallet amount
         lastLogin: null
