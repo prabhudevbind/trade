@@ -260,9 +260,15 @@ const OptionChain = () => {
 
   const atmStrike = getATMStrike();
 
+  // Add this CSS class for mobile layout
+  const mobileColumns = `
+    grid-cols-5 
+    md:grid-cols-9
+  `;
+
   return (
-    <div className="grid grid-cols-8 mx-auto px-2 py-4 gap-4">
-      <div className="col-span-6">
+    <div className="grid sm:grid-cols-8 mx-auto px-2 py-4 gap-4">
+      <div className=" col-span-1 sm:col-span-6">
         {/* Header Section */}
 
           {contestData && (
@@ -447,16 +453,17 @@ const OptionChain = () => {
         {/* Option Chain Table */}
         <div className="overflow-x-auto border rounded-lg">
           <div className="sticky top-0 bg-background z-10 border-b">
-            <div className="grid grid-cols-9 text-xs font-medium text-muted-foreground py-3 px-2">
-              <div className="text-center">Call OI</div>
-              <div className="text-center">Call Change</div>
+            <div className={`grid ${mobileColumns} text-xs font-medium text-muted-foreground py-3 px-2`}>
+              {/* Only show these columns on mobile */}
+              <div className="text-center md:block">Call OI</div>
+              <div className="hidden md:block text-center">Call Change</div>
               <div className="text-center">Call LTP</div>
-              <div className="text-center">Call IV</div>
+              <div className="hidden md:block text-center">Call IV</div>
               <div className="text-center font-bold">STRIKE</div>
-              <div className="text-center">Put IV</div>
+              <div className="hidden md:block text-center">Put IV</div>
               <div className="text-center">Put LTP</div>
-              <div className="text-center">Put Change</div>
-              <div className="text-center">Put OI</div>
+              <div className="hidden md:block text-center">Put Change</div>
+              <div className="text-center md:block">Put OI</div>
             </div>
           </div>
 
@@ -489,31 +496,19 @@ const OptionChain = () => {
                   <div
                     key={index}
                     ref={isATM ? atmRowRef : null} // Add this ref
-                    className={`grid grid-cols-9 text-xs border-b py-2 px-2 hover:bg-muted/50 ${
+                    className={`grid ${mobileColumns} text-xs border-b py-2 px-2 hover:bg-muted/50 ${
                       isATM ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
                     }`}
                   >
-                    {/* Call OI */}
+                    {/* Call OI - Mobile & Desktop */}
                     <div className="text-center">
                       <div className="font-medium">
                         {formatOI(strikeData.call_option?.oi_lots || 0)}
                       </div>
-                      <div
-                        className={`text-xs ${
-                          (strikeData.call_option?.oi_change_lots || 0) > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {(strikeData.call_option?.oi_change_lots || 0) > 0
-                          ? "+"
-                          : ""}
-                        {strikeData.call_option?.oi_change_lots || 0}
-                      </div>
                     </div>
 
-                    {/* Call Change */}
-                    <div className="text-center">
+                    {/* Call Change - Desktop Only */}
+                    <div className="hidden md:block text-center">
                       <div
                         className={`font-medium ${
                           callChange.change > 0
@@ -535,7 +530,7 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Call LTP */}
+                    {/* Call LTP - Mobile & Desktop */}
                     <div
                       className="text-center cursor-pointer hover:bg-muted p-1 rounded"
                       onClick={() => handleOptionClick(strikeData, "call")}
@@ -548,8 +543,8 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Call IV */}
-                    <div className="text-center">
+                    {/* Call IV - Desktop Only */}
+                    <div className="hidden md:block text-center">
                       <div className="font-medium">
                         {(strikeData.call_option?.greeks?.iv || 0).toFixed(1)}%
                       </div>
@@ -561,7 +556,7 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Strike Price */}
+                    {/* Strike Price - Mobile & Desktop */}
                     <div className="text-center font-bold flex items-center justify-center">
                       <Badge
                         variant={isATM ? "default" : "outline"}
@@ -571,8 +566,8 @@ const OptionChain = () => {
                       </Badge>
                     </div>
 
-                    {/* Put IV */}
-                    <div className="text-center">
+                    {/* Put IV - Desktop Only */}
+                    <div className="hidden md:block text-center">
                       <div className="font-medium">
                         {(strikeData.put_option?.greeks?.iv || 0).toFixed(1)}%
                       </div>
@@ -582,7 +577,7 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Put LTP */}
+                    {/* Put LTP - Mobile & Desktop */}
                     <div
                       className="text-center cursor-pointer hover:bg-muted p-1 rounded"
                       onClick={() => handleOptionClick(strikeData, "put")}
@@ -595,8 +590,8 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Put Change */}
-                    <div className="text-center">
+                    {/* Put Change - Desktop Only */}
+                    <div className="hidden md:block text-center">
                       <div
                         className={`font-medium ${
                           putChange.change > 0
@@ -618,22 +613,10 @@ const OptionChain = () => {
                       </div>
                     </div>
 
-                    {/* Put OI */}
+                    {/* Put OI - Mobile & Desktop */}
                     <div className="text-center">
                       <div className="font-medium">
                         {formatOI(strikeData.put_option?.oi_lots || 0)}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          (strikeData.put_option?.oi_change_lots || 0) > 0
-                            ? "text-green-500"
-                            : "text-red-500"
-                        }`}
-                      >
-                        {(strikeData.put_option?.oi_change_lots || 0) > 0
-                          ? "+"
-                          : ""}
-                        {strikeData.put_option?.oi_change_lots || 0}
                       </div>
                     </div>
                   </div>
@@ -645,7 +628,7 @@ const OptionChain = () => {
       </div>
 
       {/* Sidebar - Recommended Order */}
-      <div className="col-span-2">
+      <div className="w-full">
         <Card className="h-full">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-lg">
