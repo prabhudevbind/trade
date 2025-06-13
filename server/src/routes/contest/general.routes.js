@@ -14,15 +14,15 @@ const { authenticateToken } = require('../../utils/verify');
 
 // Contest Routes
 router.post('/contests', authenticateToken, contestController.createContest);
-router.get('/contests', contestController.getAllContests);
-router.get('/contests/:id', contestController.getContestById);
+router.get('/contests',authenticateToken, contestController.getAllContests);
+router.get('/contests/:id',authenticateToken, contestController.getContestById);
 router.put('/contests/:id', contestController.updateContest);
 router.delete('/contests/:id', contestController.deleteContest);
 
 // ContestParticipant Routes
-router.post('/contest-participants', contestParticipantController.createContestParticipant);
-router.get('/contest-participants', contestParticipantController.getAllContestParticipants);
-router.get('/contest-participants/:id', contestParticipantController.getContestParticipantById);
+router.post('/contest-participants', authenticateToken,contestParticipantController.createContestParticipant);
+router.get('/contest-participants',authenticateToken, contestParticipantController.getAllContestParticipants);
+router.get('/contest-participants/:id',authenticateToken, contestParticipantController.getContestParticipantById);
 router.put('/contest-participants/:id', contestParticipantController.updateContestParticipant);
 router.delete('/contest-participants/:id', contestParticipantController.deleteContestParticipant);
 

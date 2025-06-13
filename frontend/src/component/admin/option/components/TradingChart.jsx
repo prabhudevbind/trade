@@ -294,83 +294,69 @@ export  function TradingChart({instrumentKey}) {
 
       const candles = responseData.data.data.candles;
       
-      // Get the last valid candle
-        // Get the first valid candle
-    const firstValidCandle = candles.find(candle => {
-      const date = new Date(candle[0]);
-      const timeInMinutes = date.getHours() * 60 + date.getMinutes();
-      return timeInMinutes >= 555 && timeInMinutes <= 930;
-    });
-      if (firstValidCandle) {
-        // Update market data with last known values
-        const lastKnownValues = {
-          ltp: parseFloat(firstValidCandle[4]), // Close price
-          cp: parseFloat(firstValidCandle[1]), // Open price
-          high: parseFloat(firstValidCandle[2]),
-          low: parseFloat(firstValidCandle[3]),
-          volume: parseFloat(firstValidCandle[5]),
-          timestamp: new Date(firstValidCandle[0]),
-          lastCandle: {
-            open: parseFloat(firstValidCandle[1]),
-            high: parseFloat(firstValidCandle[2]),
-            low: parseFloat(firstValidCandle[3]),
-            close: parseFloat(firstValidCandle[4])
-          }
-        };
+      // Check if we have today's data
+      if (candles && candles.length > 0) {
+        // Get the latest valid candle
+        const latestCandle = candles[candles.length - 1];
+        const candleDate = new Date(latestCandle[0]);
+        const today = new Date();
+        
+        // Only update market data if the candle is from today
+        if (candleDate.toDateString() === today.toDateString()) {
+          const marketValues = {
+            ltp: parseFloat(latestCandle[4]), // Close price
+            cp: parseFloat(latestCandle[1]), // Open price
+            high: parseFloat(latestCandle[2]),
+            low: parseFloat(latestCandle[3]),
+            volume: parseFloat(latestCandle[5]),
+            timestamp: candleDate,
+            lastCandle: {
+              open: parseFloat(latestCandle[1]),
+              high: parseFloat(latestCandle[2]),
+              low: parseFloat(latestCandle[3]),
+              close: parseFloat(latestCandle[4])
+            }
+          };
 
-        setLastKnownData(prev => ({
-          ...prev,
-          ...lastKnownValues
-        }));
-
-        if (!isMarketOpen()) {
           setMarketData(prev => ({
             ...prev,
-            ...lastKnownValues
+            ...marketValues
+          }));
+
+          // Don't update lastKnownData since we have live data
+          setLastKnownData(prev => ({
+            ...prev,
+            timestamp: candleDate
           }));
         }
       }
 
-      // Continue with existing formatting logic...
-      const formattedData = candles.map(candle => {
-        const timestamp = convertToIndianTime(new Date(candle[0]).getTime())
-        
-        // For weekly data, we don't need to filter by market hours
-        if (timeframe === 'week') {
-          return {
-            time: timestamp,
-            open: parseFloat(candle[1]),
-            high: parseFloat(candle[2]),
-            low: parseFloat(candle[3]),
-            close: parseFloat(candle[4]),
-            value: parseFloat(candle[4]) // Close price for line series
+      // Continue with existing formatting logic for chart data
+      const formattedData = candles
+        .map(candle => {
+          const timestamp = convertToIndianTime(new Date(candle[0]).getTime());
+          const date = new Date(candle[0]);
+          const hours = date.getHours();
+          const minutes = date.getMinutes();
+          const timeInMinutes = hours * 60 + minutes;
+          
+          if (timeInMinutes >= 555 && timeInMinutes <= 930) {
+            return {
+              time: timestamp,
+              open: parseFloat(candle[1]),
+              high: parseFloat(candle[2]),
+              low: parseFloat(candle[3]),
+              close: parseFloat(candle[4]),
+              value: parseFloat(candle[4])
+            };
           }
-        }
-        
-        // For intraday, keep the market hours filter
-        const date = new Date(candle[0])
-        const hours = date.getHours()
-        const minutes = date.getMinutes()
-        const timeInMinutes = hours * 60 + minutes
-        
-        if (timeInMinutes >= 555 && timeInMinutes <= 930) {
-          return {
-            time: timestamp,
-            open: parseFloat(candle[1]),
-            high: parseFloat(candle[2]),
-            low: parseFloat(candle[3]),
-            close: parseFloat(candle[4]),
-            value: parseFloat(candle[4])
-          }
-        }
-        return null
-      }).filter(Boolean) // Remove null values
+          return null;
+        })
+        .filter(Boolean);
 
-      // Format volume data
       const formattedVolumeData = candles
         .map(candle => {
           const timestamp = convertToIndianTime(new Date(candle[0]).getTime());
-          
           const date = new Date(candle[0]);
           const timeInMinutes = date.getHours() * 60 + date.getMinutes();
           
@@ -711,7 +697,10 @@ export  function TradingChart({instrumentKey}) {
   }, [data, volumeData, chartReady, trades, isAutoScrollEnabled])
 
   // Trading functions
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+
   const placeBuyOrder = async () => {
+    setIsPlacingOrder(true);
     try {
       // Check if ask price is available
       // if (!marketData.askPrice || marketData.askPrice === 0) {
@@ -747,6 +736,7 @@ export  function TradingChart({instrumentKey}) {
 
       // Create or update position
       const positionData = {
+        contestId:id,
         optionId: option.id,
         netQuantity: orderQuantity,
         averageEntryPrice: price
@@ -770,6 +760,8 @@ export  function TradingChart({instrumentKey}) {
     } catch (err) {
       console.error('Failed to place buy order:', err);
       setError(err.error || 'Failed to place buy order');
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
@@ -893,26 +885,28 @@ export  function TradingChart({instrumentKey}) {
   const [isProduction, setIsProduction] = useState(false);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 p-2 sm:p-4">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-gray-900">{instrumentKey}</h1>
-            <Badge className={`${isStreamConnected ? 'bg-green-500' : 'bg-red-500'} text-white`}>
+        {/* Header - Mobile Friendly */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
+              {instrumentKey}
+            </h1>
+            <Badge className={`${isStreamConnected ? 'bg-green-500' : 'bg-red-500'} text-white text-xs`}>
               {isStreamConnected ? 'LIVE' : 'DISCONNECTED'}
             </Badge>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             Last Updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : "Never"}
           </div>
         </div>
 
-        {/* Market Overview */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-          <Card>
-            <CardContent className="p-4">
+        {/* Market Overview - Mobile Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">
                 LTP
                 <Badge className={`ml-2 ${isMarketOpen() ? 'bg-green-500' : 'bg-red-500'}`}>
@@ -943,24 +937,24 @@ export  function TradingChart({instrumentKey}) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">High / Low</div>
               <div className="text-lg font-semibold text-green-600">₹{marketData.high.toFixed(2)}</div>
               <div className="text-lg font-semibold text-red-600">₹{marketData.low.toFixed(2)}</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">Volume</div>
               <div className="text-lg font-semibold">{(marketData.volume / 1000).toFixed(0)}K</div>
               <div className="text-sm text-gray-500">OI: {(marketData.oi / 1000).toFixed(0)}K</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">Bid / Ask</div>
               <div className="text-sm">
                 <span className="text-green-600">₹{marketData.bidPrice.toFixed(2)} ({marketData.bidQty})</span>
@@ -971,15 +965,15 @@ export  function TradingChart({instrumentKey}) {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">CP</div>
               <div className="text-lg font-semibold">₹{marketData.cp.toFixed(2)}</div>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardContent className="p-4">
+          <Card className="p-2 sm:p-4">
+            <CardContent className="p-2 sm:p-4">
               <div className="text-sm text-gray-600">Trades</div>
               <div className="text-lg font-semibold">{trades.length}</div>
               <div className="text-sm text-gray-500">
@@ -991,19 +985,20 @@ export  function TradingChart({instrumentKey}) {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          
+        {/* Chart and Trading Panel Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
           {/* Chart Section */}
           <div className="lg:col-span-3 space-y-4">
             
-            {/* Chart Controls */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex gap-2">
+            {/* Chart Controls - Mobile Friendly */}
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
+              <div className="flex flex-wrap gap-1 sm:gap-2">
                 {Object.entries(timeframes).map(([key, config]) => (
                   <Button
                     key={key}
                     variant={timeframe === key ? "default" : "outline"}
                     size="sm"
+                    className="text-xs sm:text-sm px-2 py-1 sm:px-3 sm:py-2"
                     onClick={() => setTimeframe(key)}
                   >
                     {config.label}
@@ -1011,7 +1006,7 @@ export  function TradingChart({instrumentKey}) {
                 ))}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1 sm:gap-2">
                 <Button variant="outline" size="sm" onClick={zoomIn}>
                   <ZoomIn className="w-4 h-4" />
                 </Button>
@@ -1050,137 +1045,158 @@ export  function TradingChart({instrumentKey}) {
               </div>
             </div>
 
-            {/* Chart */}
+            {/* Chart Card with Loading State */}
             <Card>
-              <CardContent className="p-0">
+              <CardContent className="p-0 relative">
                 <div 
                   ref={chartContainerRef} 
                   className="w-full" 
                   style={{ 
-                    height: showVolume ? "600px" : "500px",
+                    height: showVolume ? "400px" : "300px",
                     background: "#ffffff"
                   }} 
                 />
                 {loading && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white/80">
-                    <RefreshCw className="w-6 h-6 animate-spin mr-3" />
-                    <span>Loading chart data...</span>
+                  <div className="absolute inset-0 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+                    <div className="flex flex-col items-center gap-2">
+                      <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+                      <span className="text-sm font-medium">Loading chart data...</span>
+                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
 
+            {/* Error Display */}
             {error && (
-              <Card className="border-red-200 bg-red-50">
-                <CardContent className="p-4">
-                  <div className="flex items-center text-red-700">
-                    <AlertCircle className="w-5 h-5 mr-2" />
-                    <strong>Error:</strong> {error}
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+                <div className="flex items-center text-red-700">
+                  <AlertCircle className="w-4 h-4 mr-2" />
+                  <span>{error}</span>
+                </div>
+              </div>
             )}
           </div>
 
-          {/* Trading Panel */}
+          {/* Trading Panel - Mobile Friendly */}
           <div className="space-y-4">
-            
-            {/* Quick Trade Panel */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Quick Trade</CardTitle>
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-base sm:text-lg">Quick Trade</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                
-                {/* Lot Size Selection */}
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Lot Size</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {lotSizes.map((size) => (
-                      <Button
-                        key={size}
-                        variant={selectedLotSize === size ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => handleLotSizeChange(size)}
-                      >
-                        {size}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Order Type */}
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Order Type</label>
-                  <Select value={orderType} onValueChange={setOrderType}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="market">Market</SelectItem>
-                      <SelectItem value="limit">Limit</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Quantity */}
-                <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
-                  <Input
-                    type="number"
-                    value={orderQuantity}
-                    onChange={(e) => setOrderQuantity(Number(e.target.value))}
-                    min={1}
-                    className="w-full"
-                    placeholder="Enter quantity"
-                  />
-                </div>
-                {/* Price (for limit orders) */}  
-                {orderType === "limit" && (
+              <CardContent className="p-3 sm:p-4 space-y-3">
+                {/* Trading Form */}
+                <div className="space-y-3">
+                  {/* Lot Size Selection */}
                   <div>
-                    <label className="text-sm font-medium text-gray-700 block mb-2">Price</label>
+                    <label className="text-sm font-medium text-gray-700 block mb-2">Lot Size</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {lotSizes.map((size) => (
+                        <Button
+                          key={size}
+                          variant={selectedLotSize === size ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleLotSizeChange(size)}
+                        >
+                          {size}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Order Type */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-2">Order Type</label>
+                    <Select value={orderType} onValueChange={setOrderType}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="market">Market</SelectItem>
+                        <SelectItem value="limit">Limit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Quantity */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 block mb-2">Quantity</label>
                     <Input
                       type="number"
-                      value={orderPrice}
-                      onChange={(e) => setOrderPrice(Number(e.target.value))}
-                      min={0}
+                      value={orderQuantity}
+                      onChange={(e) => setOrderQuantity(Number(e.target.value))}
+                      min={1}
                       className="w-full"
-                      placeholder="Enter limit price"
+                      placeholder="Enter quantity"
                     />
                   </div>
-                )}
+                  {/* Price (for limit orders) */}  
+                  {orderType === "limit" && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Price</label>
+                      <Input
+                        type="number"
+                        value={orderPrice}
+                        onChange={(e) => setOrderPrice(Number(e.target.value))}
+                        min={0}
+                        className="w-full"
+                        placeholder="Enter limit price"
+                      />
+                    </div>
+                  )}
 
-                {/* Action Buttons */}
-                <div className="flex gap-2">
-                  <Button 
-                    variant="primary" 
-                    onClick={placeBuyOrder} 
-                    disabled={loading || orderQuantity <= 0}
-                  >
-                    Buy
-                  </Button>
-                  <Button 
-                    variant="destructive" 
-                    onClick={placeSellOrder} 
-                    disabled={loading || orderQuantity <= 0}
-                  >
-                    Sell
-                  </Button>
+                  {/* Action Buttons with Loading State */}
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="primary" 
+                      onClick={placeBuyOrder} 
+                      disabled={isPlacingOrder || loading || orderQuantity <= 0}
+                      className="flex-1"
+                    >
+                      {isPlacingOrder ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Buying...
+                        </>
+                      ) : (
+                        'Buy'
+                      )}
+                    </Button>
+                    <Button 
+                      variant="destructive" 
+                      onClick={placeSellOrder} 
+                      disabled={isPlacingOrder || loading || orderQuantity <= 0}
+                      className="flex-1"
+                    >
+                      {isPlacingOrder ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                          Selling...
+                        </>
+                      ) : (
+                        'Sell'
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            {/* Trade History */}
+
+            {/* Trade History - Mobile Friendly */}
             <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Trade History</CardTitle>
+              <CardHeader className="p-3 sm:p-4">
+                <CardTitle className="text-base sm:text-lg">Trade History</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="p-3 sm:p-4">
                 {trades.length === 0 ? (
-                  <div className="text-gray-500 text-sm">No trades yet.</div>
+                  <div className="text-gray-500 text-sm text-center py-4">No trades yet.</div>
                 ) : (
-                  <ul className="space-y-2">
+                  <div className="space-y-2 max-h-[300px] overflow-y-auto">
                     {trades.map((trade) => (
-                      <li key={trade.id} className={`flex items-center justify-between p-2 rounded ${trade.type === 'buy' ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <div key={trade.id} 
+                        className={`flex items-center justify-between p-2 rounded text-xs sm:text-sm
+                          ${trade.type === 'buy' ? 'bg-green-50' : 'bg-red-50'}`}
+                      >
                         <div className="flex items-center gap-2">
                           <span className={`font-semibold ${trade.type === 'buy' ? 'text-green-600' : 'text-red-600'}`}>
                             {trade.type.toUpperCase()}
@@ -1191,9 +1207,9 @@ export  function TradingChart({instrumentKey}) {
                         <span className="text-xs text-gray-400">
                           {new Date(trade.timestamp).toLocaleTimeString()}
                         </span>
-                      </li>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </CardContent>
             </Card>

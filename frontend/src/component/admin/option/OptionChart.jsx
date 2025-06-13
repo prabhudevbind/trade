@@ -266,73 +266,124 @@ const OptionChain = () => {
     md:grid-cols-9
   `;
 
+  // Add a helper function for safe date formatting
+  const formatTimeDistance = (dateString) => {
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      return formatDistanceToNow(date, { addSuffix: true });
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date';
+    }
+  };
+
+  // Add helper function for calculating total P&L
+  const calculateTotalPnL = (positions) => {
+    if (!positions?.length) return 0;
+    return positions.reduce((total, pos) => total + pos.pnl, 0);
+  };
+
+  const formatMoney = (amount) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 2,
+    }).format(amount);
+  };
+
   return (
-    <div className="grid sm:grid-cols-8 mx-auto px-2 py-4 gap-4">
-      <div className=" col-span-1 sm:col-span-6">
+    <div className="grid grid-cols-1 md:grid-cols-8 mx-auto px-2 py-4 gap-4">
+      <div className="  md:col-span-5">
         {/* Header Section */}
 
-          {contestData && (
+          {contestData?.contest && (
         <Card className="mb-4">
           <CardContent className="p-4">
+            {/* Contest Header */}
             <div className="flex justify-between items-start">
               <div>
-                <h2 className="text-xl font-bold mb-2">{contestData.name}</h2>
+                <h2 className="text-xl font-bold mb-2">{contestData.contest.name}</h2>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center gap-2">
                     <TimerIcon className="h-4 w-4 text-muted-foreground" />
-                    <span>Ends in: {formatDistanceToNow(new Date(contestData.end_time))}</span>
+                    <span>Ends: {formatTimeDistance(contestData.contest.endTime)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <CurrencyIcon className="h-4 w-4 text-muted-foreground" />
-                    <span>Entry Fee: ₹{contestData.entry_fee}</span>
+                    <span>Entry Fee: {formatMoney(contestData.contest.entryFee)}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Trophy className="h-4 w-4 text-muted-foreground" />
-                    <span>Max Trades: {contestData.maxTrade}</span>
+                    <span>Max Trades: {contestData.contest.maxTrade}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Users className="h-4 w-4 text-muted-foreground" />
-                    <span>Participants: {contestData.contestParticipants.length}</span>
+                    <span>Participants: {contestData.contest.totalParticipants}</span>
                   </div>
                 </div>
               </div>
               <Badge variant={
-                contestData.status === 'upcoming' ? 'outline' : 
-                contestData.status === 'active' ? 'default' : 
+                contestData.contest.status === 'ongoing' ? 'default' : 
+                contestData.contest.status === 'upcoming' ? 'outline' : 
                 'secondary'
               }>
-                {contestData.status.toUpperCase()}
+                {contestData.contest.status.toUpperCase()}
               </Badge>
             </div>
-            
-            {/* Trade and Money Info */}
-            {contestData.contestParticipants?.length > 0 && (
+
+            {/* Trading Summary */}
+            {contestData.contest.participation && (
               <div className="mt-4 pt-4 border-t space-y-4">
-                {/* Virtual Cash Info */}
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-2">
-                    <CurrencyIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Available Balance:</span>
+                {/* Balance and P&L */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <CurrencyIcon className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Available Balance</span>
+                    </div>
+                    <span className="text-2xl font-bold text-green-600">
+                      {formatMoney(contestData.contest.participation.virtualCash)}
+                    </span>
                   </div>
-                  <span className="text-xl font-bold text-green-600">
-                    ₹{parseInt(contestData.contestParticipants[0].virtual_cash).toLocaleString()}
-                  </span>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Activity className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-muted-foreground">Total P&L</span>
+                    </div>
+                    <span className={`text-2xl font-bold ${
+                      calculateTotalPnL(contestData.contest.participation.positions) >= 0 
+                        ? 'text-green-600' 
+                        : 'text-red-600'
+                    }`}>
+                      {formatMoney(calculateTotalPnL(contestData.contest.participation.positions))}
+                    </span>
+                  </div>
                 </div>
-                
-                {/* Trades Info */}
-                <div className="flex justify-between items-center">
+
+                {/* Trading Status */}
+                <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
                   <div className="flex items-center gap-2">
                     <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Trades:</span>
+                    <span className="text-muted-foreground">Trading Status</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-medium">
-                      {contestData.contestParticipants[0].trades_taken || 0}/{contestData.maxTrade}
+                      {contestData.contest.participation.trades_taken}/{contestData.contest.maxTrade}
                     </span>
-                    <Badge variant={contestData.contestParticipants[0].trades_taken >= contestData.maxTrade ? "destructive" : "outline"}>
-                      {contestData.contestParticipants[0].trades_taken >= contestData.maxTrade 
+                    <Badge 
+                      variant={
+                        contestData.contest.participation.trades_taken >= contestData.contest.maxTrade 
+                          ? "destructive" 
+                          : "outline"
+                      }
+                    >
+                      {contestData.contest.participation.trades_taken >= contestData.contest.maxTrade 
                         ? "Limit Reached" 
-                        : `${contestData.maxTrade - (contestData.contestParticipants[0].trades_taken || 0)} Remaining`}
+                        : `${contestData.contest.maxTrade - contestData.contest.participation.trades_taken} Remaining`
+                      }
                     </Badge>
                   </div>
                 </div>
@@ -343,67 +394,68 @@ const OptionChain = () => {
       )}
 
 
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center space-x-4">
-            <Select value={selectedIndex} onValueChange={setSelectedIndex}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select Index" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="NSE_INDEX|Nifty Bank">BANKNIFTY</SelectItem>
-                <SelectItem value="NSE_INDEX|Nifty 50">NIFTY</SelectItem>
-                <SelectItem value="NSE_INDEX|Nifty Fin Service">
-                  FINNIFTY
-                </SelectItem>
-              </SelectContent>
-            </Select>
+        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+          {/* Controls Group */}
+          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+            <div className="grid grid-cols-2 sm:flex gap-2">
+              <Select value={selectedIndex} onValueChange={setSelectedIndex}>
+                <SelectTrigger className="w-full sm:w-[140px]">
+                  <SelectValue placeholder="Select Index" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="NSE_INDEX|Nifty Bank">BANKNIFTY</SelectItem>
+                  <SelectItem value="NSE_INDEX|Nifty 50">NIFTY</SelectItem>
+                  <SelectItem value="NSE_INDEX|Nifty Fin Service">FINNIFTY</SelectItem>
+                </SelectContent>
+              </Select>
 
-            <Select value={selectedExpiry} onValueChange={setSelectedExpiry}>
-              <SelectTrigger className="w-[150px]">
-                <Calendar className="mr-2 h-4 w-4" />
-                <SelectValue placeholder="Expiry" />
-              </SelectTrigger>
-              <SelectContent>
-                {expiryDates.map((date) => (
-                  <SelectItem key={date} value={date}>
-                    {new Date(date).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                    })}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <Select value={selectedExpiry} onValueChange={setSelectedExpiry}>
+                <SelectTrigger className="w-full sm:w-[140px]">
+                  <Calendar className="mr-2 h-4 w-4 hidden sm:inline" />
+                  <SelectValue placeholder="Expiry" />
+                </SelectTrigger>
+                <SelectContent>
+                  {expiryDates.map((date) => (
+                    <SelectItem key={date} value={date}>
+                      {new Date(date).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-            {/* Connection Status */}
-            <div className="flex items-center space-x-2">
-              <div
-                className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}
-              />
+            {/* Connection Status - Show on all screens */}
+            <div className="flex items-center gap-2 mt-2 sm:mt-0">
+              <div className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`} />
               <span className="text-xs text-muted-foreground capitalize">
                 {connectionStatus}
               </span>
             </div>
           </div>
 
-          {/* Market Info */}
+          {/* Market Info - Responsive layout */}
           {optionChainData?.underlying_info && (
-            <div className="flex items-center space-x-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Spot: </span>
-                <span className="font-semibold">
-                  {formatPrice(optionChainData.underlying_info.spot_price)}
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">PCR: </span>
-                <span className="font-semibold">
-                  {optionChainData.summary?.overall_pcr || "0.00"}
-                </span>
+            <div className="flex flex-wrap gap-4 text-sm mt-2 sm:mt-0 justify-between sm:justify-end flex-1">
+              <div className="flex gap-4">
+                <div>
+                  <span className="text-muted-foreground">Spot: </span>
+                  <span className="font-semibold">
+                    {formatPrice(optionChainData.underlying_info.spot_price)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">PCR: </span>
+                  <span className="font-semibold">
+                    {optionChainData.summary?.overall_pcr || "0.00"}
+                  </span>
+                </div>
               </div>
               {lastUpdated && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground whitespace-nowrap">
                   Updated: {lastUpdated.toLocaleTimeString()}
                 </div>
               )}
@@ -413,38 +465,38 @@ const OptionChain = () => {
 
         {/* Summary Cards */}
         {optionChainData?.summary && (
-          <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-4">
             <Card className="p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Call OI</p>
-                  <p className="text-lg font-semibold">
-                    {formatOI(optionChainData.summary.total_call_oi_lots)} lots
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Call OI</p>
+                  <p className="text-sm sm:text-lg font-semibold">
+                    {formatOI(optionChainData.summary.total_call_oi_lots)}
                   </p>
                 </div>
-                <TrendingUp className="h-5 w-5 text-green-500" />
+                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
               </div>
             </Card>
             <Card className="p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Put OI</p>
-                  <p className="text-lg font-semibold">
-                    {formatOI(optionChainData.summary.total_put_oi_lots)} lots
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Put OI</p>
+                  <p className="text-sm sm:text-lg font-semibold">
+                    {formatOI(optionChainData.summary.total_put_oi_lots)}
                   </p>
                 </div>
-                <TrendingDown className="h-5 w-5 text-red-500" />
+                <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5 text-red-500" />
               </div>
             </Card>
-            <Card className="p-3">
+            <Card className="col-span-2 sm:col-span-1 p-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Total Strikes</p>
-                  <p className="text-lg font-semibold">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Strikes</p>
+                  <p className="text-sm sm:text-lg font-semibold">
                     {optionChainData.summary.total_strikes}
                   </p>
                 </div>
-                <Activity className="h-5 w-5 text-blue-500" />
+                <Activity className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500" />
               </div>
             </Card>
           </div>
@@ -495,19 +547,54 @@ const OptionChain = () => {
                 return (
                   <div
                     key={index}
-                    ref={isATM ? atmRowRef : null} // Add this ref
+                    ref={isATM ? atmRowRef : null}
                     className={`grid ${mobileColumns} text-xs border-b py-2 px-2 hover:bg-muted/50 ${
                       isATM ? "bg-yellow-50 dark:bg-yellow-900/20" : ""
                     }`}
                   >
-                    {/* Call OI - Mobile & Desktop */}
-                    <div className="text-center">
-                      <div className="font-medium">
-                        {formatOI(strikeData.call_option?.oi_lots || 0)}
+                    {/* Call LTP - Mobile & Desktop */}
+                    <div
+                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
+                      onClick={() => handleOptionClick(strikeData, "call")}
+                    >
+                      <div className="font-semibold">
+                        {formatPrice(strikeData.call_option?.ltp || 0)}
                       </div>
                     </div>
 
-                    {/* Call Change - Desktop Only */}
+                    {/* OI - Mobile */}
+                    <div className="text-center md:hidden">
+                      <div className="font-medium text-xs">
+                        {formatOI(strikeData.call_option?.oi_lots || 0)}
+                        <span className="text-muted-foreground"> / </span>
+                        {formatOI(strikeData.put_option?.oi_lots || 0)}
+                      </div>
+                    </div>
+
+                    {/* Strike Price - Mobile & Desktop */}
+                    <div className="text-center font-bold">
+                      <Badge
+                        variant={isATM ? "default" : "outline"}
+                        className="text-xs whitespace-nowrap"
+                      >
+                        {strikeData.strike_price.toLocaleString()}
+                      </Badge>
+                    </div>
+
+                    {/* Put LTP - Mobile & Desktop */}
+                    <div
+                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
+                      onClick={() => handleOptionClick(strikeData, "put")}
+                    >
+                      <div className="font-semibold">
+                        {formatPrice(strikeData.put_option?.ltp || 0)}
+                      </div>
+                    </div>
+
+                    {/* Desktop-only columns */}
+                    <div className="hidden md:block text-center">
+                      {formatOI(strikeData.call_option?.oi_lots || 0)}
+                    </div>
                     <div className="hidden md:block text-center">
                       <div
                         className={`font-medium ${
@@ -529,21 +616,6 @@ const OptionChain = () => {
                         ({callChange.changePercent}%)
                       </div>
                     </div>
-
-                    {/* Call LTP - Mobile & Desktop */}
-                    <div
-                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                      onClick={() => handleOptionClick(strikeData, "call")}
-                    >
-                      <div className="font-semibold">
-                        {formatPrice(strikeData.call_option?.ltp || 0)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Vol: {formatOI(strikeData.call_option?.volume || 0)}
-                      </div>
-                    </div>
-
-                    {/* Call IV - Desktop Only */}
                     <div className="hidden md:block text-center">
                       <div className="font-medium">
                         {(strikeData.call_option?.greeks?.iv || 0).toFixed(1)}%
@@ -555,18 +627,6 @@ const OptionChain = () => {
                         )}
                       </div>
                     </div>
-
-                    {/* Strike Price - Mobile & Desktop */}
-                    <div className="text-center font-bold flex items-center justify-center">
-                      <Badge
-                        variant={isATM ? "default" : "outline"}
-                        className="text-xs"
-                      >
-                        {strikeData.strike_price.toLocaleString()}
-                      </Badge>
-                    </div>
-
-                    {/* Put IV - Desktop Only */}
                     <div className="hidden md:block text-center">
                       <div className="font-medium">
                         {(strikeData.put_option?.greeks?.iv || 0).toFixed(1)}%
@@ -576,21 +636,6 @@ const OptionChain = () => {
                         {(strikeData.put_option?.greeks?.delta || 0).toFixed(2)}
                       </div>
                     </div>
-
-                    {/* Put LTP - Mobile & Desktop */}
-                    <div
-                      className="text-center cursor-pointer hover:bg-muted p-1 rounded"
-                      onClick={() => handleOptionClick(strikeData, "put")}
-                    >
-                      <div className="font-semibold">
-                        {formatPrice(strikeData.put_option?.ltp || 0)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Vol: {formatOI(strikeData.put_option?.volume || 0)}
-                      </div>
-                    </div>
-
-                    {/* Put Change - Desktop Only */}
                     <div className="hidden md:block text-center">
                       <div
                         className={`font-medium ${
@@ -612,13 +657,6 @@ const OptionChain = () => {
                         ({putChange.changePercent}%)
                       </div>
                     </div>
-
-                    {/* Put OI - Mobile & Desktop */}
-                    <div className="text-center">
-                      <div className="font-medium">
-                        {formatOI(strikeData.put_option?.oi_lots || 0)}
-                      </div>
-                    </div>
                   </div>
                 );
               })}
@@ -628,68 +666,97 @@ const OptionChain = () => {
       </div>
 
       {/* Sidebar - Recommended Order */}
-      <div className="w-full">
+      <div className="w-full col-span-3">
         <Card className="h-full">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center justify-between text-lg">
-              Recommended Order
-              <BarChart3 className="h-5 w-5 text-primary" />
+              My Orders & Positions
+              <Activity className="h-5 w-5 text-primary" />
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {optionChainData && (
-              <>
-                <div className="text-sm space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Instrument:</span>
-                    <span className="font-medium">
-                      {selectedIndex.includes("Bank") ? "BANKNIFTY" : "NIFTY"}{" "}
-                      {atmStrike} CE
-                    </span>
+          <CardContent className="space-y-4">
+            {/* Current Positions */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Open Positions</h3>
+              {contestData?.contest?.participation?.positions?.length > 0 ? (
+                <div className="space-y-3">
+                  {contestData.contest.participation.positions.map((position) => (
+                    <div 
+                      key={position.id} 
+                      className={`p-3 rounded-lg border ${
+                        position.pnl >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="font-medium">
+                          {position.strikePrice} {position.optionType}
+                        </span>
+                        <Badge variant={position.pnl >= 0 ? "success" : "destructive"}>
+                          {position.pnl >= 0 ? '+' : ''}{position.pnl.toFixed(2)}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>Qty: {position.quantity}</div>
+                        <div>Avg: ₹{position.averagePrice}</div>
+                        <div>Current: ₹{position.currentPrice}</div>
+                        <div>
+                          Change: {((position.currentPrice - position.averagePrice) / position.averagePrice * 100).toFixed(2)}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  No open positions
+                </div>
+              )}
+            </div>
+
+            {/* Recent Trades */}
+            <div>
+              <h3 className="text-sm font-semibold mb-2">Recent Trades</h3>
+              <div className="space-y-2">
+                {contestData?.contest?.participation?.recentTrades?.map((trade) => (
+                  <div 
+                    key={trade.id}
+                    className="flex items-center justify-between p-2 rounded-lg bg-muted text-xs"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={trade.action === 'buy' ? 'default' : 'destructive'}>
+                          {trade.action.toUpperCase()}
+                        </Badge>
+                        <span className="font-medium">{trade.strikePrice}</span>
+                      </div>
+                      <div className="text-muted-foreground">
+                        {new Date(trade.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">₹{trade.price}</div>
+                      <div className="text-muted-foreground">{trade.quantity} qty</div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Action:</span>
-                    <Badge className="bg-green-100 text-green-800">Buy</Badge>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Current Price:
-                    </span>
-                    <span className="font-medium">
-                      {formatPrice(
-                        optionChainData.option_chain.find(
-                          (s) => s.strike_price === atmStrike
-                        )?.call_option?.ltp || 0
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">
-                      Recommended Qty:
-                    </span>
-                    <span className="font-medium">25 lots</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Stop Loss:</span>
-                    <span className="font-medium text-red-600">₹350.00</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Target:</span>
-                    <span className="font-medium text-green-600">₹550.00</span>
+                ))}
+              </div>
+            </div>
+
+            {/* Contest Summary */}
+            <div className="border-t pt-3 mt-3">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="text-muted-foreground">Virtual Cash</div>
+                  <div className="font-semibold">₹{contestData?.contest?.participation?.virtualCash.toLocaleString()}</div>
+                </div>
+                <div>
+                  <div className="text-muted-foreground">Trades Used</div>
+                  <div className="font-semibold">
+                    {contestData?.contest?.participation?.trades_taken}/{contestData?.contest?.maxTrade}
                   </div>
                 </div>
-
-                <div className="pt-2 border-t">
-                  <p className="text-xs text-muted-foreground">
-                    <strong>Rationale:</strong> High OI build-up in calls with
-                    positive PCR trend. Spot price showing bullish momentum near
-                    ATM strike.
-                  </p>
-                </div>
-
-                <Button className="w-full mt-4">Place Order</Button>
-              </>
-            )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

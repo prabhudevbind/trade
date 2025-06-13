@@ -165,13 +165,19 @@ export default function Wallet() {
   } = groupTransactions(transactionsData);
 
   return (
-    <div className="container mx-auto px-4 py-6 space-y-8 max-w-6xl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+    <div className="container mx-auto sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-8 max-w-6xl">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Wallet</h1>
-          <p className="text-muted-foreground">Manage your funds and view transaction history</p>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Wallet</h1>
+          <p className="text-sm text-muted-foreground">Manage your funds and view transaction history</p>
         </div>
-        <Button variant="outline" onClick={() => refetch()} disabled={userLoading || transactionsLoading}>
+        <Button 
+          variant="outline" 
+          onClick={() => refetch()} 
+          disabled={userLoading || transactionsLoading}
+          className="w-full sm:w-auto"
+        >
           {userLoading || transactionsLoading ? (
             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
           ) : (
@@ -181,170 +187,159 @@ export default function Wallet() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Balance Card */}
-        <Card className="md:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <WalletIcon className="h-5 w-5" />
-              Wallet Balance
-            </CardTitle>
-            <CardDescription>Your available funds for trading and contests</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {userLoading ? (
-              <Skeleton className="h-14 w-1/2" />
-            ) : userError ? (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>
-                  Failed to load balance: {userError?.data?.message || "Unknown error"}
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <div className="flex items-baseline">
-                <span className="text-4xl font-bold text-primary">{formatCurrency(user?.amount || 0)}</span>
-                <span className="text-muted-foreground ml-2">INR</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Deposit Form */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <CreditCard className="h-5 w-5" />
-              Add Funds
-            </CardTitle>
-            <CardDescription>Deposit money to your wallet</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleDeposit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount (₹)</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="amount"
-                    type="number"
-                    placeholder="Enter amount"
-                    value={depositAmount}
-                    onChange={(e) => setDepositAmount(e.target.value)}
-                    className="pl-9"
-                    min="1"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-
-              {depositError && (
-                <Alert variant="destructive" className="py-2">
+      {/* Cards Grid */}
+      <div className="grid grid-cols-1 gap-4 sm:gap-6">
+        {/* Balance and Deposit Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Balance Card */}
+          <Card className="md:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <WalletIcon className="h-5 w-5" />
+                Wallet Balance
+              </CardTitle>
+              <CardDescription>Your available funds for trading and contests</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {userLoading ? (
+                <Skeleton className="h-14 w-1/2" />
+              ) : userError ? (
+                <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{depositError}</AlertDescription>
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>
+                    Failed to load balance: {userError?.data?.message || "Unknown error"}
+                  </AlertDescription>
                 </Alert>
-              )}
-
-              {depositSuccess && (
-                <Alert variant="success" className="py-2 bg-green-50 text-green-800 border-green-200">
-                  <CheckCircle2 className="h-4 w-4" />
-                  <AlertDescription>{depositSuccess}</AlertDescription>
-                </Alert>
-              )}
-            </form>
-          </CardContent>
-          <CardFooter>
-            <Button className="w-full" onClick={handleDeposit} disabled={isDepositing || !depositAmount}>
-              {isDepositing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Processing...
-                </>
               ) : (
-                <>Add Funds</>
+                <div className="flex items-baseline">
+                  <span className="text-4xl font-bold text-primary">{formatCurrency(user?.amount || 0)}</span>
+                  <span className="text-muted-foreground ml-2">INR</span>
+                </div>
               )}
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
+            </CardContent>
+          </Card>
 
-      {/* Transactions History */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl flex items-center gap-2">
-            <RefreshCw className="h-5 w-5" />
-            Transaction History
-          </CardTitle>
-          <CardDescription>View all your wallet transactions</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {transactionsLoading ? (
-            <div className="space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          ) : transactionsError ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                Failed to load transactions: {transactionsError?.data?.message || "Unknown error"}
-              </AlertDescription>
-            </Alert>
-          ) : allTransactions?.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No transactions found. Add funds to get started.
-            </div>
-          ) : (
-            <Tabs defaultValue="all">
-              <TabsList className="grid grid-cols-4 mb-6">
-                <TabsTrigger value="all">
+          {/* Deposit Form */}
+          <Card className="h-auto">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-xl flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Add Funds
+              </CardTitle>
+              <CardDescription>Deposit money to your wallet</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleDeposit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Amount (₹)</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="amount"
+                      type="number"
+                      placeholder="Enter amount"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      className="pl-9"
+                      min="1"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                {depositError && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{depositError}</AlertDescription>
+                  </Alert>
+                )}
+
+                {depositSuccess && (
+                  <Alert variant="success" className="py-2 bg-green-50 text-green-800 border-green-200">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>{depositSuccess}</AlertDescription>
+                  </Alert>
+                )}
+              </form>
+            </CardContent>
+            <CardFooter>
+              <Button className="w-full" onClick={handleDeposit} disabled={isDepositing || !depositAmount}>
+                {isDepositing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>Add Funds</>
+                )}
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
+
+        {/* Transactions History */}
+        <Card>
+          <CardHeader className="pb-0 sm:pb-3">
+            <CardTitle className="text-lg sm:text-xl flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 sm:h-5 sm:w-5" />
+              Transaction History
+            </CardTitle>
+            <CardDescription className="text-sm">View all your wallet transactions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {/* Update Tabs for mobile */}
+            <Tabs defaultValue="all" className="w-full">
+              <TabsList className="grid grid-cols-2 sm:grid-cols-4 mb-4 sm:mb-6 h-auto">
+                {/* Make tabs stack on mobile */}
+                <TabsTrigger value="all" className="text-sm py-2">
                   All
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs">
                     {allTransactions.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="deposits">
+                <TabsTrigger value="deposits" className="text-sm py-2">
                   Deposits
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs">
                     {depositTransactions.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="withdrawals">
+                <TabsTrigger value="withdrawals" className="text-sm py-2">
                   Withdrawals
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs">
                     {withdrawalTransactions.length}
                   </Badge>
                 </TabsTrigger>
-                <TabsTrigger value="contests">
+                <TabsTrigger value="contests" className="text-sm py-2">
                   Contests
-                  <Badge variant="secondary" className="ml-2">
+                  <Badge variant="secondary" className="ml-2 text-xs">
                     {contestTransactions.length}
                   </Badge>
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="all" className="space-y-4">
-                <TransactionTable transactions={allTransactions} />
-              </TabsContent>
+              {/* Make table container scrollable */}
+              <div className="overflow-auto max-h-[60vh] rounded-md border">
+                <TabsContent value="all" className="m-0">
+                  <TransactionTable transactions={allTransactions} />
+                </TabsContent>
 
-              <TabsContent value="deposits" className="space-y-4">
-                <TransactionTable transactions={depositTransactions} />
-              </TabsContent>
+                <TabsContent value="deposits" className="m-0">
+                  <TransactionTable transactions={depositTransactions} />
+                </TabsContent>
 
-              <TabsContent value="withdrawals" className="space-y-4">
-                <TransactionTable transactions={withdrawalTransactions} />
-              </TabsContent>
+                <TabsContent value="withdrawals" className="m-0">
+                  <TransactionTable transactions={withdrawalTransactions} />
+                </TabsContent>
 
-              <TabsContent value="contests" className="space-y-4">
-                <TransactionTable transactions={contestTransactions} />
-              </TabsContent>
+                <TabsContent value="contests" className="m-0">
+                  <TransactionTable transactions={contestTransactions} />
+                </TabsContent>
+              </div>
             </Tabs>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -355,61 +350,46 @@ function TransactionTable({ transactions }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="w-full">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Date</TableHead>
+            <TableHead className="w-[100px]">Date</TableHead>
             <TableHead>Type</TableHead>
             <TableHead>Amount</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="hidden md:table-cell">Payment ID</TableHead>
+            <TableHead className="hidden sm:table-cell">Status</TableHead>
+            <TableHead className="hidden lg:table-cell">Payment ID</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.map((tx) => (
             <TableRow key={tx.id}>
-              <TableCell className="font-medium">{formatDate(tx.created_at)}</TableCell>
+              <TableCell className="font-medium text-xs sm:text-sm">
+                {formatDate(tx.created_at)}
+              </TableCell>
               <TableCell>
                 <Badge
                   variant={tx.type === "DEPOSIT" ? "success" : tx.type === "WITHDRAWAL" ? "destructive" : "secondary"}
-                  className={`
-                    ${tx.type === "DEPOSIT" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""} 
-                    ${tx.type === "WITHDRAWAL" ? "bg-red-100 text-red-800 hover:bg-red-100" : ""}
-                    ${tx.type === "DEBIT" ? "bg-orange-100 text-orange-800 hover:bg-orange-100" : ""}
-                    ${tx.type === "CREDIT" ? "bg-blue-100 text-blue-800 hover:bg-blue-100" : ""}
-                  `}
+                  className="text-xs whitespace-nowrap"
                 >
                   <span className="flex items-center gap-1">
-                    {tx.type === "DEPOSIT" && <ArrowDownCircle className="h-3 w-3" />}
-                    {tx.type === "WITHDRAWAL" && <ArrowUpCircle className="h-3 w-3" />}
-                    {tx.type === "DEBIT" && <ArrowUpCircle className="h-3 w-3" />}
-                    {tx.type === "CREDIT" && <ArrowDownCircle className="h-3 w-3" />}
+                    {tx.type === "DEPOSIT" && <ArrowDownCircle className="h-3 w-3 hidden sm:inline" />}
                     {tx.type}
                   </span>
                 </Badge>
               </TableCell>
-              <TableCell
-                className={`font-medium ${tx.type === "DEPOSIT" || tx.type === "CREDIT" ? "text-green-600" : "text-red-600"}`}
-              >
+              <TableCell className={`font-medium text-xs sm:text-sm ${
+                tx.type === "DEPOSIT" || tx.type === "CREDIT" ? "text-green-600" : "text-red-600"
+              }`}>
                 {tx.type === "DEPOSIT" || tx.type === "CREDIT" ? "+" : "-"}
                 {formatCurrency(tx.amount)}
               </TableCell>
-              <TableCell>
-                <Badge
-                  variant={
-                    tx.status === "COMPLETED" ? "outline" : tx.status === "PENDING" ? "secondary" : "destructive"
-                  }
-                  className={`
-                    ${tx.status === "COMPLETED" ? "bg-green-100 text-green-800 hover:bg-green-100" : ""} 
-                    ${tx.status === "PENDING" ? "bg-yellow-100 text-yellow-800 hover:bg-yellow-100" : ""}
-                    ${tx.status === "FAILED" ? "bg-red-100 text-red-800 hover:bg-red-100" : ""}
-                  `}
-                >
+              <TableCell className="hidden sm:table-cell">
+                <Badge variant="outline" className="text-xs">
                   {tx.status}
                 </Badge>
               </TableCell>
-              <TableCell className="hidden md:table-cell truncate max-w-[150px]">
+              <TableCell className="hidden lg:table-cell text-xs truncate max-w-[150px]">
                 {tx.razorpay_payment_id || "N/A"}
               </TableCell>
             </TableRow>

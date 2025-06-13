@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TrendingUp, TrendingDown, DollarSign, Activity, BarChart3, Clock, Users, Trophy, Loader2 } from 'lucide-react';
 import { useGetMarketDataQuery, useCreateTradeMutation } from '@/store/api/contest';
 import { Card, CardContent } from "@/components/ui/card";
+import { useNavigate } from 'react-router-dom';
 
 const TradingPositions = () => {
   const [activeTab, setActiveTab] = useState('positions');
@@ -16,6 +17,7 @@ const TradingPositions = () => {
     refetch
   } = useGetMarketDataQuery();
   const [createTrade] = useCreateTradeMutation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!isLoading && tradingData) {
@@ -210,28 +212,37 @@ const TradingPositions = () => {
         </div>
       </div>
 
-      {contest.positions.length > 0 && (
-        <div>
+      {/* Add trade button and modify positions button layout */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => navigate(`/option-chain/${contest.contestId}`)}
+          className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-blue-700 hover:to-purple-700 transition-colors flex items-center justify-center"
+        >
+          <BarChart3 className="w-4 h-4 mr-2" />
+          Trade Now
+        </button>
+
+        {contest.positions.length > 0 && (
           <button
             onClick={() => setSelectedContest(selectedContest === contest.contestId ? null : contest.contestId)}
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="flex-1 bg-gray-100 text-gray-700 py-2 px-4 rounded-lg font-medium hover:bg-gray-200 transition-colors"
           >
             {selectedContest === contest.contestId ? 'Hide Positions' : 'View Positions'}
           </button>
-          
-          {selectedContest === contest.contestId && (
-            <div className="mt-4">
-              {contest.positions.map(position => (
-                <PositionCard 
-                selectedContest={selectedContest}
-                  key={position.id} 
-                  position={position}
-                  onClose={handleClosePosition}
-                  onSell={handleSellPosition}
-                />
-              ))}
-            </div>
-          )}
+        )}
+      </div>
+
+      {contest.positions.length > 0 && selectedContest === contest.contestId && (
+        <div className="mt-4">
+          {contest.positions.map(position => (
+            <PositionCard 
+            selectedContest={selectedContest}
+              key={position.id} 
+              position={position}
+              onClose={handleClosePosition}
+              onSell={handleSellPosition}
+            />
+          ))}
         </div>
       )}
     </div>
@@ -300,7 +311,7 @@ const TradingPositions = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto  sm:px-6 lg:px-8">
           <div className="py-4">
             <h1 className="text-2xl font-bold text-gray-900 mb-4">Trading Dashboard</h1>
             
@@ -369,7 +380,7 @@ const TradingPositions = () => {
       </div>
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-7xl mx-auto  sm:px-6 lg:px-8 py-6">
         {activeTab === 'positions' && (
           <div className="space-y-6">
             {tradingData.currentTrading.map(contest => (

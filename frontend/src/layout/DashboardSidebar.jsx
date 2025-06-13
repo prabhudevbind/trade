@@ -354,7 +354,9 @@ export default function DashboardSidebar() {
     <Sidebar className="scrollbar-thin">
       <SidebarHeader className="px-6 py-4 ">
         <div className="flex items-center justify-center  gap-2 text-xl font-semibold">
+          <Link to="/" className="flex items-center">
           <img src={logo} alt="shantipatra logo" className="  w-24" />
+          </Link>
         </div>
       </SidebarHeader>
 

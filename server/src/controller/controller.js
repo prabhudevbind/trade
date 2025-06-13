@@ -1,37 +1,101 @@
-const prisma = require('../utils/prisma');
+const prisma = require("../utils/prisma");
 
 // Contest Controller
 const contestController = {
   // Create a new contest
   async createContest(req, res) {
     try {
-      const { name, start_time, end_time, entry_fee,maxTrade, status, trading_instrument } = req.body;
+      const {
+        name,
+        start_time,
+        end_time,
+        entry_fee,
+        maxTrade,
+        status,
+        trading_instrument,
+      } = req.body;
       const contest = await prisma.contest.create({
         data: {
           name,
           start_time: new Date(start_time),
           end_time: new Date(end_time),
-          maxTrade:maxTrade,
+          maxTrade: maxTrade,
           entry_fee: parseFloat(entry_fee),
-          status: status || 'upcoming',
-          trading_instrument: trading_instrument || 'BOTH',
+          status: status || "upcoming",
+          trading_instrument: trading_instrument || "BOTH",
         },
       });
       res.status(201).json(contest);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create contest', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to create contest", details: error.message });
     }
   },
 
   // Get all contests
   async getAllContests(req, res) {
     try {
+      const userId = parseInt(req.user.userId);
+
+      // Get all contests with participant info for the current user
       const contests = await prisma.contest.findMany({
-        include: { contestParticipants: true, contestWinners: true },
+        include: {
+          contestParticipants: {
+            where: {
+              user_id: userId,
+            },
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+          contestWinners: {
+            where: {
+              user_id: userId,
+            },
+          },
+          _count: {
+            select: {
+              contestParticipants: true,
+            },
+          },
+        },
       });
-      res.status(200).json(contests);
+
+      // Format response
+      const formattedContests = contests.map((contest) => ({
+        id: contest.id,
+        name: contest.name,
+        startTime: contest.start_time,
+        endTime: contest.end_time,
+        entryFee: parseFloat(contest.entry_fee),
+        maxTrade: contest.maxTrade,
+        status: contest.status,
+        tradingInstrument: contest.trading_instrument,
+        totalParticipants: contest._count.contestParticipants,
+        hasJoined: contest.contestParticipants.length > 0,
+        userParticipation: contest.contestParticipants[0] || null,
+        userWinning: contest.contestWinners[0] || null,
+      }));
+
+      res.status(200).json({
+        success: true,
+        count: contests.length,
+        contests: formattedContests,
+      });
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch contests', details: error.message });
+      console.error("Error fetching contests:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch contests",
+        details: error.message,
+      });
     }
   },
 
@@ -39,16 +103,107 @@ const contestController = {
   async getContestById(req, res) {
     try {
       const { id } = req.params;
+      const userId = parseInt(req.user.userId);
+
       const contest = await prisma.contest.findUnique({
-        where: { id: parseInt(id) },
-        include: { contestParticipants: true, contestWinners: true },
+        where: { 
+          id: parseInt(id) 
+        },
+        include: { 
+          contestParticipants: {
+            where: {
+              user_id: userId
+            },
+            include: {
+              user: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true
+                }
+              },
+              positions: {
+                include: {
+                  option: true
+                }
+              },
+              trades: {
+                include: {
+                  option: true
+                },
+                orderBy: {
+                  timestamp: 'desc'
+                }
+              }
+            }
+          },
+          contestWinners: {
+            where: {
+              user_id: userId
+            }
+          },
+          _count: {
+            select: {
+              contestParticipants: true
+            }
+          }
+        }
       });
+
       if (!contest) {
-        return res.status(404).json({ error: 'Contest not found' });
+        return res.status(404).json({ error: "Contest not found" });
       }
-      res.status(200).json(contest);
+
+      // Format response
+      const formattedContest = {
+        id: contest.id,
+        name: contest.name,
+        startTime: contest.start_time,
+        endTime: contest.end_time,
+        entryFee: parseFloat(contest.entry_fee),
+        maxTrade: contest.maxTrade,
+        status: contest.status,
+        tradingInstrument: contest.trading_instrument,
+        totalParticipants: contest._count.contestParticipants,
+        participation: contest.contestParticipants[0] ? {
+          id: contest.contestParticipants[0].id,
+          virtualCash: parseFloat(contest.contestParticipants[0].virtual_cash),
+          trades_taken: contest.contestParticipants[0].trades.length,
+          positions: contest.contestParticipants[0].positions.map(pos => ({
+            id: pos.id,
+            symbol: pos.option.symbol,
+            strikePrice: parseFloat(pos.option.strike_price),
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            currentPrice: parseFloat(pos.option.ltp),
+            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity
+          })),
+          recentTrades: contest.contestParticipants[0].trades.slice(0, 5).map(trade => ({
+            id: trade.id,
+            timestamp: trade.timestamp,
+            action: trade.action,
+            symbol: trade.option.symbol,
+            strikePrice: parseFloat(trade.option.strike_price),
+            quantity: trade.quantity,
+            price: parseFloat(trade.price)
+          }))
+        } : null,
+        winning: contest.contestWinners[0] || null
+      };
+
+      res.status(200).json({
+        success: true,
+        contest: formattedContest
+      });
+
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch contest', details: error.message });
+      console.error("Error fetching contest:", error);
+      res.status(500).json({ 
+        success: false,
+        error: "Failed to fetch contest", 
+        details: error.message 
+      });
     }
   },
 
@@ -56,14 +211,22 @@ const contestController = {
   async updateContest(req, res) {
     try {
       const { id } = req.params;
-      const { name, start_time, end_time, entry_fee,maxTrade, status, trading_instrument } = req.body;
+      const {
+        name,
+        start_time,
+        end_time,
+        entry_fee,
+        maxTrade,
+        status,
+        trading_instrument,
+      } = req.body;
       const contest = await prisma.contest.update({
         where: { id: parseInt(id) },
         data: {
           name,
           start_time: start_time ? new Date(start_time) : undefined,
           end_time: end_time ? new Date(end_time) : undefined,
-          maxTrade:maxTrade,
+          maxTrade: maxTrade,
           entry_fee: entry_fee ? parseFloat(entry_fee) : undefined,
           status,
           trading_instrument,
@@ -71,7 +234,9 @@ const contestController = {
       });
       res.status(200).json(contest);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update contest', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update contest", details: error.message });
     }
   },
 
@@ -84,7 +249,9 @@ const contestController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete contest', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete contest", details: error.message });
     }
   },
 };
@@ -94,46 +261,150 @@ const contestParticipantController = {
   // Create a new contest participant
   async createContestParticipant(req, res) {
     try {
-      const { user_id, contest_id, virtual_cash } = req.body;
+      const {  contest_id, virtual_cash } = req.body;
+      let user_id=req.user.userId;
       const participant = await prisma.contestParticipant.create({
         data: {
           user_id: parseInt(user_id),
           contest_id: parseInt(contest_id),
-          virtual_cash: parseFloat(virtual_cash) || 100000.00,
+          virtual_cash: parseFloat(virtual_cash) || 100000.0,
         },
       });
       res.status(201).json(participant);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create participant', details: error.message });
+      res
+        .status(400)
+        .json({
+          error: "Failed to create participant",
+          details: error.message,
+        });
     }
   },
 
   // Get all contest participants
   async getAllContestParticipants(req, res) {
     try {
+      const userId = parseInt(req.user.userId);
+
       const participants = await prisma.contestParticipant.findMany({
-        include: { user: true, contest: true, positions: true, trades: true },
+        where: {
+          user_id: userId
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            }
+          },
+          contest: {
+            select: {
+              name: true,
+              start_time: true,
+              end_time: true,
+              entry_fee: true,
+              maxTrade: true,
+              status: true,
+              trading_instrument: true
+            }
+          },
+          positions: {
+            include: {
+              option: true
+            }
+          },
+          trades: {
+            include: {
+              option: true
+            },
+            orderBy: {
+              timestamp: 'desc'
+            }
+          }
+        },
+        orderBy: {
+          created_at: 'desc'
+        }
       });
-      res.status(200).json(participants);
+
+      // Format the response
+      const formattedParticipants = participants.map(participant => ({
+        id: participant.id,
+        contestInfo: {
+          id: participant.contest_id,
+          name: participant.contest.name,
+          status: participant.contest.status,
+          startTime: participant.contest.start_time,
+          endTime: participant.contest.end_time,
+          tradingInstrument: participant.contest.trading_instrument,
+          maxTrades: parseInt(participant.contest.maxTrade),
+          entryFee: parseFloat(participant.contest.entry_fee)
+        },
+        userInfo: {
+          name: `${participant.user.firstName} ${participant.user.lastName}`,
+          email: participant.user.email
+        },
+        tradingInfo: {
+          virtualCash: parseFloat(participant.virtual_cash),
+          tradesUsed: participant.trades.length,
+          tradesRemaining: parseInt(participant.contest.maxTrade) - participant.trades.length,
+          positions: participant.positions.map(pos => ({
+            id: pos.id,
+            symbol: pos.option.symbol,
+            strikePrice: parseFloat(pos.option.strike_price),
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            currentPrice: parseFloat(pos.option.ltp),
+            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity
+          })),
+          recentTrades: participant.trades.slice(0, 5).map(trade => ({
+            id: trade.id,
+            timestamp: trade.timestamp,
+            action: trade.action,
+            symbol: trade.option.symbol,
+            strikePrice: parseFloat(trade.option.strike_price),
+            quantity: trade.quantity,
+            price: parseFloat(trade.price)
+          }))
+        },
+        created_at: participant.created_at,
+        updated_at: participant.updated_at
+      }));
+
+      res.status(200).json({
+        success: true,
+        count: participants.length,
+        participants: formattedParticipants
+      });
+
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch participants', details: error.message });
+      console.error('Error fetching participants:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch participants',
+        details: error.message
+      });
     }
   },
 
   // Get a single contest participant by ID
   async getContestParticipantById(req, res) {
     try {
-      const { id } = req.params;
+      const id=req.user.userId;
       const participant = await prisma.contestParticipant.findMany({
         where: { user_id: parseInt(id) },
         include: { user: true, contest: true, positions: true, trades: true },
       });
       if (!participant) {
-        return res.status(404).json({ error: 'Participant not found' });
+        return res.status(404).json({ error: "Participant not found" });
       }
       res.status(200).json(participant);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch participant', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch participant", details: error.message });
     }
   },
 
@@ -150,7 +421,12 @@ const contestParticipantController = {
       });
       res.status(200).json(participant);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update participant', details: error.message });
+      res
+        .status(400)
+        .json({
+          error: "Failed to update participant",
+          details: error.message,
+        });
     }
   },
 
@@ -163,7 +439,12 @@ const contestParticipantController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete participant', details: error.message });
+      res
+        .status(400)
+        .json({
+          error: "Failed to delete participant",
+          details: error.message,
+        });
     }
   },
 
@@ -177,25 +458,25 @@ const contestParticipantController = {
         where: {
           user_id: userId,
           contest: {
-            status: 'ongoing'
-          }
+            status: "ongoing",
+          },
         },
         include: {
           contest: true,
           trades: {
             include: {
-              option: true
+              option: true,
             },
             orderBy: {
-              timestamp: 'desc'
-            }
+              timestamp: "desc",
+            },
           },
           positions: {
             include: {
-              option: true
-            }
-          }
-        }
+              option: true,
+            },
+          },
+        },
       });
 
       // Get historical/past contests data
@@ -204,37 +485,37 @@ const contestParticipantController = {
           user_id: userId,
           contest: {
             status: {
-              in: ['ended']
-            }
-          }
+              in: ["ended"],
+            },
+          },
         },
         include: {
           contest: true,
           trades: {
             include: {
-              option: true
+              option: true,
             },
             orderBy: {
-              timestamp: 'desc'
-            }
+              timestamp: "desc",
+            },
           },
           positions: {
             include: {
-              option: true
-            }
-          }
-        }
+              option: true,
+            },
+          },
+        },
       });
 
       // Format response data
       const response = {
-        currentTrading: currentContestData.map(participant => ({
+        currentTrading: currentContestData.map((participant) => ({
           contestId: participant.contest_id,
           contestName: participant.contest.name,
           virtualCash: parseFloat(participant.virtual_cash),
           maxTrades: parseInt(participant.contest.maxTrade),
           usedTrades: participant.trades.length,
-          positions: participant.positions.map(pos => ({
+          positions: participant.positions.map((pos) => ({
             id: pos.id,
             symbol: pos.option.symbol,
             strikePrice: parseFloat(pos.option.strike_price),
@@ -242,64 +523,68 @@ const contestParticipantController = {
             quantity: pos.net_quantity,
             averagePrice: parseFloat(pos.average_entry_price),
             currentPrice: parseFloat(pos.option.ltp),
-            pnl: (pos.option.ltp - pos.average_entry_price) * pos.net_quantity
+            pnl: (pos.option.ltp - pos.average_entry_price) * pos.net_quantity,
           })),
-          recentTrades: participant.trades.slice(0, 5).map(trade => ({
+          recentTrades: participant.trades.slice(0, 5).map((trade) => ({
             id: trade.id,
             timestamp: trade.timestamp,
             action: trade.action,
             symbol: trade.option.symbol,
             strikePrice: parseFloat(trade.option.strike_price),
             quantity: trade.quantity,
-            price: parseFloat(trade.price)
-          }))
-        })),
+            price: parseFloat(trade.price),
+          })),
+      })),
 
-        tradingHistory: historicalContestData.map(participant => ({
+        tradingHistory: historicalContestData.map((participant) => ({
           contestId: participant.contest_id,
           contestName: participant.contest.name,
           endedAt: participant.contest.end_time,
           finalCash: parseFloat(participant.virtual_cash),
           totalTrades: participant.trades.length,
-          positions: participant.positions.map(pos => ({
+          positions: participant.positions.map((pos) => ({
             symbol: pos.option.symbol,
             strikePrice: parseFloat(pos.option.strike_price),
             optionType: pos.option.option_type,
             quantity: pos.net_quantity,
             averagePrice: parseFloat(pos.average_entry_price),
             lastPrice: parseFloat(pos.option.ltp),
-            realizedPnl: (pos.option.ltp - pos.average_entry_price) * pos.net_quantity
+            realizedPnl:
+              (pos.option.ltp - pos.average_entry_price) * pos.net_quantity,
           })),
-          tradeHistory: participant.trades.map(trade => ({
+          tradeHistory: participant.trades.map((trade) => ({
             timestamp: trade.timestamp,
             action: trade.action,
             symbol: trade.option.symbol,
             strikePrice: parseFloat(trade.option.strike_price),
             quantity: trade.quantity,
-            price: parseFloat(trade.price)
-          }))
-        })),
+            price: parseFloat(trade.price),
+          })),
+      })),
 
         summary: {
           activeContests: currentContestData.length,
           completedContests: historicalContestData.length,
-          totalTradesAllTime: [...currentContestData, ...historicalContestData]
-            .reduce((sum, contest) => sum + contest.trades.length, 0),
-          currentTotalValue: currentContestData
-            .reduce((sum, contest) => sum + parseFloat(contest.virtual_cash), 0)
-        }
+          totalTradesAllTime: [
+            ...currentContestData,
+            ...historicalContestData,
+          ].reduce((sum, contest) => sum + contest.trades.length, 0),
+          currentTotalValue: currentContestData.reduce(
+            (sum, contest) => sum + parseFloat(contest.virtual_cash),
+            0
+          ),
+        },
       };
 
       res.status(200).json(response);
-
     } catch (error) {
-      console.error('Error fetching user trading data:', error);
+      console.error("Error fetching user trading data:", error);
       res.status(500).json({
-        error: 'Failed to fetch trading data',
-        details: error.message
+        error: "Failed to fetch trading data",
+        details: error.message,
       });
     }
-  }
+  },
 };
 
 // Option Controller
@@ -308,19 +593,49 @@ const optionController = {
   async createOption(req, res) {
     try {
       const { symbol, expiryDate, strikePrice, optionType, ltp, lotSize } = req.body;
+
+      // Validate required fields
+      if (!symbol || !expiryDate || !strikePrice || !optionType || !ltp || !lotSize) {
+        return res.status(400).json({
+          error: "Missing required fields",
+          details: "All fields are required: symbol, expiryDate, strikePrice, optionType, ltp, lotSize"
+        });
+      }
+
+      // Create option with proper data formatting
       const option = await prisma.option.create({
         data: {
-          symbol,
+          symbol: symbol.toString() || "jjj", // Ensure symbol is stored as string
           expiry_date: expiryDate,
-          strike_price: parseFloat(strikePrice),
-          option_type:optionType,
-          ltp: parseFloat(ltp),
+          strike_price: strikePrice,
+          option_type: optionType,
+          ltp:ltp,
           lot_size: parseInt(lotSize),
-        },
+          updated_at: new Date()
+        }
       });
-      res.status(201).json(option);
+
+      // Return formatted response
+      res.status(201).json({
+        success: true,
+        option: {
+          id: option.id,
+          symbol: option.symbol,
+          expiryDate: option.expiry_date,
+          strikePrice: parseFloat(option.strike_price),
+          optionType: option.option_type,
+          ltp: parseFloat(option.ltp),
+          lotSize: option.lot_size,
+          updatedAt: option.updated_at
+        }
+      });
+
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create option', details: error.message });
+      console.error("Option creation error:", error);
+      res.status(400).json({
+        error: "Failed to create option",
+        details: error.message
+      });
     }
   },
 
@@ -332,7 +647,9 @@ const optionController = {
       });
       res.status(200).json(options);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch options', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch options", details: error.message });
     }
   },
 
@@ -345,11 +662,13 @@ const optionController = {
         include: { positions: true, trades: true },
       });
       if (!option) {
-        return res.status(404).json({ error: 'Option not found' });
+        return res.status(404).json({ error: "Option not found" });
       }
       res.status(200).json(option);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch option', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch option", details: error.message });
     }
   },
 
@@ -357,7 +676,8 @@ const optionController = {
   async updateOption(req, res) {
     try {
       const { id } = req.params;
-      const { symbol, expiry_date, strike_price, option_type, ltp, lot_size } = req.body;
+      const { symbol, expiry_date, strike_price, option_type, ltp, lot_size } =
+        req.body;
       const option = await prisma.option.update({
         where: { id: parseInt(id) },
         data: {
@@ -371,7 +691,9 @@ const optionController = {
       });
       res.status(200).json(option);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update option', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update option", details: error.message });
     }
   },
 
@@ -384,7 +706,9 @@ const optionController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete option', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete option", details: error.message });
     }
   },
 };
@@ -394,23 +718,40 @@ const positionController = {
   // Create a new position
   async createPosition(req, res) {
     try {
-      const { optionId, netQuantity, averageEntryPrice } = req.body;
-      let contest_participant_id=req.user.userId;
+      const { optionId, netQuantity, averageEntryPrice, contestId } = req.body;
+      const userId = parseInt(req.user.userId);
+
+      // First find the contest participant
+      const contestParticipant = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest_id: parseInt(contestId),
+          contest: {
+            status: "ongoing"
+          }
+        }
+      });
+
+      if (!contestParticipant) {
+        return res.status(404).json({ 
+          error: "Contest participant not found", 
+          details: "You are not participating in this contest or the contest is not active" 
+        });
+      }
+
       // Validate inputs
-      if (!contest_participant_id || !optionId || !netQuantity || !averageEntryPrice) {
-        return res.status(400).json({ error: 'Missing required fields' });
+      if (!optionId || !netQuantity || !averageEntryPrice) {
+        return res.status(400).json({ error: "Missing required fields" });
       }
 
       // Parse values
-      const parsedParticipantId = parseInt(contest_participant_id);
       const parsedOptionId = parseInt(optionId);
       const parsedQuantity = parseInt(netQuantity);
       const parsedPrice = parseFloat(averageEntryPrice);
 
       // Validate parsed values
-      if (isNaN(parsedParticipantId) || isNaN(parsedOptionId) || 
-          isNaN(parsedQuantity) || isNaN(parsedPrice)) {
-        return res.status(400).json({ error: 'Invalid input values' });
+      if (isNaN(parsedOptionId) || isNaN(parsedQuantity) || isNaN(parsedPrice)) {
+        return res.status(400).json({ error: "Invalid input values" });
       }
 
       // Create position with proper relations
@@ -420,7 +761,7 @@ const positionController = {
           average_entry_price: parsedPrice,
           contestParticipant: {
             connect: {
-              id: parsedParticipantId
+              id: contestParticipant.id
             }
           },
           option: {
@@ -430,17 +771,41 @@ const positionController = {
           }
         },
         include: {
-          contestParticipant: true,
+          contestParticipant: {
+            include: {
+              contest: true,
+              user: true
+            }
+          },
           option: true
         }
       });
 
-      res.status(201).json(position);
+      // Return formatted response
+      res.status(201).json({
+        success: true,
+        position: {
+          id: position.id,
+          quantity: position.net_quantity,
+          averagePrice: parseFloat(position.average_entry_price),
+          option: {
+            id: position.option.id,
+            symbol: position.option.symbol,
+            strikePrice: parseFloat(position.option.strike_price),
+            optionType: position.option.option_type
+          },
+          contest: {
+            id: position.contestParticipant.contest.id,
+            name: position.contestParticipant.contest.name
+          }
+        }
+      });
+
     } catch (error) {
-      console.error('Position creation error:', error);
-      res.status(400).json({ 
-        error: 'Failed to create position', 
-        details: error.message 
+      console.error("Position creation error:", error);
+      res.status(400).json({
+        error: "Failed to create position",
+        details: error.message
       });
     }
   },
@@ -453,7 +818,9 @@ const positionController = {
       });
       res.status(200).json(positions);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch positions', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch positions", details: error.message });
     }
   },
 
@@ -466,11 +833,13 @@ const positionController = {
         include: { contestParticipant: true, option: true },
       });
       if (!position) {
-        return res.status(404).json({ error: 'Position not found' });
+        return res.status(404).json({ error: "Position not found" });
       }
       res.status(200).json(position);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch position', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch position", details: error.message });
     }
   },
 
@@ -483,12 +852,16 @@ const positionController = {
         where: { id: parseInt(id) },
         data: {
           net_quantity: net_quantity ? parseInt(net_quantity) : undefined,
-          average_entry_price: average_entry_price ? parseFloat(average_entry_price) : undefined,
+          average_entry_price: average_entry_price
+            ? parseFloat(average_entry_price)
+            : undefined,
         },
       });
       res.status(200).json(position);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update position', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update position", details: error.message });
     }
   },
 
@@ -501,7 +874,9 @@ const positionController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete position', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete position", details: error.message });
     }
   },
 };
@@ -520,58 +895,60 @@ const tradeController = {
           user_id: userId,
           contest_id: parseInt(contestId),
           contest: {
-            status: 'ongoing'
-          }
+            status: "ongoing",
+          },
         },
         include: {
           contest: true,
           trades: {
             where: {
               contestParticipant: {
-                contest_id: parseInt(contestId)
-              }
-            }
-          }
-        }
+                contest_id: parseInt(contestId),
+              },
+            },
+          },
+        },
       });
 
       // Check if participant exists in this contest
       if (!contestParticipant) {
         return res.status(400).json({
-          error: 'You are not participating in this contest'
+          error: "You are not participating in this contest",
         });
       }
 
       // Check if contest is active
-      if (contestParticipant.contest.status !== 'ongoing') {
+      if (contestParticipant.contest.status !== "ongoing") {
         return res.status(400).json({
-          error: 'Contest is not active'
+          error: "Contest is not active",
         });
       }
 
       // Check trade limits for this specific contest
       const contestTrades = contestParticipant.trades;
-      if (contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)) {
+      if (
+        contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)
+      ) {
         return res.status(400).json({
           error: `Maximum trades limit (${contestParticipant.contest.maxTrade}) reached for contest ${contestId}`,
           currentTrades: contestTrades.length,
-          maxAllowed: contestParticipant.contest.maxTrade
+          maxAllowed: contestParticipant.contest.maxTrade,
         });
       }
 
       // Calculate trade value
       const tradeValue = parseFloat(price) * parseInt(quantity);
-      
+
       // For buy orders, check virtual cash limit for this contest
-      if (action === 'buy') {
+      if (action === "buy") {
         const currentVirtualCash = parseFloat(contestParticipant.virtual_cash);
         if (tradeValue > currentVirtualCash) {
           return res.status(400).json({
-            error: 'Insufficient virtual cash for this trade',
+            error: "Insufficient virtual cash for this trade",
             contestId: contestId,
             available: currentVirtualCash,
             required: tradeValue,
-            deficit: tradeValue - currentVirtualCash
+            deficit: tradeValue - currentVirtualCash,
           });
         }
       }
@@ -581,13 +958,13 @@ const tradeController = {
         data: {
           contestParticipant: {
             connect: {
-              id: contestParticipant.id
-            }
+              id: contestParticipant.id,
+            },
           },
           option: {
             connect: {
-              id: parseInt(optionId)
-            }
+              id: parseInt(optionId),
+            },
           },
           action,
           quantity: parseInt(quantity),
@@ -595,21 +972,21 @@ const tradeController = {
         },
         include: {
           contestParticipant: true,
-          option: true
-        }
+          option: true,
+        },
       });
 
       // Update virtual cash for this specific contest
-      const cashUpdate = action === 'buy' ? -tradeValue : tradeValue;
+      const cashUpdate = action === "buy" ? -tradeValue : tradeValue;
       await prisma.contestParticipant.update({
         where: {
-          id: contestParticipant.id
+          id: contestParticipant.id,
         },
         data: {
           virtual_cash: {
-            increment: cashUpdate
-          }
-        }
+            increment: cashUpdate,
+          },
+        },
       });
 
       // Return detailed response
@@ -618,18 +995,20 @@ const tradeController = {
         contestStatus: {
           contestId: contestId,
           tradesUsed: contestTrades.length + 1,
-          tradesRemaining: parseInt(contestParticipant.contest.maxTrade) - (contestTrades.length + 1),
+          tradesRemaining:
+            parseInt(contestParticipant.contest.maxTrade) -
+            (contestTrades.length + 1),
           virtualCashBefore: parseFloat(contestParticipant.virtual_cash),
-          virtualCashAfter: parseFloat(contestParticipant.virtual_cash) + cashUpdate,
-          tradeValue: tradeValue
-        }
+          virtualCashAfter:
+            parseFloat(contestParticipant.virtual_cash) + cashUpdate,
+          tradeValue: tradeValue,
+        },
       });
-
     } catch (error) {
-      console.error('Trade creation error:', error);
+      console.error("Trade creation error:", error);
       res.status(400).json({
-        error: 'Failed to create trade',
-        details: error.message
+        error: "Failed to create trade",
+        details: error.message,
       });
     }
   },
@@ -642,7 +1021,9 @@ const tradeController = {
       });
       res.status(200).json(trades);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch trades', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch trades", details: error.message });
     }
   },
 
@@ -655,11 +1036,13 @@ const tradeController = {
         include: { contestParticipant: true, option: true },
       });
       if (!trade) {
-        return res.status(404).json({ error: 'Trade not found' });
+        return res.status(404).json({ error: "Trade not found" });
       }
       res.status(200).json(trade);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch trade', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch trade", details: error.message });
     }
   },
 
@@ -678,7 +1061,9 @@ const tradeController = {
       });
       res.status(200).json(trade);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update trade', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update trade", details: error.message });
     }
   },
 
@@ -691,7 +1076,9 @@ const tradeController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete trade', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete trade", details: error.message });
     }
   },
 };
@@ -699,134 +1086,141 @@ const tradeController = {
 // WalletTransaction Controller
 const walletTransactionController = {
   // Create a new wallet transaction
- async createWalletTransaction(req, res) {
-  try {
-    const {  amount, type, status } = req.body;
+  async createWalletTransaction(req, res) {
+    try {
+      const { amount, type, status } = req.body;
 
-    // Validate input
-    if ( !amount || !type || !status) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      // Validate input
+      if (!amount || !type || !status) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+      const parsedUserId = parseInt(req.user.userId);
+      const parsedAmount = parseFloat(amount);
+      if (isNaN(parsedUserId) || isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: "Invalid user_id or amount" });
+      }
+
+      // Find user
+      const user = await prisma.user.findUnique({
+        where: { id: parsedUserId },
+      });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Handle null amount
+      const currentBalance = user.amount !== null ? parseFloat(user.amount) : 0;
+
+      // Check balance for DEBIT
+      if (type === "DEBIT" && currentBalance < parsedAmount) {
+        return res.status(400).json({ error: "Insufficient balance" });
+      }
+
+      // Update user's amount
+      const updatedUser = await prisma.user.update({
+        where: { id: parsedUserId },
+        data: {
+          amount:
+            type === "DEPOSIT" || type == "deposit"
+              ? currentBalance + parsedAmount
+              : currentBalance - parsedAmount,
+        },
+      });
+
+      // Create wallet transaction
+      const transaction = await prisma.walletTransaction.create({
+        data: {
+          user_id: parsedUserId,
+          amount: parsedAmount,
+          type,
+          status,
+          created_at: new Date(),
+        },
+      });
+
+      res.status(201).json({
+        message: "Transaction created successfully",
+        transaction,
+        updatedBalance: updatedUser.amount,
+      });
+    } catch (error) {
+      console.error("Error creating transaction:", error);
+      res
+        .status(400)
+        .json({
+          error: "Failed to create transaction",
+          details: error.message,
+        });
     }
-    const parsedUserId = parseInt(req.user.userId);
-    const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedUserId) || isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ error: 'Invalid user_id or amount' });
-    }
-   
-
-
-    // Find user
-    const user = await prisma.user.findUnique({
-      where: { id: parsedUserId },
-    });
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    // Handle null amount
-    const currentBalance = user.amount !== null ? parseFloat(user.amount) : 0;
-
-    // Check balance for DEBIT
-    if (type === 'DEBIT' && currentBalance < parsedAmount) {
-      return res.status(400).json({ error: 'Insufficient balance' });
-    }
-
-    // Update user's amount
-    const updatedUser = await prisma.user.update({
-      where: { id: parsedUserId },
-      data: {
-        amount: type === 'DEPOSIT' || type == 'deposit' ? currentBalance + parsedAmount : currentBalance - parsedAmount,
-      },
-    });
-
-    // Create wallet transaction
-    const transaction = await prisma.walletTransaction.create({
-      data: {
-        user_id: parsedUserId,
-        amount: parsedAmount,
-        type,
-        status,
-        created_at: new Date(),
-      },
-    });
-
-    res.status(201).json({
-      message: 'Transaction created successfully',
-      transaction,
-      updatedBalance: updatedUser.amount,
-    });
-  } catch (error) {
-    console.error('Error creating transaction:', error);
-    res.status(400).json({ error: 'Failed to create transaction', details: error.message });
-  }
-},
+  },
 
   // Get all wallet transactions
-async getAllWalletTransactions(req, res) {
-  try {
-    const userId = parseInt(req.user.userId);
+  async getAllWalletTransactions(req, res) {
+    try {
+      const userId = parseInt(req.user.userId);
 
-    const transactions = await prisma.walletTransaction.findMany({
-      where: {
-        user_id: userId
-      },
-      include: {
+      const transactions = await prisma.walletTransaction.findMany({
+        where: {
+          user_id: userId,
+        },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: {
+          created_at: "desc",
+        },
+      });
+
+      // Format the response
+      const formattedTransactions = transactions.map((transaction) => ({
+        id: transaction.id,
+        amount: parseFloat(transaction.amount),
+        type: transaction.type,
+        status: transaction.status,
+        created_at: transaction.created_at,
         user: {
-          select: {
-            firstName: true,
-            lastName: true,
-            email: true
-          }
-        }
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    });
+          name: `${transaction.user.firstName} ${transaction.user.lastName}`,
+          email: transaction.user.email,
+        },
+      }));
 
-    // Format the response
-    const formattedTransactions = transactions.map(transaction => ({
-      id: transaction.id,
-      amount: parseFloat(transaction.amount),
-      type: transaction.type,
-      status: transaction.status,
-      created_at: transaction.created_at,
-      user: {
-        name: `${transaction.user.firstName} ${transaction.user.lastName}`,
-        email: transaction.user.email
-      }
-    }));
-
-    res.status(200).json({
-      success: true,
-      count: transactions.length,
-      transactions: formattedTransactions
-    });
-
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
-    res.status(500).json({ 
-      success: false,
-      error: 'Failed to fetch transactions', 
-      details: error.message 
-    });
-  }
-},
+      res.status(200).json({
+        success: true,
+        count: transactions.length,
+        transactions: formattedTransactions,
+      });
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch transactions",
+        details: error.message,
+      });
+    }
+  },
 
   // Get a single wallet transaction by ID
   async getWalletTransactionById(req, res) {
     try {
-      const  { id } = req.params;
+      const { id } = req.params;
       const transaction = await prisma.walletTransaction.findUnique({
         where: { id: parseInt(id) },
         include: { user: true },
       });
       if (!transaction) {
-        return res.status(404).json({ error: 'Transaction not found' });
+        return res.status(404).json({ error: "Transaction not found" });
       }
       res.status(200).json(transaction);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch transaction', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch transaction", details: error.message });
     }
   },
 
@@ -845,7 +1239,12 @@ async getAllWalletTransactions(req, res) {
       });
       res.status(200).json(transaction);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update transaction', details: error.message });
+      res
+        .status(400)
+        .json({
+          error: "Failed to update transaction",
+          details: error.message,
+        });
     }
   },
 
@@ -858,7 +1257,12 @@ async getAllWalletTransactions(req, res) {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete transaction', details: error.message });
+      res
+        .status(400)
+        .json({
+          error: "Failed to delete transaction",
+          details: error.message,
+        });
     }
   },
 };
@@ -879,7 +1283,9 @@ const contestWinnerController = {
       });
       res.status(201).json(winner);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create winner', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to create winner", details: error.message });
     }
   },
 
@@ -891,7 +1297,9 @@ const contestWinnerController = {
       });
       res.status(200).json(winners);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch winners', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch winners", details: error.message });
     }
   },
 
@@ -904,11 +1312,13 @@ const contestWinnerController = {
         include: { contest: true, user: true },
       });
       if (!winner) {
-        return res.status(404).json({ error: 'Winner not found' });
+        return res.status(404).json({ error: "Winner not found" });
       }
       res.status(200).json(winner);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch winner', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch winner", details: error.message });
     }
   },
 
@@ -926,7 +1336,9 @@ const contestWinnerController = {
       });
       res.status(200).json(winner);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update winner', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update winner", details: error.message });
     }
   },
 
@@ -939,7 +1351,9 @@ const contestWinnerController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete winner', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete winner", details: error.message });
     }
   },
 };
@@ -954,12 +1368,14 @@ const referralController = {
         data: {
           referrer_id: parseInt(referrer_id),
           referred_id: parseInt(referred_id),
-          reward_amount: parseFloat(reward_amount) || 0.00,
+          reward_amount: parseFloat(reward_amount) || 0.0,
         },
       });
       res.status(201).json(referral);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to create referral', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to create referral", details: error.message });
     }
   },
 
@@ -971,7 +1387,9 @@ const referralController = {
       });
       res.status(200).json(referrals);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch referrals', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch referrals", details: error.message });
     }
   },
 
@@ -984,11 +1402,13 @@ const referralController = {
         include: { referrer: true, referred: true },
       });
       if (!referral) {
-        return res.status(404).json({ error: 'Referral not found' });
+        return res.status(404).json({ error: "Referral not found" });
       }
       res.status(200).json(referral);
     } catch (error) {
-      res.status(500).json({ error: 'Failed to fetch referral', details: error.message });
+      res
+        .status(500)
+        .json({ error: "Failed to fetch referral", details: error.message });
     }
   },
 
@@ -1005,7 +1425,9 @@ const referralController = {
       });
       res.status(200).json(referral);
     } catch (error) {
-      res.status(400).json({ error: 'Failed to update referral', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to update referral", details: error.message });
     }
   },
 
@@ -1018,7 +1440,9 @@ const referralController = {
       });
       res.status(204).send();
     } catch (error) {
-      res.status(400).json({ error: 'Failed to delete referral', details: error.message });
+      res
+        .status(400)
+        .json({ error: "Failed to delete referral", details: error.message });
     }
   },
 };
