@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { CalendarIcon, Coins, DollarSign, LineChart, Loader2, TrendingUp, Trophy, BarChart3, ChevronRight } from 'lucide-react'
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import OptionsTrading from "../option/OptionChart"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -67,9 +67,11 @@ export default function MyContests() {
           <CardDescription>You haven't joined any contests yet.</CardDescription>
         </CardHeader>
         <CardContent className="flex justify-center">
-          <Button variant="default" onClick={() => router.push("/contests")} className="mt-2">
+        
+          <Button variant="default" onClick={() => router("/contests")} className="mt-2">
             Browse Available Contests
           </Button>
+      
         </CardContent>
       </Card>
     )
@@ -102,7 +104,7 @@ export default function MyContests() {
           <h1 className="text-2xl font-bold tracking-tight">My Contests</h1>
           <p className="text-muted-foreground">Manage and track your trading contests</p>
         </div>
-        <Button onClick={() => router.push("/contests")}>Find New Contests</Button>
+        <Button onClick={() => router("/contests")}>Find New Contests</Button>
       </div>
 
       <Tabs defaultValue="active" className="w-full">

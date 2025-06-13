@@ -13,7 +13,7 @@ export default function DashboardLayout({ children }) {
       <DashboardSidebar />
       <SidebarInset className="flex w-full flex-col">
         <DashboardHeader />
-        <main  className="p-6">{children}</main>
+        <main  className="sm:p-6">{children}</main>
       </SidebarInset>
     </div>
   )

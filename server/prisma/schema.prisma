@@ -272,6 +272,7 @@ enum TransactionType {
   DEPOSIT
   WITHDRAWAL
   DEBIT
+  CREDIT
 }
 
 enum TransactionStatus {
