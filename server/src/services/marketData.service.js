@@ -136,7 +136,7 @@ class MarketDataService {
         if (this.connectionRetries < this.maxRetries) {
           this.connectionRetries++;
           const delay = Math.min(5000 * this.connectionRetries, 30000);
-          console.log(`Attempting reconnection in ${delay}ms (attempt ${this.connectionRetries}/${this.maxRetries})`);
+          // console.log(`Attempting reconnection in ${delay}ms (attempt ${this.connectionRetries}/${this.maxRetries})`);
           this.reconnectTimeout = setTimeout(() => this.initConnection(), delay);
         } else {
           console.error("Max reconnection attempts reached. Manual intervention required.");
@@ -150,12 +150,12 @@ class MarketDataService {
       });
 
       ws.on("ping", (data) => {
-        console.log("Received ping from server");
+        // console.log("Received ping from server");
         this.lastHeartbeat = Date.now();
       });
 
       ws.on("pong", (data) => {
-        console.log("Received pong from server");
+        // console.log("Received pong from server");
         this.lastHeartbeat = Date.now();
       });
     });
@@ -350,7 +350,7 @@ class MarketDataService {
             timestamp: Date.now(),
             source: 'test_data_after_subscription'
           };
-          console.log(`Sending test data for ${instrumentKey}:`, testData);
+          // console.log(`Sending test data for ${instrumentKey}:`, testData);
           this.broadcastToClients(instrumentKey, testData);
         }, 2000);
         
@@ -409,7 +409,7 @@ class MarketDataService {
     
     try {
       response.write(`data: ${JSON.stringify(statusMessage)}\n\n`);
-      console.log(`Sent status to new client for ${instrumentKey}:`, statusMessage);
+      // console.log(`Sent status to new client for ${instrumentKey}:`, statusMessage);
     } catch (error) {
       console.error('Error sending status to new client:', error);
     }
