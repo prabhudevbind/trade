@@ -96,6 +96,13 @@ const navigation = [
         url: "/positions",
         permission: "view-positions",
       },
+
+      {
+        title:"Leader Board",
+        icon:Bell,
+        url:"/leaderboard",
+        permission:"view-rank"
+      },
       {
         title: "Trade History",
         icon: History,

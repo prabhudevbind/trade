@@ -1,0 +1,75 @@
+@keyframes highlight-green {
+  0% {
+    background-color: rgba(34, 197, 94, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes highlight-red {
+  0% {
+    background-color: rgba(239, 68, 68, 0.1);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-highlight-green {
+  animation: highlight-green 2s ease-out;
+}
+
+.animate-highlight-red {
+  animation: highlight-red 2s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .leaderboard-card {
+    margin: -1.5rem;
+    border-radius: 0;
+  }
+  
+  .stats-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  
+  .position-card {
+    margin: -0.5rem;
+  }
+}
+
+/* Custom scrollbar */
+.overflow-auto::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.overflow-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.overflow-auto::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

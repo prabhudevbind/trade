@@ -4,10 +4,11 @@ import { useGetUserByIdQuery } from '@/store/api/userSliceApi'
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DollarSign, Loader2, User, Mail } from "lucide-react"
+import { useNavigate } from 'react-router-dom'
 
 export default function UserDashboard() {
     const { data: user, isLoading, isError } = useGetUserByIdQuery();
-
+    const navigate = useNavigate();
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-screen">
@@ -63,7 +64,7 @@ export default function UserDashboard() {
                             </p>
                         </div>
                         <Button
-                            onClick={() => window.location.href = '/wallet'}
+                            onClick={() => navigate('/wallet')}
                             className="bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:from-blue-700 hover:to-purple-700"
                         >
                             <DollarSign className="mr-2 h-4 w-4" />

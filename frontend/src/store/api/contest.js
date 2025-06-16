@@ -1,3 +1,4 @@
+import { get } from 'react-hook-form';
 import { apiSlice } from './apiSlice';
 
 export const contestApi = apiSlice.injectEndpoints({
@@ -40,6 +41,10 @@ export const contestApi = apiSlice.injectEndpoints({
       query: () => '/contest-participants',
       providesTags: ['ContestParticipant'],
     }),
+    getActiveContestForUser: builder.query({
+      query: () => '/contest-participants/active',
+      providesTags: ['ContestParticipant'],
+    }),
     getContestParticipantById: builder.query({
       query: (id) => `/contest-participants/${id}`,
       providesTags: ['ContestParticipant'],
@@ -70,6 +75,10 @@ export const contestApi = apiSlice.injectEndpoints({
 
     // Option Endpoints
   
+    getOptions: builder.query({
+      query: () => '/options',
+      providesTags: ['Option'],
+    }),
     getOptionById: builder.query({
       query: (id) => `/options/${id}`,
       providesTags: ['Option'],
@@ -135,6 +144,14 @@ export const contestApi = apiSlice.injectEndpoints({
     getTrades: builder.query({
       query: () => '/trades',
       providesTags: ['Trade'],
+    }),
+  getTradesActive: builder.query({
+      query: () => '/trades/active',
+      providesTags: ['Trade'],
+    }),
+    getLeaderState:builder.query({
+      query:()=>'/trades/leaderboard',
+       providesTags: ['Trade'],
     }),
 
     getMarketData: builder.query({
@@ -283,9 +300,11 @@ export const {
   useCreateContestParticipantMutation,
   useUpdateContestParticipantMutation,
   useDeleteContestParticipantMutation,
+  useGetActiveContestForUserQuery,
   // Option Hooks
   // useGetOptionsQuery,
   useGetOptionByIdQuery,
+  useGetOptionsQuery,
   useCreateOptionMutation,
   useUpdateOptionMutation,
   useDeleteOptionMutation,
@@ -297,6 +316,8 @@ export const {
   useDeletePositionMutation,
   // Trade Hooks
   useGetTradesQuery,
+  useGetTradesActiveQuery,
+  useGetLeaderStateQuery,
   useGetTradeByIdQuery,
   useCreateTradeMutation,
   useUpdateTradeMutation,

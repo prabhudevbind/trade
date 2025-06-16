@@ -3,7 +3,8 @@ const { PrismaClient } = require('@prisma/client');
 const { body, validationResult } =require('express-validator');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const {prisma} = require("../../utils/prisma");
+
 // Create a new user activity log
 router.post('/', [
   body('userId').isInt(),

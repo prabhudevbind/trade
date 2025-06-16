@@ -23,6 +23,7 @@ import OptionDetails from "@/component/admin/option/OptionDetails";
 import HistoryChart from "@/component/admin/option/HistoryChart";
 import Positions from "@/component/admin/positions/Positions";
 import StockverseLogin from "../component/welcome/login/Login";
+import Leaderboard from "@/component/admin/option/components/leaderboard/Leaderboard";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -125,6 +126,10 @@ export const createAppRouter = (isAuthenticated) =>
          {
           path:"option-details/:id/:optionId",
           element:<HistoryChart/>
+        },
+        {
+          path:"leaderboard",
+          element:<Leaderboard/>
         },
         {
           path:"positions",

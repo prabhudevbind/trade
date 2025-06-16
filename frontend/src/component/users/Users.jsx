@@ -44,6 +44,7 @@ import { useDeleteUserSessionMutation } from "@/store/api/sessionApiSlice"
 import SMTPDetailsModal from "./userDetails/SMTPDetailsModal"
 import BreadcrumbComp from "@/utils/BreadcrumbComp"
 import { useUpdateUserMutation } from "@/store/api/userSliceApi"
+import Loader from "../admin/option/Loader"
 
 export default function Users() {
   const { data: users = [], isLoading: isLoadingUsers, refetch } = useGetUsersQuery()
@@ -115,11 +116,11 @@ export default function Users() {
   }, [navigate, deleteSession, refetch, filteredUsers]);
 
   if (isLoadingRoles) {
-    return <p>loading role</p>
+    return <Loader/>
   }
 
   if (isLoadingUsers || isLoadingRoles || isLoadingPermissions) {
-    return <div>Loading...</div>
+    return <Loader/>
   }
 
   const themecolor = useThemeClasses();

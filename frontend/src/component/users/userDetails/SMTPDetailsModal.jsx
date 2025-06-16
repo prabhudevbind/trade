@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Copy, Edit, Save, X } from 'lucide-react';
 import { toast } from "react-toastify";
 import { useCreateSmtpDetailsMutation, useGetSmtpDetailsByUserIdQuery } from '@/store/api/smtp.api';
+import Loader from '@/component/admin/option/Loader';
 
 function SMTPDetailsModal({
     isOpen,
@@ -115,7 +116,7 @@ function SMTPDetailsModal({
         }
 
         if (isLoading) {
-            return <p>Loading...</p>;
+            return <Loader/>;
         }
 
         if (isError) {

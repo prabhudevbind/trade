@@ -11,10 +11,11 @@ const {
   referralController,
 } = require('../../controller/controller');
 const { authenticateToken } = require('../../utils/verify');
+const { route } = require('./payment.routes');
 
 // Contest Routes
 router.post('/contests', authenticateToken, contestController.createContest);
-router.get('/contests',authenticateToken, contestController.getAllContests);
+router.get('/contests', contestController.getAllContests);
 router.get('/contests/:id',authenticateToken, contestController.getContestById);
 router.put('/contests/:id', contestController.updateContest);
 router.delete('/contests/:id', contestController.deleteContest);
@@ -22,6 +23,7 @@ router.delete('/contests/:id', contestController.deleteContest);
 // ContestParticipant Routes
 router.post('/contest-participants', authenticateToken,contestParticipantController.createContestParticipant);
 router.get('/contest-participants',authenticateToken, contestParticipantController.getAllContestParticipants);
+router.get('/contest-participants/active', authenticateToken, contestParticipantController.getActiveContestForUser);
 router.get('/contest-participants/:id',authenticateToken, contestParticipantController.getContestParticipantById);
 router.put('/contest-participants/:id', contestParticipantController.updateContestParticipant);
 router.delete('/contest-participants/:id', contestParticipantController.deleteContestParticipant);
@@ -48,6 +50,8 @@ router.get(
 
 // Trade Routes
 router.post('/trades',authenticateToken, tradeController.createTrade);
+router.get('/trades/active', authenticateToken, contestParticipantController.getUserActiveTrades);
+router.get('/trades/leaderboard', authenticateToken, contestParticipantController.getActiveContestLeaderboard);
 router.get('/trades',authenticateToken, tradeController.getAllTrades);
 router.get('/trades/:id',authenticateToken, tradeController.getTradeById);
 router.put('/trades/:id',authenticateToken, tradeController.updateTrade);

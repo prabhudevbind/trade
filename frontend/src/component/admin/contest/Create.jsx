@@ -7,7 +7,6 @@ import {
   useUpdateContestMutation,
   useDeleteContestMutation,
 } from "@/store/api/contest"
-import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
@@ -48,12 +47,26 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency } from "@/lib/utils"
 import { Alert } from "@/components/ui/alert"
 
+import { parseISO, format } from 'date-fns'
+
+const formatDate = (dateString) => {
+  try {
+    if (!dateString) return "N/A";
+    const date = parseISO(dateString);
+    return format(date, "yyyy-MM-dd hh:mm a"); // Customize format as needed
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return dateString;
+  }
+};
+
+
 // Form schema for validation
 const contestSchema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name must be 255 characters or less"),
-  start_time: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid start date"),
-  end_time: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid end date"),
-  entry_fee: z
+  startTime: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid start date"),
+  endTime: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid end date"),
+  entryFee: z
     .string()
     .refine(
       (val) => !isNaN(Number.parseFloat(val)) && Number.parseFloat(val) >= 0,
@@ -64,8 +77,18 @@ const contestSchema = z.object({
     .refine((val) => !isNaN(Number.parseInt(val)) && Number.parseInt(val) >= 0, "Max trades must be a positive integer")
     .optional(),
   status: z.enum(["upcoming", "ongoing", "ended"]),
-  trading_instrument: z.enum(["NIFTY50", "BANKNIFTY", "BOTH"]),
+  tradingInstrument: z.enum(["NIFTY50", "BANKNIFTY", "BOTH"]),
 })
+
+// Helper function to check if contest is expired
+const checkContestStatus = (contest) => {
+  const now = new Date()
+  const endTime = new Date(contest.end_time)
+  return {
+    ...contest,
+    status: endTime < now ? "ended" : contest.status,
+  }
+}
 
 export default function ContestManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -87,12 +110,12 @@ export default function ContestManager() {
     resolver: zodResolver(contestSchema),
     defaultValues: {
       name: "",
-      start_time: "",
-      end_time: "",
-      entry_fee: "50.00",
+      startTime: "",
+      endTime: "",
+      entryFee: "50.00",
       maxTrade: "5",
       status: "upcoming",
-      trading_instrument: "BOTH",
+      tradingInstrument: "BOTH",
     },
   })
 
@@ -100,18 +123,18 @@ export default function ContestManager() {
     resolver: zodResolver(contestSchema),
     defaultValues: {
       name: "",
-      start_time: "",
-      end_time: "",
-      entry_fee: "",
+      startTime: "",
+      endTime: "",
+      entryFee: "",
       maxTrade: "5",
       status: "upcoming",
-      trading_instrument: "BOTH",
+      tradingInstrument: "BOTH",
     },
   })
 
   // Filter and search contests
   const filteredContests = contests
-    ? contests.filter((contest) => {
+    ? contests.contests.map(checkContestStatus).filter((contest) => {
         const matchesSearch = contest.name.toLowerCase().includes(searchTerm.toLowerCase())
         const matchesStatus = statusFilter === "all" || contest.status === statusFilter
         return matchesSearch && matchesStatus
@@ -138,11 +161,11 @@ export default function ContestManager() {
     try {
       const payload = {
         name: data.name,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        entry_fee: Number.parseFloat(data.entry_fee),
+        startTime: data.startTime,
+        endTime: data.endTime,
+        entryFee: Number.parseFloat(data.entryFee),
         status: data.status,
-        trading_instrument: data.trading_instrument,
+        tradingInstrument: data.tradingInstrument,
         ...(data.maxTrade && { maxTrade: Number.parseInt(data.maxTrade) }),
       }
       await createContest(payload).unwrap()
@@ -154,17 +177,32 @@ export default function ContestManager() {
     }
   }
 
+  // Open update modal with pre-filled data
+  const openUpdateModal = (contest) => {
+    setSelectedContest(contest)
+    updateForm.reset({
+      name: contest.name,
+      startTime: new Date(contest.start_time).toISOString().slice(0, 16),
+      endTime: new Date(contest.end_time).toISOString().slice(0, 16),
+      entryFee: contest.entry_fee.toString(),
+      maxTrade: contest.maxTrade ? contest.maxTrade.toString() : "",
+      status: contest.status,
+      tradingInstrument: contest.tradingInstrument,
+    })
+    setIsUpdateOpen(true)
+  }
+
   // Handle update contest
   const handleUpdate = async (data) => {
     try {
       const payload = {
         id: selectedContest.id,
         name: data.name,
-        start_time: data.start_time,
-        end_time: data.end_time,
-        entry_fee: Number.parseFloat(data.entry_fee),
+        start_time: data.startTime,
+        end_time: data.endTime,
+        entry_fee: Number.parseFloat(data.entryFee),
         status: data.status,
-        trading_instrument: data.trading_instrument,
+        tradingInstrument: data.tradingInstrument,
         ...(data.maxTrade && { maxTrade: Number.parseInt(data.maxTrade) }),
       }
       await updateContest(payload).unwrap()
@@ -186,21 +224,6 @@ export default function ContestManager() {
     } catch (err) {
       toast.error("Failed to delete contest: " + (err?.data?.error || "Unknown error"))
     }
-  }
-
-  // Open update modal with pre-filled data
-  const openUpdateModal = (contest) => {
-    setSelectedContest(contest)
-    updateForm.reset({
-      name: contest.name,
-      start_time: new Date(contest.start_time).toISOString().slice(0, 16),
-      end_time: new Date(contest.end_time).toISOString().slice(0, 16),
-      entry_fee: contest.entry_fee.toString(),
-      maxTrade: contest.maxTrade ? contest.maxTrade.toString() : "",
-      status: contest.status,
-      trading_instrument: contest.trading_instrument,
-    })
-    setIsUpdateOpen(true)
   }
 
   // Open delete confirmation
@@ -233,73 +256,57 @@ export default function ContestManager() {
         </div>
       </div>
 
-      {/* Dashboard Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Contests</CardTitle>
-            <BarChart className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{filteredContests.length}</div>
-            <p className="text-xs text-muted-foreground">
-              {upcomingContests.length} upcoming, {ongoingContests.length} ongoing, {endedContests.length} ended
-            </p>
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <Users className="h-8 w-8 text-primary mb-2" />
+            <CardTitle className="text-xl mb-2">Total Participants</CardTitle>
+            <p className="text-2xl font-bold">{totalParticipants}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Participants</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalParticipants}</div>
-            <p className="text-xs text-muted-foreground">Across all contests</p>
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <DollarSign className="h-8 w-8 text-primary mb-2" />
+            <CardTitle className="text-xl mb-2">Total Entry Fees</CardTitle>
+            <p className="text-2xl font-bold">{formatCurrency(totalEntryFees)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Entry Fees</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(totalEntryFees)}</div>
-            <p className="text-xs text-muted-foreground">Revenue from all contests</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Next Contest</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <Calendar className="h-8 w-8 text-primary mb-2" />
+            <CardTitle className="text-xl mb-2">Next Contest</CardTitle>
             {upcomingContests.length > 0 ? (
-              <>
-                <div className="text-lg font-bold truncate">{upcomingContests[0].name}</div>
-                <p className="text-xs text-muted-foreground">
-                  {format(new Date(upcomingContests[0].start_time), "PPp")}
-                </p>
-              </>
+              <p className="text-2xl font-bold truncate">{upcomingContests[0].name}</p>
             ) : (
-              <div className="text-sm text-muted-foreground">No upcoming contests</div>
+              <p className="text-sm text-muted-foreground">No upcoming contests</p>
             )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center p-6">
+            <BarChart className="h-8 w-8 text-primary mb-2" />
+            <CardTitle className="text-xl mb-2">Total Contests</CardTitle>
+            <p className="text-2xl font-bold">{filteredContests.length}</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Search and Filter */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search contests..."
-            className="pl-8"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search contests..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-full"
+            />
+          </div>
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]">
             <Filter className="mr-2 h-4 w-4" />
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
@@ -310,7 +317,7 @@ export default function ContestManager() {
             <SelectItem value="ended">Ended</SelectItem>
           </SelectContent>
         </Select>
-        <Button variant="outline">
+        <Button variant="outline" className="w-full sm:w-auto">
           <Download className="mr-2 h-4 w-4" />
           Export
         </Button>
@@ -334,167 +341,170 @@ export default function ContestManager() {
         </div>
       )}
 
-      {/* Contests Table */}
-      {!isLoading && !error && (
-        <Tabs defaultValue="table" className="w-full">
-          <TabsList>
-            <TabsTrigger value="table">Table View</TabsTrigger>
-            <TabsTrigger value="cards">Card View</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="table" className="space-y-4">
-            <div className="rounded-md border shadow-sm overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/50">
-                    <TableHead>ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Start Time</TableHead>
-                    <TableHead>End Time</TableHead>
-                    <TableHead>Entry Fee</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Trading Instrument</TableHead>
-                    <TableHead>Max Trades</TableHead>
-                    <TableHead>Participants</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredContests.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={10} className="text-center h-24 text-muted-foreground">
-                        No contests found
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    filteredContests.map((contest) => (
-                      <TableRow key={contest.id} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">{contest.id}</TableCell>
-                        <TableCell>{contest.name}</TableCell>
-                        <TableCell>{format(new Date(contest.start_time), "PPp")}</TableCell>
-                        <TableCell>{format(new Date(contest.end_time), "PPp")}</TableCell>
-                        <TableCell>{formatCurrency(contest.entry_fee)}</TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              contest.status === "upcoming"
-                                ? "outline"
-                                : contest.status === "ongoing"
-                                  ? "default"
-                                  : "secondary"
-                            }
-                            className={
-                              contest.status === "upcoming"
-                                ? "bg-blue-50 text-blue-700 hover:bg-blue-50 hover:text-blue-700"
-                                : contest.status === "ongoing"
-                                  ? "bg-green-50 text-green-700 hover:bg-green-50 hover:text-green-700"
-                                  : "bg-gray-50 text-gray-700 hover:bg-gray-50 hover:text-gray-700"
-                            }
-                          >
-                            {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{contest.trading_instrument}</TableCell>
-                        <TableCell>{contest.maxTrade || "N/A"}</TableCell>
-                        <TableCell>{contest.contestParticipants?.length || 0}</TableCell>
-                        <TableCell>
-                          <div className="flex space-x-2">
-                            <Button variant="outline" size="icon" onClick={() => viewContest(contest)} title="View">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button variant="outline" size="icon" onClick={() => openUpdateModal(contest)} title="Edit">
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="icon"
-                              onClick={() => openDeleteModal(contest)}
-                              title="Delete"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="cards" className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredContests.length === 0 ? (
-                <div className="col-span-full text-center p-8 text-muted-foreground border rounded-lg">
+      {/* Table View */}
+      <div className=" hidden sm:block overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/50">
+              <TableHead className="whitespace-nowrap">ID</TableHead>
+              <TableHead className="whitespace-nowrap">Name</TableHead>
+              <TableHead className="whitespace-nowrap">Start Time</TableHead>
+              <TableHead className="whitespace-nowrap">End Time</TableHead>
+              <TableHead className="whitespace-nowrap">Entry Fee</TableHead>
+              <TableHead className="whitespace-nowrap">Status</TableHead>
+              <TableHead className="whitespace-nowrap">Trading</TableHead>
+              <TableHead className="whitespace-nowrap">Max Trades</TableHead>
+              <TableHead className="whitespace-nowrap">Participants</TableHead>
+              <TableHead className="whitespace-nowrap">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredContests.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={10} className="text-center h-24 text-muted-foreground">
                   No contests found
-                </div>
-              ) : (
-                filteredContests.map((contest) => (
-                  <Card key={contest.id} className="overflow-hidden">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start">
-                        <CardTitle className="text-lg">{contest.name}</CardTitle>
-                        <Badge
-                          variant={
-                            contest.status === "upcoming"
-                              ? "outline"
-                              : contest.status === "ongoing"
-                                ? "default"
-                                : "secondary"
-                          }
-                          className={
-                            contest.status === "upcoming"
-                              ? "bg-blue-50 text-blue-700 hover:bg-blue-50 hover:text-blue-700"
-                              : contest.status === "ongoing"
-                                ? "bg-green-50 text-green-700 hover:bg-green-50 hover:text-green-700"
-                                : "bg-gray-50 text-gray-700 hover:bg-gray-50 hover:text-gray-700"
-                          }
-                        >
-                          {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
-                        </Badge>
-                      </div>
-                      <CardDescription>Trading Instrument: {contest.trading_instrument}</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pb-3">
-                      <div className="grid grid-cols-2 gap-y-2 text-sm">
-                        <div className="text-muted-foreground">Start Time:</div>
-                        <div className="font-medium text-right">{format(new Date(contest.start_time), "PPp")}</div>
-
-                        <div className="text-muted-foreground">End Time:</div>
-                        <div className="font-medium text-right">{format(new Date(contest.end_time), "PPp")}</div>
-
-                        <div className="text-muted-foreground">Entry Fee:</div>
-                        <div className="font-medium text-right">{formatCurrency(contest.entry_fee)}</div>
-
-                        <div className="text-muted-foreground">Max Trades:</div>
-                        <div className="font-medium text-right">{contest.maxTrade || "N/A"}</div>
-
-                        <div className="text-muted-foreground">Participants:</div>
-                        <div className="font-medium text-right">{contest.contestParticipants?.length || 0}</div>
-                      </div>
-                    </CardContent>
-                    <div className="p-3 bg-muted/20 flex justify-end gap-2">
-                      <Button variant="outline" size="sm" onClick={() => viewContest(contest)}>
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredContests.map((contest) => (
+                <TableRow key={contest.id} className="hover:bg-muted/50">
+                  <TableCell className="font-medium">{contest.id}</TableCell>
+                  <TableCell>{contest.name}</TableCell>
+                  <TableCell>{formatDate(contest.start_time)}</TableCell>
+                  <TableCell>{formatDate(contest.end_time)}</TableCell>
+                  <TableCell>{formatCurrency(contest.entry_fee)}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        contest.status === "upcoming"
+                          ? "outline"
+                          : contest.status === "ongoing"
+                            ? "default"
+                            : "secondary"
+                      }
+                      className={
+                        contest.status === "upcoming"
+                          ? "bg-blue-50 text-blue-700 hover:bg-blue-50 hover:text-blue-700"
+                          : contest.status === "ongoing"
+                            ? "bg-green-50 text-green-700 hover:bg-green-50 hover:text-green-700"
+                            : "bg-gray-50 text-gray-700 hover:bg-gray-50 hover:text-gray-700"
+                      }
+                    >
+                      {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{contest.tradingInstrument}</TableCell>
+                  <TableCell>{contest.maxTrade || "N/A"}</TableCell>
+                  <TableCell>{contest.contestParticipants.length || 0}</TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="icon" onClick={() => viewContest(contest)} title="View">
+                        <Eye className="h-4 w-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => openUpdateModal(contest)}>
-                        <Pencil className="h-4 w-4 mr-1" />
-                        Edit
+                      <Button variant="outline" size="icon" onClick={() => openUpdateModal(contest)} title="Edit">
+                        <Pencil className="h-4 w-4" />
                       </Button>
-                      <Button variant="destructive" size="sm" onClick={() => openDeleteModal(contest)}>
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Delete
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        onClick={() => openDeleteModal(contest)}
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </Card>
-                ))
-              )}
-            </div>
-          </TabsContent>
-        </Tabs>
-      )}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Card View */}
+      <div className=" sm:hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredContests.map((contest) => (
+          <Card key={contest.id} className="overflow-hidden">
+            <CardHeader className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="text-lg truncate">{contest.name}</CardTitle>
+                <Badge
+                  variant={
+                    contest.status === "upcoming"
+                      ? "outline"
+                      : contest.status === "ongoing"
+                        ? "default"
+                        : "secondary"
+                  }
+                  className="whitespace-nowrap"
+                >
+                  {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4 pt-0">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Start Time</p>
+                  <p className="font-medium truncate">{formatDate(contest.start_time)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">End Time</p>
+                  <p className="font-medium truncate">{formatDate(contest.end_time)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Entry Fee</p>
+                  <p className="font-medium">{formatCurrency(contest.entry_fee)}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Trading</p>
+                  <p className="font-medium truncate">{contest.tradingInstrument}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Max Trades</p>
+                  <p className="font-medium">{contest.maxTrade || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Participants</p>
+                  <p className="font-medium">{contest.totalParticipants || 0}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => router(`/admin/contest/${contest.id}`)}
+                >
+                  <Eye className="h-4 w-4 mr-1" />
+                  View
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => openUpdateModal(contest)}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    setSelectedContest(contest)
+                    setIsDeleteOpen(true)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
 
       {/* Create Contest Modal */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
@@ -521,7 +531,7 @@ export default function ContestManager() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={createForm.control}
-                  name="start_time"
+                  name="startTime"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Start Time</FormLabel>
@@ -534,7 +544,7 @@ export default function ContestManager() {
                 />
                 <FormField
                   control={createForm.control}
-                  name="end_time"
+                  name="endTime"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Time</FormLabel>
@@ -549,7 +559,7 @@ export default function ContestManager() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={createForm.control}
-                  name="entry_fee"
+                  name="entryFee"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Entry Fee (₹)</FormLabel>
@@ -599,7 +609,7 @@ export default function ContestManager() {
                 />
                 <FormField
                   control={createForm.control}
-                  name="trading_instrument"
+                  name="tradingInstrument"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Trading Instrument</FormLabel>
@@ -659,7 +669,7 @@ export default function ContestManager() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={updateForm.control}
-                  name="start_time"
+                  name="startTime"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Start Time</FormLabel>
@@ -672,7 +682,7 @@ export default function ContestManager() {
                 />
                 <FormField
                   control={updateForm.control}
-                  name="end_time"
+                  name="endTime"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>End Time</FormLabel>
@@ -687,7 +697,7 @@ export default function ContestManager() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={updateForm.control}
-                  name="entry_fee"
+                  name="entryFee"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Entry Fee (₹)</FormLabel>
@@ -737,7 +747,7 @@ export default function ContestManager() {
                 />
                 <FormField
                   control={updateForm.control}
-                  name="trading_instrument"
+                  name="tradingInstrument"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Trading Instrument</FormLabel>

@@ -36,30 +36,13 @@ const contestController = {
   // Get all contests
   async getAllContests(req, res) {
     try {
-      const userId = parseInt(req.user.userId);
+      // const userId = parseInt(req.user.userId);
 
       // Get all contests with participant info for the current user
       const contests = await prisma.contest.findMany({
         include: {
-          contestParticipants: {
-            where: {
-              user_id: userId,
-            },
-            include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
-            },
-          },
-          contestWinners: {
-            where: {
-              user_id: userId,
-            },
-          },
+          contestParticipants: true,
+
           _count: {
             select: {
               contestParticipants: true,
@@ -69,25 +52,25 @@ const contestController = {
       });
 
       // Format response
-      const formattedContests = contests.map((contest) => ({
-        id: contest.id,
-        name: contest.name,
-        startTime: contest.start_time,
-        endTime: contest.end_time,
-        entryFee: parseFloat(contest.entry_fee),
-        maxTrade: contest.maxTrade,
-        status: contest.status,
-        tradingInstrument: contest.trading_instrument,
-        totalParticipants: contest._count.contestParticipants,
-        hasJoined: contest.contestParticipants.length > 0,
-        userParticipation: contest.contestParticipants[0] || null,
-        userWinning: contest.contestWinners[0] || null,
-      }));
+      // const formattedContests = contests.map((contest) => ({
+      //   id: contest.id,
+      //   name: contest.name,
+      //   startTime: contest.start_time,
+      //   endTime: contest.end_time,
+      //   entryFee: parseFloat(contest.entry_fee),
+      //   maxTrade: contest.maxTrade,
+      //   status: contest.status,
+      //   tradingInstrument: contest.trading_instrument,
+      //   totalParticipants: contest._count.contestParticipants,
+      //   hasJoined: contest.contestParticipants.length > 0,
+      //   userParticipation: contest.contestParticipants[0] || null,
+      //   userWinning: contest.contestWinners[0] || null,
+      // }));
 
       res.status(200).json({
         success: true,
         count: contests.length,
-        contests: formattedContests,
+        contests: contests,
       });
     } catch (error) {
       console.error("Error fetching contests:", error);
@@ -106,48 +89,48 @@ const contestController = {
       const userId = parseInt(req.user.userId);
 
       const contest = await prisma.contest.findUnique({
-        where: { 
-          id: parseInt(id) 
+        where: {
+          id: parseInt(id),
         },
-        include: { 
+        include: {
           contestParticipants: {
             where: {
-              user_id: userId
+              user_id: userId,
             },
             include: {
               user: {
                 select: {
                   firstName: true,
                   lastName: true,
-                  email: true
-                }
+                  email: true,
+                },
               },
               positions: {
                 include: {
-                  option: true
-                }
+                  option: true,
+                },
               },
               trades: {
                 include: {
-                  option: true
+                  option: true,
                 },
                 orderBy: {
-                  timestamp: 'desc'
-                }
-              }
-            }
+                  timestamp: "desc",
+                },
+              },
+            },
           },
           contestWinners: {
             where: {
-              user_id: userId
-            }
+              user_id: userId,
+            },
           },
           _count: {
             select: {
-              contestParticipants: true
-            }
-          }
-        }
+              contestParticipants: true,
+            },
+          },
+        },
       });
 
       if (!contest) {
@@ -165,44 +148,54 @@ const contestController = {
         status: contest.status,
         tradingInstrument: contest.trading_instrument,
         totalParticipants: contest._count.contestParticipants,
-        participation: contest.contestParticipants[0] ? {
-          id: contest.contestParticipants[0].id,
-          virtualCash: parseFloat(contest.contestParticipants[0].virtual_cash),
-          trades_taken: contest.contestParticipants[0].trades.length,
-          positions: contest.contestParticipants[0].positions.map(pos => ({
-            id: pos.id,
-            symbol: pos.option.symbol,
-            strikePrice: parseFloat(pos.option.strike_price),
-            optionType: pos.option.option_type,
-            quantity: pos.net_quantity,
-            averagePrice: parseFloat(pos.average_entry_price),
-            currentPrice: parseFloat(pos.option.ltp),
-            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity
-          })),
-          recentTrades: contest.contestParticipants[0].trades.slice(0, 5).map(trade => ({
-            id: trade.id,
-            timestamp: trade.timestamp,
-            action: trade.action,
-            symbol: trade.option.symbol,
-            strikePrice: parseFloat(trade.option.strike_price),
-            quantity: trade.quantity,
-            price: parseFloat(trade.price)
-          }))
-        } : null,
-        winning: contest.contestWinners[0] || null
+        participation: contest.contestParticipants[0]
+          ? {
+              id: contest.contestParticipants[0].id,
+              virtualCash: parseFloat(
+                contest.contestParticipants[0].virtual_cash
+              ),
+              trades_taken: contest.contestParticipants[0].trades.length,
+              positions: contest.contestParticipants[0].positions.map(
+                (pos) => ({
+                  id: pos.id,
+                  symbol: pos.option.symbol,
+                  strikePrice: parseFloat(pos.option.strike_price),
+                  optionType: pos.option.option_type,
+                  quantity: pos.net_quantity,
+                  averagePrice: parseFloat(pos.average_entry_price),
+                  currentPrice: parseFloat(pos.option.ltp),
+                  pnl:
+                    (parseFloat(pos.option.ltp) -
+                      parseFloat(pos.average_entry_price)) *
+                    pos.net_quantity,
+                })
+              ),
+              recentTrades: contest.contestParticipants[0].trades
+                .slice(0, 5)
+                .map((trade) => ({
+                  id: trade.id,
+                  timestamp: trade.timestamp,
+                  action: trade.action,
+                  symbol: trade.option.symbol,
+                  strikePrice: parseFloat(trade.option.strike_price),
+                  quantity: trade.quantity,
+                  price: parseFloat(trade.price),
+                })),
+            }
+          : null,
+        winning: contest.contestWinners[0] || null,
       };
 
       res.status(200).json({
         success: true,
-        contest: formattedContest
+        contest: formattedContest,
       });
-
     } catch (error) {
       console.error("Error fetching contest:", error);
-      res.status(500).json({ 
+      res.status(500).json({
         success: false,
-        error: "Failed to fetch contest", 
-        details: error.message 
+        error: "Failed to fetch contest",
+        details: error.message,
       });
     }
   },
@@ -259,10 +252,55 @@ const contestController = {
 // ContestParticipant Controller
 const contestParticipantController = {
   // Create a new contest participant
-  async createContestParticipant(req, res) {
+async createContestParticipant(req, res) {
     try {
-      const {  contest_id, virtual_cash } = req.body;
-      let user_id=req.user.userId;
+      const { contest_id, virtual_cash } = req.body;
+      const user_id = req.user.userId;
+
+      // Check if the new contest exists and is still active
+      const newContest = await prisma.contest.findUnique({
+        where: {
+          id: parseInt(contest_id),
+        },
+      });
+
+      if (!newContest) {
+        return res.status(404).json({
+          error: "Contest not found",
+        });
+      }
+
+      if (newContest.end_date < new Date()) {
+        return res.status(400).json({
+          error: "Contest has already ended",
+        });
+      }
+
+      // Check if user is already participating in any active contest
+      const existingParticipation = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: parseInt(user_id),
+          contest: {
+            end_time: {
+              gt: new Date(), // Check if contest end date is greater than current date
+            },
+          },
+        },
+        include: {
+          contest: true,
+        },
+      });
+
+      // If user is already in an active contest, remove them first
+      if (existingParticipation) {
+        await prisma.contestParticipant.delete({
+          where: {
+            id: existingParticipation.id,
+          },
+        });
+      }
+
+      // Create new participant
       const participant = await prisma.contestParticipant.create({
         data: {
           user_id: parseInt(user_id),
@@ -270,16 +308,58 @@ const contestParticipantController = {
           virtual_cash: parseFloat(virtual_cash) || 100000.0,
         },
       });
-      res.status(201).json(participant);
+
+      const response = {
+        participant,
+        message: existingParticipation 
+          ? `Removed from "${existingParticipation.contest.name}" and joined "${newContest.name}"`
+          : `Successfully joined "${newContest.name}"`
+      };
+
+      res.status(201).json(response);
     } catch (error) {
-      res
-        .status(400)
-        .json({
-          error: "Failed to create participant",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to create participant",
+        details: error.message,
+      });
     }
   },
+  // Get active contest for a specific user
+async getActiveContestForUser(req, res) {
+  try {
+    const user_id = req.user.userId; // From authenticated user
+    // Or if you want to get from params: const { user_id } = req.params;
+
+    // Find the user's active contest participation
+    const activeParticipation = await prisma.contestParticipant.findFirst({
+      where: {
+        user_id: parseInt(user_id),
+        contest: {
+          end_time: {
+            gt: new Date(), // Contest end date is greater than current date
+          },
+        },
+      },
+      include: {
+        contest: true,
+      },
+    });
+
+    if (!activeParticipation) {
+      return res.status(404).json({
+        message: "No active contest found for this user",
+      });
+    }
+
+
+    res.status(200).json(activeParticipation);
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to fetch active contest",
+      details: error.message,
+    });
+  }
+},
 
   // Get all contest participants
   async getAllContestParticipants(req, res) {
@@ -288,7 +368,7 @@ const contestParticipantController = {
 
       const participants = await prisma.contestParticipant.findMany({
         where: {
-          user_id: userId
+          user_id: userId,
         },
         include: {
           user: {
@@ -296,7 +376,7 @@ const contestParticipantController = {
               firstName: true,
               lastName: true,
               email: true,
-            }
+            },
           },
           contest: {
             select: {
@@ -306,30 +386,30 @@ const contestParticipantController = {
               entry_fee: true,
               maxTrade: true,
               status: true,
-              trading_instrument: true
-            }
+              trading_instrument: true,
+            },
           },
           positions: {
             include: {
-              option: true
-            }
+              option: true,
+            },
           },
           trades: {
             include: {
-              option: true
+              option: true,
             },
             orderBy: {
-              timestamp: 'desc'
-            }
-          }
+              timestamp: "desc",
+            },
+          },
         },
         orderBy: {
-          created_at: 'desc'
-        }
+          created_at: "desc",
+        },
       });
 
       // Format the response
-      const formattedParticipants = participants.map(participant => ({
+      const formattedParticipants = participants.map((participant) => ({
         id: participant.id,
         contestInfo: {
           id: participant.contest_id,
@@ -339,17 +419,18 @@ const contestParticipantController = {
           endTime: participant.contest.end_time,
           tradingInstrument: participant.contest.trading_instrument,
           maxTrades: parseInt(participant.contest.maxTrade),
-          entryFee: parseFloat(participant.contest.entry_fee)
+          entryFee: parseFloat(participant.contest.entry_fee),
         },
         userInfo: {
           name: `${participant.user.firstName} ${participant.user.lastName}`,
-          email: participant.user.email
+          email: participant.user.email,
         },
         tradingInfo: {
           virtualCash: parseFloat(participant.virtual_cash),
           tradesUsed: participant.trades.length,
-          tradesRemaining: parseInt(participant.contest.maxTrade) - participant.trades.length,
-          positions: participant.positions.map(pos => ({
+          tradesRemaining:
+            parseInt(participant.contest.maxTrade) - participant.trades.length,
+          positions: participant.positions.map((pos) => ({
             id: pos.id,
             symbol: pos.option.symbol,
             strikePrice: parseFloat(pos.option.strike_price),
@@ -357,34 +438,36 @@ const contestParticipantController = {
             quantity: pos.net_quantity,
             averagePrice: parseFloat(pos.average_entry_price),
             currentPrice: parseFloat(pos.option.ltp),
-            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity
+            pnl:
+              (parseFloat(pos.option.ltp) -
+                parseFloat(pos.average_entry_price)) *
+              pos.net_quantity,
           })),
-          recentTrades: participant.trades.slice(0, 5).map(trade => ({
+          recentTrades: participant.trades.slice(0, 5).map((trade) => ({
             id: trade.id,
             timestamp: trade.timestamp,
             action: trade.action,
             symbol: trade.option.symbol,
             strikePrice: parseFloat(trade.option.strike_price),
             quantity: trade.quantity,
-            price: parseFloat(trade.price)
-          }))
+            price: parseFloat(trade.price),
+          })),
         },
         created_at: participant.created_at,
-        updated_at: participant.updated_at
+        updated_at: participant.updated_at,
       }));
 
       res.status(200).json({
         success: true,
         count: participants.length,
-        participants: formattedParticipants
+        participants: formattedParticipants,
       });
-
     } catch (error) {
-      console.error('Error fetching participants:', error);
+      console.error("Error fetching participants:", error);
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch participants',
-        details: error.message
+        error: "Failed to fetch participants",
+        details: error.message,
       });
     }
   },
@@ -392,7 +475,7 @@ const contestParticipantController = {
   // Get a single contest participant by ID
   async getContestParticipantById(req, res) {
     try {
-      const id=req.user.userId;
+      const id = req.user.userId;
       const participant = await prisma.contestParticipant.findMany({
         where: { user_id: parseInt(id) },
         include: { user: true, contest: true, positions: true, trades: true },
@@ -421,12 +504,10 @@ const contestParticipantController = {
       });
       res.status(200).json(participant);
     } catch (error) {
-      res
-        .status(400)
-        .json({
-          error: "Failed to update participant",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to update participant",
+        details: error.message,
+      });
     }
   },
 
@@ -439,12 +520,10 @@ const contestParticipantController = {
       });
       res.status(204).send();
     } catch (error) {
-      res
-        .status(400)
-        .json({
-          error: "Failed to delete participant",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to delete participant",
+        details: error.message,
+      });
     }
   },
 
@@ -534,7 +613,7 @@ const contestParticipantController = {
             quantity: trade.quantity,
             price: parseFloat(trade.price),
           })),
-      })),
+        })),
 
         tradingHistory: historicalContestData.map((participant) => ({
           contestId: participant.contest_id,
@@ -560,7 +639,7 @@ const contestParticipantController = {
             quantity: trade.quantity,
             price: parseFloat(trade.price),
           })),
-      })),
+        })),
 
         summary: {
           activeContests: currentContestData.length,
@@ -585,6 +664,440 @@ const contestParticipantController = {
       });
     }
   },
+
+  // Get user's active contest trades
+  async getUserActiveTrades(req, res) {
+    try {
+      const userId = req.user.userId;
+      console.log(userId);
+      // First find the active contest participation for this user
+      const activeParticipation = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest: {
+            status: 'ongoing',
+          },
+        },
+        include: {
+          contest: true,
+        },
+      });
+
+      if (!activeParticipation) {
+        return res.status(404).json({
+          error: "No active contest found for this user",
+        });
+      }
+      console.log(activeParticipation);
+
+      // Get all trades for this participation
+      const trades = await prisma.trade.findMany({
+        where: {
+          contest_participant_id: activeParticipation.user_id,
+        },
+        include: {
+          option: {
+            select: {
+              symbol: true,
+              strike_price: true,
+              option_type: true,
+              expiry_date: true,
+              ltp: true,
+            },
+          },
+        },
+        orderBy: {
+          timestamp: 'desc',
+        },
+      });
+      console.log(trades);
+
+      // Get positions for this participation
+      const positions = await prisma.position.findMany({
+        where: {
+          contest_participant_id: activeParticipation.id,
+        },
+        include: {
+          option: {
+            select: {
+              symbol: true,
+              strike_price: true,
+              option_type: true,
+              expiry_date: true,
+              ltp: true,
+            },
+          },
+        },
+      });
+
+      // Calculate PnL for positions
+      const positionsWithPnL = positions.map(position => {
+        const currentValue = parseFloat(position.option.ltp) * position.net_quantity;
+        const costBasis = parseFloat(position.average_entry_price) * position.net_quantity;
+        const unrealizedPnL = currentValue - costBasis;
+
+        return {
+          ...position,
+          unrealizedPnL,
+          currentValue,
+        };
+      });
+
+      return res.json({
+        contest: activeParticipation.contest,
+        virtualCash: activeParticipation.virtual_cash,
+        trades: trades.map(trade => ({
+          id: trade.id,
+          symbol: trade.option.symbol,
+          strikePrice: trade.option.strike_price,
+          optionType: trade.option.option_type,
+          expiryDate: trade.option.expiry_date,
+          action: trade.action,
+          quantity: trade.quantity,
+          price: trade.price,
+          timestamp: trade.timestamp,
+          value: parseFloat(trade.price) * trade.quantity,
+        })),
+        positions: positionsWithPnL,
+      });
+
+    } catch (error) {
+      console.error('Error fetching user trades:', error);
+      return res.status(500).json({
+        error: "Failed to fetch trades",
+        details: error.message,
+      });
+    }
+  },
+
+  // Get user trading statistics and leaderboard
+  async getUserTradingStats(req, res) {
+    try {
+
+      let userId=req.user.userId;
+
+      const activeContests=await prisma.context.findFirst(
+        userId,
+        ongoint
+      )
+      const contestId = parseInt(activeContests.id); // Optional: filter by specific contest
+
+      // Get all contest participants with their positions and trades
+      const participantsQuery = {
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              profile_image: true,
+            }
+          },
+          contest: true,
+          positions: {
+            include: {
+              option: {
+                select: {
+                  symbol: true,
+                  strike_price: true,
+                  option_type: true,
+                  expiry_date: true,
+                  ltp: true,
+                }
+              }
+            }
+          },
+          trades: {
+            include: {
+              option: {
+                select: {
+                  symbol: true,
+                  strike_price: true,
+                  option_type: true,
+                  expiry_date: true,
+                  ltp: true,
+                }
+              }
+            }
+          }
+        }
+      };
+
+      // Add contest filter if provided
+      if (contestId) {
+        participantsQuery.where = {
+          contest_id: contestId
+        };
+      }
+
+      const participants = await prisma.contestParticipant.findMany(participantsQuery);
+
+      // Calculate statistics for each participant
+      const userStats = participants.map(participant => {
+        // Calculate total P&L from positions
+        const positionsPnL = participant.positions.reduce((total, position) => {
+          const currentValue = parseFloat(position.option.ltp) * position.net_quantity;
+          const costBasis = parseFloat(position.average_entry_price) * position.net_quantity;
+          return total + (currentValue - costBasis);
+        }, 0);
+
+        // Calculate trading statistics
+        const trades = participant.trades;
+        const totalTrades = trades.length;
+        const buyTrades = trades.filter(t => t.action === 'buy').length;
+        const sellTrades = trades.filter(t => t.action === 'sell').length;
+
+        // Calculate win rate (assuming a trade is winning if price moved in favorable direction)
+        const winningTrades = trades.filter(trade => {
+          const currentPrice = parseFloat(trade.option.ltp);
+          const tradePrice = parseFloat(trade.price);
+          return (trade.action === 'buy' && currentPrice > tradePrice) ||
+                 (trade.action === 'sell' && currentPrice < tradePrice);
+        }).length;
+
+        const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+
+        // Calculate ROI
+        const initialCash = 100000; // Default initial cash
+        const currentValue = parseFloat(participant.virtual_cash) + positionsPnL;
+        const roi = ((currentValue - initialCash) / initialCash) * 100;
+
+        return {
+          userId: participant.user_id,
+          userName: participant.user.name,
+          userImage: participant.user.profile_image,
+          contestId: participant.contest_id,
+          contestName: participant.contest.name,
+          virtualCash: parseFloat(participant.virtual_cash),
+          totalPnL: positionsPnL,
+          totalValue: currentValue,
+          roi: roi,
+          tradingStats: {
+            totalTrades,
+            buyTrades,
+            sellTrades,
+            winningTrades,
+            winRate,
+          },
+          positions: participant.positions.map(pos => ({
+            symbol: pos.option.symbol,
+            strikePrice: pos.option.strike_price,
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            currentPrice: parseFloat(pos.option.ltp),
+            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity,
+          })),
+          trades: participant.trades.map(trade => ({
+            symbol: trade.option.symbol,
+            strikePrice: trade.option.strike_price,
+            optionType: trade.option.option_type,
+            action: trade.action,
+            quantity: trade.quantity,
+            price: parseFloat(trade.price),
+            timestamp: trade.timestamp,
+            currentPrice: parseFloat(trade.option.ltp),
+          }))
+        };
+      });
+
+      // Sort users by ROI for leaderboard ranking
+      const leaderboard = [...userStats].sort((a, b) => b.roi - a.roi)
+        .map((user, index) => ({
+          ...user,
+          rank: index + 1
+        }));
+
+      return res.json({
+        leaderboard,
+        stats: {
+          totalParticipants: participants.length,
+          averageROI: leaderboard.reduce((sum, user) => sum + user.roi, 0) / participants.length,
+          topROI: leaderboard[0]?.roi || 0,
+          totalTradingVolume: participants.reduce((sum, p) => 
+            sum + p.trades.reduce((tSum, t) => tSum + (parseFloat(t.price) * t.quantity), 0), 0
+          ),
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching trading stats:', error);
+      return res.status(500).json({
+        error: "Failed to fetch trading statistics",
+        details: error.message,
+      });
+    }
+  },
+
+  // Get leaderboard for user's active contest
+  async getActiveContestLeaderboard(req, res) {
+    try {
+      // Check if user ID exists
+      if (!req.user || !req.user.userId) {
+        return res.status(401).json({
+          error: "Unauthorized",
+          details: "User not authenticated"
+        });
+      }
+
+      const userId = req.user.userId;
+
+      // Verify Prisma connection
+      if (!prisma) {
+        throw new Error("Database connection not established");
+      }
+      console.log(`Fetching leaderboard for user ID: ${userId}`);
+
+      // First find if user is participating in any active contest
+      const activeParticipation = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest: {
+            status: 'ongoing',
+          },
+        },
+        include: {
+          contest: true,
+        },
+      });
+
+      console.log(activeParticipation);
+      // If user is not in any active contest
+      if (!activeParticipation) {
+        return res.status(404).json({
+          error: "You are not participating in any active contest",
+          isParticipating: false,
+        });
+      }
+
+      // Get all participants in the same contest
+      const contestParticipants = await prisma.contestParticipant.findMany({
+        where: {
+          contest_id: activeParticipation.contest_id,
+        },
+        include: {
+          user: true,
+          positions: {
+            include: {
+              option: {
+                select: {
+                  symbol: true,
+                  strike_price: true,
+                  option_type: true,
+                  expiry_date: true,
+                  ltp: true,
+                }
+              }
+            }
+          },
+          trades: {
+            include: {
+              option: {
+                select: {
+                  symbol: true,
+                  strike_price: true,
+                  option_type: true,
+                  expiry_date: true,
+                  ltp: true,
+                }
+              }
+            },
+            orderBy: {
+              timestamp: 'desc'
+            }
+          }
+        }
+      });
+
+      // Calculate statistics for each participant
+      const participantStats = contestParticipants.map(participant => {
+        // Calculate positions P&L
+        const positionsPnL = participant.positions.reduce((total, position) => {
+          const currentValue = parseFloat(position.option.ltp) * position.net_quantity;
+          const costBasis = parseFloat(position.average_entry_price) * position.net_quantity;
+          return total + (currentValue - costBasis);
+        }, 0);
+
+        // Calculate realized P&L from trades
+        const realizedPnL = participant.trades.reduce((total, trade) => {
+          const tradeValue = parseFloat(trade.price) * trade.quantity;
+          return trade.action === 'sell' ? total + tradeValue : total - tradeValue;
+        }, 0);
+
+        // Calculate current portfolio value
+        const portfolioValue = parseFloat(participant.virtual_cash) + positionsPnL + realizedPnL;
+
+        return {
+          userId: participant.user.id,
+          
+          userName: participant.user.username,
+          userImage: participant.user.profile_image,
+          isCurrentUser: participant.user.id === userId,
+          virtualCash: parseFloat(participant.virtual_cash),
+          unrealizedPnL: positionsPnL,
+          realizedPnL: realizedPnL,
+          totalPnL: positionsPnL + realizedPnL,
+          portfolioValue: portfolioValue,
+          roi: ((portfolioValue - 100000) / 100000) * 100, // Assuming initial cash was 100000
+          tradingStats: {
+            totalTrades: participant.trades.length,
+            buyTrades: participant.trades.filter(t => t.action === 'buy').length,
+            sellTrades: participant.trades.filter(t => t.action === 'sell').length,
+          },
+          activePositions: participant.positions.map(pos => ({
+            symbol: pos.option.symbol,
+            strikePrice: pos.option.strike_price,
+            optionType: pos.option.option_type,
+            quantity: pos.net_quantity,
+            averagePrice: parseFloat(pos.average_entry_price),
+            currentPrice: parseFloat(pos.option.ltp),
+            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity,
+          })),
+
+        };
+      });
+
+      // Sort by portfolio value for ranking
+      const leaderboard = participantStats
+        .sort((a, b) => b.portfolioValue - a.portfolioValue)
+        .map((participant, index) => ({
+          ...participant,
+          rank: index + 1
+        }));
+
+      // Get user's ranking
+      const userRank = leaderboard.find(p => p.userId === userId)?.rank || 0;
+
+      return res.json({
+        isParticipating: true,
+        contestInfo: {
+          id: activeParticipation.contest_id,
+          name: activeParticipation.contest.name,
+          startTime: activeParticipation.contest.start_time,
+          endTime: activeParticipation.contest.end_time,
+          maxTrade: activeParticipation.contest.maxTrade,
+          entryFee: activeParticipation.contest.entry_fee,
+        },
+        userRank,
+        totalParticipants: contestParticipants.length,
+        leaderboard,
+        contestStats: {
+          averageROI: leaderboard.reduce((sum, p) => sum + p.roi, 0) / leaderboard.length,
+          highestPnL: Math.max(...leaderboard.map(p => p.totalPnL)),
+          totalTradingVolume: participantStats.reduce((sum, p) => 
+            sum + p.tradingStats.totalTrades, 0
+          ),
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching contest leaderboard:', error);
+      return res.status(500).json({
+        error: "Failed to fetch contest leaderboard",
+        details: error.message,
+      });
+    }
+  },
 };
 
 // Option Controller
@@ -592,13 +1105,22 @@ const optionController = {
   // Create a new option
   async createOption(req, res) {
     try {
-      const { symbol, expiryDate, strikePrice, optionType, ltp, lotSize } = req.body;
+      const { symbol, expiryDate, strikePrice, optionType, ltp, lotSize } =
+        req.body;
 
       // Validate required fields
-      if (!symbol || !expiryDate || !strikePrice || !optionType || !ltp || !lotSize) {
+      if (
+        !symbol ||
+        !expiryDate ||
+        !strikePrice ||
+        !optionType ||
+        !ltp ||
+        !lotSize
+      ) {
         return res.status(400).json({
           error: "Missing required fields",
-          details: "All fields are required: symbol, expiryDate, strikePrice, optionType, ltp, lotSize"
+          details:
+            "All fields are required: symbol, expiryDate, strikePrice, optionType, ltp, lotSize",
         });
       }
 
@@ -609,10 +1131,10 @@ const optionController = {
           expiry_date: expiryDate,
           strike_price: strikePrice,
           option_type: optionType,
-          ltp:ltp,
+          ltp: ltp,
           lot_size: parseInt(lotSize),
-          updated_at: new Date()
-        }
+          updated_at: new Date(),
+        },
       });
 
       // Return formatted response
@@ -626,15 +1148,14 @@ const optionController = {
           optionType: option.option_type,
           ltp: parseFloat(option.ltp),
           lotSize: option.lot_size,
-          updatedAt: option.updated_at
-        }
+          updatedAt: option.updated_at,
+        },
       });
-
     } catch (error) {
       console.error("Option creation error:", error);
       res.status(400).json({
         error: "Failed to create option",
-        details: error.message
+        details: error.message,
       });
     }
   },
@@ -718,7 +1239,7 @@ const positionController = {
   // Create a new position
   async createPosition(req, res) {
     try {
-      const { optionId, netQuantity, averageEntryPrice, contestId } = req.body;
+      const { optionId, quantity, averagePrice, contestId } = req.body;
       const userId = parseInt(req.user.userId);
 
       // First find the contest participant
@@ -727,30 +1248,35 @@ const positionController = {
           user_id: userId,
           contest_id: parseInt(contestId),
           contest: {
-            status: "ongoing"
-          }
-        }
+            status: "ongoing",
+          },
+        },
       });
 
       if (!contestParticipant) {
-        return res.status(404).json({ 
-          error: "Contest participant not found", 
-          details: "You are not participating in this contest or the contest is not active" 
+        return res.status(404).json({
+          error: "Contest participant not found",
+          details:
+            "You are not participating in this contest or the contest is not active",
         });
       }
 
       // Validate inputs
-      if (!optionId || !netQuantity || !averageEntryPrice) {
+      if (!optionId || !quantity || !averagePrice) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
       // Parse values
       const parsedOptionId = parseInt(optionId);
-      const parsedQuantity = parseInt(netQuantity);
-      const parsedPrice = parseFloat(averageEntryPrice);
+      const parsedQuantity = parseInt(quantity);
+      const parsedPrice = parseFloat(averagePrice);
 
       // Validate parsed values
-      if (isNaN(parsedOptionId) || isNaN(parsedQuantity) || isNaN(parsedPrice)) {
+      if (
+        isNaN(parsedOptionId) ||
+        isNaN(parsedQuantity) ||
+        isNaN(parsedPrice)
+      ) {
         return res.status(400).json({ error: "Invalid input values" });
       }
 
@@ -761,24 +1287,24 @@ const positionController = {
           average_entry_price: parsedPrice,
           contestParticipant: {
             connect: {
-              id: contestParticipant.id
-            }
+              id: contestParticipant.id,
+            },
           },
           option: {
             connect: {
-              id: parsedOptionId
-            }
-          }
+              id: parsedOptionId,
+            },
+          },
         },
         include: {
           contestParticipant: {
             include: {
               contest: true,
-              user: true
-            }
+              user: true,
+            },
           },
-          option: true
-        }
+          option: true,
+        },
       });
 
       // Return formatted response
@@ -792,20 +1318,19 @@ const positionController = {
             id: position.option.id,
             symbol: position.option.symbol,
             strikePrice: parseFloat(position.option.strike_price),
-            optionType: position.option.option_type
+            optionType: position.option.option_type,
           },
           contest: {
             id: position.contestParticipant.contest.id,
-            name: position.contestParticipant.contest.name
-          }
-        }
+            name: position.contestParticipant.contest.name,
+          },
+        },
       });
-
     } catch (error) {
       console.error("Position creation error:", error);
       res.status(400).json({
         error: "Failed to create position",
-        details: error.message
+        details: error.message,
       });
     }
   },
@@ -893,7 +1418,8 @@ const tradeController = {
       if (!optionId || !contestId || !action || !quantity || !price) {
         return res.status(400).json({
           error: "Missing required fields",
-          details: "All fields are required: optionId, contestId, action, quantity, price"
+          details:
+            "All fields are required: optionId, contestId, action, quantity, price",
         });
       }
 
@@ -904,11 +1430,15 @@ const tradeController = {
       const parsedPrice = parseFloat(price);
 
       // Validate parsed values
-      if (isNaN(parsedOptionId) || isNaN(parsedContestId) || 
-          isNaN(parsedQuantity) || isNaN(parsedPrice)) {
+      if (
+        isNaN(parsedOptionId) ||
+        isNaN(parsedContestId) ||
+        isNaN(parsedQuantity) ||
+        isNaN(parsedPrice)
+      ) {
         return res.status(400).json({
           error: "Invalid input values",
-          details: "All numeric fields must be valid numbers"
+          details: "All numeric fields must be valid numbers",
         });
       }
 
@@ -949,7 +1479,9 @@ const tradeController = {
 
       // Check trade limits
       const contestTrades = contestParticipant.trades;
-      if (contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)) {
+      if (
+        contestTrades.length >= parseInt(contestParticipant.contest.maxTrade)
+      ) {
         return res.status(400).json({
           error: `Maximum trades limit (${contestParticipant.contest.maxTrade}) reached`,
           currentTrades: contestTrades.length,
@@ -978,35 +1510,35 @@ const tradeController = {
         data: {
           contestParticipant: {
             connect: {
-              id: contestParticipant.id
-            }
+              id: contestParticipant.id,
+            },
           },
           option: {
             connect: {
-              id: parsedOptionId // Now properly parsed
-            }
+              id: parsedOptionId, // Now properly parsed
+            },
           },
           action: action,
           quantity: parsedQuantity,
-          price: parsedPrice
+          price: parsedPrice,
         },
         include: {
           contestParticipant: true,
-          option: true
-        }
+          option: true,
+        },
       });
 
       // Update virtual cash
       const cashUpdate = action === "buy" ? -tradeValue : tradeValue;
       await prisma.contestParticipant.update({
         where: {
-          id: contestParticipant.id
+          id: contestParticipant.id,
         },
         data: {
           virtual_cash: {
-            increment: cashUpdate
-          }
-        }
+            increment: cashUpdate,
+          },
+        },
       });
 
       // Return success response
@@ -1016,18 +1548,20 @@ const tradeController = {
         contestStatus: {
           contestId: parsedContestId,
           tradesUsed: contestTrades.length + 1,
-          tradesRemaining: parseInt(contestParticipant.contest.maxTrade) - (contestTrades.length + 1),
+          tradesRemaining:
+            parseInt(contestParticipant.contest.maxTrade) -
+            (contestTrades.length + 1),
           virtualCashBefore: parseFloat(contestParticipant.virtual_cash),
-          virtualCashAfter: parseFloat(contestParticipant.virtual_cash) + cashUpdate,
-          tradeValue: tradeValue
-        }
+          virtualCashAfter:
+            parseFloat(contestParticipant.virtual_cash) + cashUpdate,
+          tradeValue: tradeValue,
+        },
       });
-
     } catch (error) {
       console.error("Trade creation error:", error);
       res.status(400).json({
         error: "Failed to create trade",
-        details: error.message
+        details: error.message,
       });
     }
   },
@@ -1164,12 +1698,10 @@ const walletTransactionController = {
       });
     } catch (error) {
       console.error("Error creating transaction:", error);
-      res
-        .status(400)
-        .json({
-          error: "Failed to create transaction",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to create transaction",
+        details: error.message,
+      });
     }
   },
 
@@ -1258,12 +1790,10 @@ const walletTransactionController = {
       });
       res.status(200).json(transaction);
     } catch (error) {
-      res
-        .status(400)
-        .json({
-          error: "Failed to update transaction",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to update transaction",
+        details: error.message,
+      });
     }
   },
 
@@ -1276,12 +1806,10 @@ const walletTransactionController = {
       });
       res.status(204).send();
     } catch (error) {
-      res
-        .status(400)
-        .json({
-          error: "Failed to delete transaction",
-          details: error.message,
-        });
+      res.status(400).json({
+        error: "Failed to delete transaction",
+        details: error.message,
+      });
     }
   },
 };

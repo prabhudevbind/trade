@@ -1,14 +1,16 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Activity } from "lucide-react"
+import { Activity, AlertCircle, Trophy } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useNavigate, useParams } from "react-router-dom"
 import { useGetOptionsQuery } from "@/store/api/options.api"
-import { useGetContestByIdQuery } from "@/store/api/contest"
+import { useGetActiveContestForUserQuery, useGetContestByIdQuery } from "@/store/api/contest"
 import { CompactContestInfo } from "./CompactContestInfo"
 import { MobileOptionChain } from "./option-chain/MobileOptionChain"
 import { DesktopOptionChain } from "./option-chain/DesktopOptionChain"
@@ -16,6 +18,7 @@ import { DesktopOptionChain } from "./option-chain/DesktopOptionChain"
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty Bank")
   const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12")
+  const {data: activeContest, isLoading: activeContestLoading} = useGetActiveContestForUserQuery();
   const [optionChainData, setOptionChainData] = useState(null)
   const [connectionStatus, setConnectionStatus] = useState("disconnected")
   const [error, setError] = useState(null)
@@ -32,7 +35,7 @@ const OptionChain = () => {
     isLoading: contestLoading,
   } = useGetContestByIdQuery(id, {
     skip: !id,
-    refetchOnMountOrArgChange: true,
+    refetchOnMountOrArgument: true,
     refetchOnFocus: true,
     refetchOnReconnect: true,
   })
@@ -160,10 +163,21 @@ const OptionChain = () => {
   const handleOptionClick = (strikeData, type) => {
     if (!strikeData) return
 
+    // Check if user has active contest participation
+    if (!activeContest) {
+      // Show participation prompt instead of navigating
+      return
+    }
+
     const optionData = type === "call" ? strikeData.call_option : strikeData.put_option
     if (!optionData?.instrument_key) return
 
     navigate(`/option-details/${id}/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`)
+  }
+
+  const handleParticipateInContest = () => {
+    // Navigate to contest participation page
+    navigate('/contests')
   }
 
   const formatPrice = (price) => {
@@ -217,12 +231,15 @@ const OptionChain = () => {
 
   const atmStrike = getATMStrike()
 
+  // Show participation prompt if no active contest
+  const showParticipationPrompt = !activeContestLoading && !activeContest
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-8 mx-auto px-2 py-4 gap-4">
       <div className="lg:col-span-5">
-           {/* Controls - More Compact */}
+        {/* Controls - More Compact */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <Select value={selectedIndex} onValueChange={setSelectedIndex}>
               <SelectTrigger className="w-[130px]">
                 <SelectValue />
@@ -249,22 +266,42 @@ const OptionChain = () => {
                 ))}
               </SelectContent>
             </Select>
+         
           </div>
-
         </div>
 
-        {/* Compact Contest Info */}
-        <CompactContestInfo contestData={contestData} />
+        {/* Contest Participation Alert */}
+        {showParticipationPrompt && (
+          <Alert className="mb-4 border-orange-200 bg-orange-50">
+            <Trophy className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="flex items-center justify-between">
+              <div className="flex flex-col gap-1">
+                <span className="font-medium text-orange-800">Join a Contest to Start Trading</span>
+                <span className="text-sm text-orange-700">
+                  You need to participate in a contest before you can place trades.
+                </span>
+              </div>
+              <Button 
+                onClick={handleParticipateInContest}
+                className="bg-orange-600 hover:bg-orange-700 text-white ml-4"
+                size="sm"
+              >
+                <Trophy className="h-4 w-4 mr-1" />
+                Join Contest
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-     
-     
+        {/* Compact Contest Info */}
+        {activeContest && <CompactContestInfo contestData={contestData} />}
 
         {/* Option Chain */}
         {isLoading ? (
           <div className="space-y-2 p-4">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="grid grid-cols-9 gap-2">
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((j) => (
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="grid grid-cols-3 gap-2">
+                {[1, 2, 3,4,5,6,7].map((j) => (
                   <Skeleton key={j} className="h-12 w-full" />
                 ))}
               </div>
@@ -276,10 +313,12 @@ const OptionChain = () => {
           <>
             <MobileOptionChain
               data={optionChainData}
+              contestData={contestData}
               onOptionClick={handleOptionClick}
               formatPrice={formatPrice}
               formatOI={formatOI}
               atmStrike={atmStrike}
+              disabled={showParticipationPrompt}
             />
             <DesktopOptionChain
               data={optionChainData}
@@ -288,6 +327,7 @@ const OptionChain = () => {
               formatOI={formatOI}
               atmStrike={atmStrike}
               calculatePriceChange={calculatePriceChange}
+              disabled={showParticipationPrompt}
             />
           </>
         )}
@@ -303,33 +343,68 @@ const OptionChain = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Positions */}
-            <div>
-              <h3 className="text-sm font-medium mb-2">Open Positions</h3>
-              {contestData?.contest?.participation?.positions?.length > 0 ? (
+            {/* Contest Status */}
+            {showParticipationPrompt ? (
+              <div className="text-center py-6 space-y-3">
+                <AlertCircle className="h-8 w-8 text-orange-500 mx-auto" />
                 <div className="space-y-2">
-                  {contestData.contest.participation.positions.map((position) => (
-                    <div key={position.id} className="p-2 rounded-lg border bg-muted/50">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className="text-sm font-medium">
-                          {position.strikePrice} {position.optionType}
-                        </span>
-                        <Badge variant={position.pnl >= 0 ? "default" : "destructive"} className="text-xs">
-                          {position.pnl >= 0 ? "+" : ""}
-                          {position.pnl.toFixed(2)}
-                        </Badge>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                        <div>Qty: {position.quantity}</div>
-                        <div>Avg: ₹{position.averagePrice}</div>
-                      </div>
-                    </div>
-                  ))}
+                  <p className="text-sm font-medium text-slate-700">No Active Contest</p>
+                  <p className="text-xs text-slate-500">Join a contest to view positions and place trades</p>
                 </div>
-              ) : (
-                <div className="text-center py-3 text-muted-foreground text-sm">No positions</div>
-              )}
-            </div>
+                <Button 
+                  onClick={handleParticipateInContest}
+                  size="sm" 
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  <Trophy className="h-3 w-3 mr-1" />
+                  Browse Contests
+                </Button>
+              </div>
+            ) : (
+              <>
+                {/* Active Contest Badge */}
+                {activeContest && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Trophy className="h-4 w-4 text-green-600" />
+                      <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                        Active Contest
+                      </Badge>
+                    </div>
+                    <p className="text-sm font-medium text-green-800">{activeContest.contest.name}</p>
+                    <p className="text-xs text-green-600">Virtual Cash: ₹{parseInt(activeContest.virtual_cash).toLocaleString()}</p>
+                  </div>
+                )}
+
+                {/* Positions */}
+                <div>
+                  <h3 className="text-sm font-medium mb-2">Open Positions</h3>
+                  {contestData?.contest?.participation?.positions?.length > 0 ? (
+                    <div className="space-y-2">
+                      {contestData.contest.participation.positions.map((position) => (
+                        <div key={position.id} className="p-2 rounded-lg border bg-muted/50">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-sm font-medium">
+                              {position.strikePrice} {position.optionType}
+                            </span>
+                            <Badge variant={position.pnl >= 0 ? "default" : "destructive"} className="text-xs">
+                              {position.pnl >= 0 ? "+" : ""}
+                              {position.pnl.toFixed(2)}
+                            </Badge>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                            <div>Qty: {position.quantity}</div>
+                            <div>Avg: ₹{position.averagePrice}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-3 text-muted-foreground text-sm">No positions</div>
+                  )}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>

@@ -10,14 +10,17 @@ import {
   BarChart3,
   DollarSign,
   Target,
+  Lock,
 } from "lucide-react";
 
 export function MobileOptionChain({
   data,
   onOptionClick,
+  contestData,
   formatPrice,
   formatOI,
   atmStrike,
+  disabled = false,
 }) {
   const listRef = useRef(null);
   const [selectedOption, setSelectedOption] = useState(null);
@@ -36,6 +39,8 @@ export function MobileOptionChain({
   }, [atmStrike]);
 
   const handleOptionSelect = (strikeData, type) => {
+    if (disabled) return;
+    
     const optionData =
       type === "call" ? strikeData.call_option : strikeData.put_option;
     if (optionData) {
@@ -64,40 +69,44 @@ export function MobileOptionChain({
 
   return (
     <>
-      <div className="md:hidden bg-white" ref={listRef}>
+      <div className={`md:hidden bg-white ${disabled ? 'opacity-60' : ''}`} ref={listRef}>
         {/* Header with Toggle */}
         <div className="sticky top-0 bg-white z-20 border-b border-slate-200">
           {/* View Toggle */}
           <div className="col-span-2 flex items-center justify-center gap-0 bg-slate-50 rounded-md"></div>
 
           {/* Column Headers */}
-          <div className="grid text-xs justify-center  items-center grid-cols-4  font-semibold p-3 bg-white border-b">
+          <div className="grid text-xs justify-center items-center grid-cols-4 font-semibold p-3 bg-white border-b">
             <div className="text-center text-green-700">
               {viewMode === "price" ? "Call LTP" : "Call OI"}
             </div>
-            <div className=" col-span-2  text-center ">
+            <div className="col-span-2 text-center">
               {" "}
               <button
                 onClick={() => setViewMode("price")}
+                disabled={disabled}
                 className={`flex-1 w-16 border text-xs rounded-s-2xl font-medium py-1 transition-colors
-      ${
-        viewMode === "price"
-          ? "bg-gray-200 text-blue-700 border-blue-400"
-          : "bg-white text-gray-700 border-gray-200"
-      }
-    `}
+                  ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                  ${
+                    viewMode === "price"
+                      ? "bg-gray-200 text-blue-700 border-blue-400"
+                      : "bg-white text-gray-700 border-gray-200"
+                  }
+                `}
               >
                 Price
               </button>
               <button
                 onClick={() => setViewMode("oi")}
+                disabled={disabled}
                 className={`flex-1 w-16 border text-xs rounded-e-2xl font-medium py-1 transition-colors
-      ${
-        viewMode === "oi"
-          ? "bg-gray-200 text-blue-700 border-blue-400"
-          : "bg-white text-gray-700 border-gray-200"
-      }
-    `}
+                  ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
+                  ${
+                    viewMode === "oi"
+                      ? "bg-gray-200 text-blue-700 border-blue-400"
+                      : "bg-white text-gray-700 border-gray-200"
+                  }
+                `}
               >
                 OI
               </button>
@@ -108,6 +117,18 @@ export function MobileOptionChain({
             </div>
           </div>
         </div>
+
+        {/* Disabled Overlay Message */}
+        {disabled && (
+          <div className="sticky top-[120px] z-30 mx-2 mb-2">
+            <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 text-center">
+              <Lock className="h-4 w-4 text-orange-600 mx-auto mb-1" />
+              <p className="text-xs text-orange-700 font-medium">
+                Join a contest to interact with options
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Options List */}
         <div className="overflow-y-auto max-h-[calc(100vh-12rem)]">
@@ -128,7 +149,11 @@ export function MobileOptionChain({
               >
                 {/* Call Side */}
                 <div
-                  className="flex flex-col items-center p-3 active:bg-green-50 transition-colors"
+                  className={`flex flex-col items-center p-3 transition-colors ${
+                    disabled 
+                      ? 'cursor-not-allowed' 
+                      : 'active:bg-green-50 cursor-pointer'
+                  }`}
                   onClick={() => handleOptionSelect(strikeData, "call")}
                 >
                   {callOption ? (
@@ -186,7 +211,11 @@ export function MobileOptionChain({
 
                 {/* Put Side */}
                 <div
-                  className="flex flex-col items-center p-3 active:bg-red-50 transition-colors"
+                  className={`flex flex-col items-center p-3 transition-colors ${
+                    disabled 
+                      ? 'cursor-not-allowed' 
+                      : 'active:bg-red-50 cursor-pointer'
+                  }`}
                   onClick={() => handleOptionSelect(strikeData, "put")}
                 >
                   {putOption ? (
@@ -231,22 +260,27 @@ export function MobileOptionChain({
           })}
         </div>
       </div>
-      {console.log("Selected Option:", data)}
+      
       <OptionDetailsDrawer
-        isOpen={isDrawerOpen}
+        isOpen={isDrawerOpen && !disabled}
         onClose={() => setIsDrawerOpen(false)}
         optionData={selectedOption}
+        contestData={contestData}
         strikePrice={selectedStrike}
         optionType={selectedType}
         expiry={data?.option_chain?.[0]?.expiry}
         underlyingPrice={data?.[0]?.underlying_spot_price}
         onBuy={(option) => {
-          onOptionClick(option, "buy");
-          setIsDrawerOpen(false);
+          if (!disabled) {
+            onOptionClick(option, "buy");
+            setIsDrawerOpen(false);
+          }
         }}
         onSell={(option) => {
-          onOptionClick(option, "sell");
-          setIsDrawerOpen(false);
+          if (!disabled) {
+            onOptionClick(option, "sell");
+            setIsDrawerOpen(false);
+          }
         }}
       />
     </>

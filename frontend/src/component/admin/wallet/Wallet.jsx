@@ -165,7 +165,7 @@ export default function Wallet() {
   } = groupTransactions(transactionsData);
 
   return (
-    <div className="container mx-auto sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-8 max-w-6xl">
+    <div className="container px-2 mx-auto sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-8 max-w-6xl">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-4">
         <div>

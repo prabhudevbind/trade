@@ -1,7 +1,8 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { body, validationResult } =require('express-validator');
-const prisma = new PrismaClient();
+const {prisma} = require("../../utils/prisma");
+
 const router = express.Router();
 
 // Create a new password reset token

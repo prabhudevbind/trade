@@ -6,6 +6,7 @@ import './App.css'
 import { useGetUserRefetchQuery } from './store/api/apiSlice'
 import { clearAllDetails, setToken } from './store/reducer/authSlice'
 import { createAppRouter } from './router/AppRouter'
+import Loader from './component/admin/option/Loader'
 
 export default function App() {
   const dispatch = useDispatch();
@@ -21,7 +22,7 @@ export default function App() {
   }, [userData, error, dispatch]);
 
   if (isLoading) {
-    return <div>Loading...</div>; // Add a proper loading component here
+    return <Loader/>; // Add a proper loading component here
   }
 
   const router = createAppRouter(isAuthenticated);
