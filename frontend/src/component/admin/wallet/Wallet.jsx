@@ -55,13 +55,13 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
     
     switch(paymentMethod) {
       case "paytm":
-        deepLink = `paytmmp://pay?pa=your.upi.id@paytm&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
         break;
       case "phonepe":
-        deepLink = `phonepe://pay?pa=your.upi.id@ybl&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
         break;
       case "gpay":
-        deepLink = `tez://upi/pay?pa=your.upi.id@okaxis&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
         break;
       default:
         return;
