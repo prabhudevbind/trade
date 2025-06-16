@@ -22,15 +22,12 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent } from "@/components/ui/card"
-import { useToast } from "@/hooks/use-toast"
-import { Toaster } from "@/components/ui/toaster"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 
 // Mock Redux hooks - replace with your actual Redux implementation
 import { useRegisterUserMutation } from "@/store/api/userSliceApi"
-
-
 import { loginUser } from "@/store/reducer/authSlice" 
-
 import { fetchUserDetails } from "@/store/reducer/userDetailsSlice"
 import { useDispatch } from "react-redux"
 
@@ -38,7 +35,6 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const dispatch = useDispatch()
-  const { toast } = useToast()
 
   const {
     register,
@@ -55,10 +51,13 @@ function LoginForm() {
 
       const result = await dispatch(loginUser(data)).unwrap()
 
-      toast({
-        title: "Login Successful! 🎉",
-        description: "Welcome back to Stockverse!",
-        duration: 3000,
+      toast.success("Login Successful! 🎉 Welcome back to Stockverse!", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       })
 
       // Fetch user details after successful login
@@ -66,11 +65,13 @@ function LoginForm() {
     } catch (error) {
       const errorMessage = error?.error || error?.message || "Login failed. Please try again."
 
-      toast({
-        variant: "destructive",
-        title: "Login Failed",
-        description: errorMessage,
-        duration: 4000,
+      toast.error(errorMessage, {
+        position: "top-right",
+        autoClose: 4000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
       })
 
       // Set form-level error for invalid credentials
@@ -85,6 +86,7 @@ function LoginForm() {
 
   return (
     <div className="space-y-6 w-full">
+      <ToastContainer />
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email" className="flex items-center gap-2">
@@ -183,7 +185,7 @@ function RegisterForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [registerUser] = useRegisterUserMutation()
   const dispatch = useDispatch()
-  const { toast } = useToast()
+
 
   const {
     register,
@@ -204,34 +206,28 @@ function RegisterForm() {
 
       const { firstName, lastName, email, password } = data
 
-      const result = await registerUser({
+      // First, register the user
+      const registerResult = await registerUser({
         firstName,
         lastName,
         email,
         password,
       }).unwrap()
 
-      toast({
-        title: "Account Created Successfully! 🎉",
-        description: "Welcome to Stockverse! You can now start trading.",
-        duration: 4000,
-      })
+      // Then automatically log in
+      const loginResult = await dispatch(loginUser({ email, password })).unwrap()
 
-      // Reset form after successful registration
+      toast.success( "Your account has been created and you're now logged in!");
+
+      // Reset form after successful registration and login
       reset()
 
-      // Fetch user details
-      await dispatch(fetchUserDetails(result.user.id))
+      // Fetch user details using the logged-in user's ID
+      await dispatch(fetchUserDetails(loginResult.user.id))
     } catch (error) {
       const errorMessage = error?.data?.message || error?.message || "Registration failed. Please try again."
 
-      toast({
-        variant: "destructive",
-        title: "Registration Failed",
-        description: errorMessage,
-        duration: 4000,
-      })
-
+      toast.error( "Registration Failed")
       // Handle specific errors
       if (errorMessage.includes("email") || errorMessage.includes("Email")) {
         setError("email", { message: "This email is already registered" })
@@ -342,7 +338,7 @@ function RegisterForm() {
                   message: "Password must be at least 8 characters",
                 },
                 pattern: {
-                  value: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/,
+                  value: /^(?=.*[a-z])(?=.*\d)/,
                   message: "Password must contain uppercase, lowercase, and number",
                 },
               })}
@@ -581,7 +577,7 @@ export default function StockverseLogin() {
           </div>
         </div>
       </div>
-      <Toaster />
+    
     </div>
   )
 }

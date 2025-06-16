@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React from 'react';
 import { motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import {
@@ -22,9 +22,14 @@ import RecentActivity from './RecentActivity';
 import ImageUploader from './ImageUploader';
 
 const CreativeProfileView = () => {
-  const user = useSelector((state) => state.auth?.user);
+  // Move all hooks to the top
   const { themeColor } = useThemeContext();
+  const auth = useSelector((state) => state.auth);
+  const user = auth?.user;
+
+  // Helper functions
   const formatDate = (dateString) => {
+    if (!dateString) return '';
     return new Date(dateString).toLocaleString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -34,27 +39,33 @@ const CreativeProfileView = () => {
     });
   };
 
-  if (!user) return <div className="text-center text-gray-500 p-8">Loading profile...</div>;
-  const img = useSelector((state) => state.auth?.user?.img)
+  const getColorClass = () => {
+    return `from-${themeColor}-500 to-${themeColor}-900`;
+  };
 
-  const color = () => {
-    return `from-${themeColor}-500 to-${themeColor}-900`
-  }
-  // Calculate user account age
-  const accountAge = () => {
+  const calculateAccountAge = () => {
+    if (!user?.createdAt) return 0;
     const createdAt = new Date(user.createdAt);
     const now = new Date();
     const diffTime = Math.abs(now - createdAt);
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   };
 
-  // Group activities by type
-
+  // Loading state
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <p className="text-gray-500">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-100 p-8">
-      {themeColor &&
+      {themeColor && (
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -62,12 +73,17 @@ const CreativeProfileView = () => {
           className="max-w-4xl mx-auto bg-white rounded-2xl shadow-2xl overflow-hidden"
         >
           {/* Header Section */}
-          <div className={`bg-gradient-to-r ${color} from-blue-500 to-blue-900 p-6 text-white`}>
+          <div className={`bg-gradient-to-r ${getColorClass()} p-6 text-white`}>
             <div className="flex items-center space-x-4">
               <div className="w-24 h-24 bg-white rounded-full overflow-hidden border-4 border-white">
                 <Avatar>
-                  <AvatarImage src={`http://localhost:5000${img}`} alt="@shadcn" />
-                  <AvatarFallback className={`${color()} text-${themeColor}-500`}>CN</AvatarFallback>
+                  <AvatarImage 
+                    src={user.img ? `http://localhost:5000${user.img}` : undefined} 
+                    alt={`${user.firstName} ${user.lastName}`} 
+                  />
+                  <AvatarFallback className={cn(`bg-${themeColor}-100 text-${themeColor}-500`)}>
+                    {user.firstName?.charAt(0)}{user.lastName?.charAt(0)}
+                  </AvatarFallback>
                 </Avatar>
               </div>
               <div>
@@ -99,28 +115,20 @@ const CreativeProfileView = () => {
                 <div className="flex items-center space-x-3">
                   <Clock className="text-purple-500" size={20} />
                   <span className="text-gray-700">
-                    Account Age: {accountAge()} days
+                    Account Age: {calculateAccountAge()} days
                   </span>
                 </div>
               </div>
 
-              <ImageUploader/>
+              <ImageUploader />
             </div>
           </div>
           
-          {user &&
-            <>
-              <LoginDevices user={user} />
-              <RecentActivity user={user} />
-            </>
-
-          }
-
-          {/* RecentActivity Timeline */}
+          <LoginDevices user={user} />
+          <RecentActivity user={user} />
 
         </motion.div>
-      }
-
+      )}
     </div>
   );
 };

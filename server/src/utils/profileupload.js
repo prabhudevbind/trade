@@ -50,6 +50,8 @@ router.patch('/update-profile-image',
         try {
             const userId = req.user.userId;
     
+            console.log('User ID:', userId);
+            console.log('Uploaded file:', req.user);
             // Check if file was uploaded
             if (!req.file) {
                 return res.status(400).json({

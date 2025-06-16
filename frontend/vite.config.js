@@ -64,21 +64,6 @@ export default defineConfig({
         ],
       },
     }),
-    // Custom plugin to append build timestamp
-    {
-      name: "append-build-timestamp",
-      config: () => ({
-        build: {
-          rollupOptions: {
-            output: {
-              entryFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-              chunkFileNames: `assets/[name]-[hash]-${Date.now()}.js`,
-              assetFileNames: `assets/[name]-[hash]-${Date.now()}[extname]`,
-            },
-          },
-        },
-      }),
-    },
   ],
 
   resolve: {
@@ -87,23 +72,35 @@ export default defineConfig({
     },
   },
   build: {
+    sourcemap: true,
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 2000,
     rollupOptions: {
       input: {
         main: "./index.html",
         "service-worker": "./public/service-worker.js",
       },
       output: {
-        // File names mein hash explicitly define karna
-        entryFileNames: "assets/[name]-[hash].js",
-        chunkFileNames: "assets/[name]-[hash].js",
-        assetFileNames: "assets/[name]-[hash][extname]",
+        // Add unique timestamp to file names
+        entryFileNames: (chunkInfo) => {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          return `assets/[name]-[hash]-${timestamp}.js`;
+        },
+        chunkFileNames: (chunkInfo) => {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          return `assets/[name]-[hash]-${timestamp}.js`;
+        },
+        assetFileNames: (assetInfo) => {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+          const ext = assetInfo.name.split('.').pop();
+          return `assets/[name]-[hash]-${timestamp}.${ext}`;
+        },
         manualChunks: {
           "pdf-lib": ["@react-pdf/renderer"],
           vendor: ["react", "react-dom", "react-router-dom"],
         },
       },
     },
-    chunkSizeWarningLimit: 2000, // Increase warning limit to 1000kb
   },
 
   server: {

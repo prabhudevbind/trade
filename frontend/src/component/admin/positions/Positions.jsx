@@ -10,10 +10,12 @@ import {
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, DollarSign } from "lucide-react"
+import { TrendingUp, TrendingDown, DollarSign, Trophy } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Link } from "react-router-dom"
 
 export default function Positions() {
-  const { data: activeTradesData, isLoading, isError } = useGetTradesActiveQuery();
+  const { data: activeTradesData, isLoading, isError, error } = useGetTradesActiveQuery();
   const [positions, setPositions] = useState([]);
   const [totalPnL, setTotalPnL] = useState(0);
 
@@ -65,8 +67,56 @@ export default function Positions() {
     setTotalPnL(total);
   }, [positions]);
 
-  if (isLoading) return <div>Loading positions data...</div>;
-  if (isError) return <div>Error loading positions data.</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <p className="text-gray-500">Loading positions data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    const isNoActiveContest = error?.data?.error === "No active contest found for this user";
+    
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] p-6">
+        <div className="text-center space-y-6 max-w-md">
+          {isNoActiveContest ? (
+            <>
+              <Trophy className="h-16 w-16 text-gray-400 mx-auto" />
+              <h2 className="text-2xl font-semibold text-gray-800">No Active Contest</h2>
+              <p className="text-gray-600">
+                You don't have any active contests at the moment. Join a contest to start trading!
+              </p>
+              <Link to="/contests">
+                <Button className="w-full mt-4" size="lg">
+                  Browse Available Contests
+                </Button>
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="text-red-500 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-semibold text-gray-800">Error Loading Positions</h2>
+              <p className="text-gray-600">
+                {error?.data?.error || "Something went wrong while loading your positions. Please try again."}
+              </p>
+              <Button onClick={() => window.location.reload()} className="w-full mt-4" variant="outline" size="lg">
+                Retry
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-6">

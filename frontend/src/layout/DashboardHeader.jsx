@@ -22,17 +22,17 @@ export default function DashboardHeader() {
     )}>
       <SidebarTrigger className={`text-${themeColor}-500 hover:bg-${themeColor}-100`} />
       <div className="flex w-full max-w-md items-center gap-2">
-      <Search className="h-4 w-4 text-muted-foreground" />
+      {/* <Search className="h-4 w-4 text-muted-foreground" />
         <Input
           type="search"
           placeholder="Search..."
           className="h-9 md:w-[300px] lg:w-[400px]"
-        />
+        /> */}
 
         {/* <CommandDemo /> */}
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Notification/>
+        {/* <Notification/> */}
         <PopoverDemo />
       </div>
     </header>

@@ -35,9 +35,160 @@ import {
   Users,
   TrendingUp,
   ArrowRight,
+  QrCode,
+  Smartphone,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Link, useNavigate } from "react-router-dom"
+import { Input } from "@/components/ui/input"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Label } from "@/components/ui/label"
+import { toast } from "react-toastify"
+
+// Payment Dialog Component
+function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
+  const [paymentMethod, setPaymentMethod] = useState("paytm")
+  const [paymentStatus, setPaymentStatus] = useState("pending")
+  const [showQR, setShowQR] = useState(false)
+
+  const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+  const handlePaymentMethodChange = (value) => {
+    setPaymentMethod(value)
+    setShowQR(value === "qr")
+  }
+
+  const handlePayNow = () => {
+    if (paymentMethod === "paytm") {
+      window.open(`paytmmp://pay?pa=your.upi.id@paytm&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`, "_blank")
+    } else if (paymentMethod === "gpay") {
+      window.open(`tez://upi/pay?pa=your.upi.id@okaxis&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`, "_blank")
+    }
+    setPaymentStatus("verifying")
+  }
+
+  const verifyPayment = () => {
+    setPaymentStatus("completed")
+    toast.success("Payment verified successfully!")
+    onPaymentComplete()
+    onClose()
+  }
+
+  const cancelPayment = () => {
+    setPaymentStatus("pending")
+    toast.error("Payment cancelled")
+    onClose()
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Add Money to Wallet</DialogTitle>
+          <DialogDescription>
+            Choose your preferred payment method to add ₹{amount}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-4 py-4">
+          <RadioGroup
+            defaultValue={paymentMethod}
+            onValueChange={handlePaymentMethodChange}
+            className="grid grid-cols-2 gap-4"
+          >
+            <div>
+              <RadioGroupItem
+                value="paytm"
+                id="paytm"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="paytm"
+                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+              >
+                <Smartphone className="mb-2 h-6 w-6" />
+                PayTM
+              </Label>
+            </div>
+
+            <div>
+              <RadioGroupItem
+                value="gpay"
+                id="gpay"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="gpay"
+                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+              >
+                <Smartphone className="mb-2 h-6 w-6" />
+                Google Pay
+              </Label>
+            </div>
+
+            <div className="col-span-2">
+              <RadioGroupItem
+                value="qr"
+                id="qr"
+                className="peer sr-only"
+              />
+              <Label
+                htmlFor="qr"
+                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
+              >
+                <QrCode className="mb-2 h-6 w-6" />
+                Scan QR Code
+              </Label>
+            </div>
+          </RadioGroup>
+
+          {showQR && (
+            <div className="flex flex-col items-center space-y-4">
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=your.upi.id@okaxis%26pn=Fantasy Trading%26am=${amount}%26tn=${transactionId}`} 
+                alt="Payment QR Code" 
+                className="border p-2 rounded-lg"
+              />
+              <p className="text-sm text-gray-500">Scan with any UPI app</p>
+            </div>
+          )}
+
+          {paymentStatus === "pending" ? (
+            <Button onClick={handlePayNow} className="w-full">
+              Pay Now ₹{amount}
+            </Button>
+          ) : paymentStatus === "verifying" ? (
+            <div className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Verify Payment</AlertTitle>
+                <AlertDescription>
+                  Did you complete the payment?
+                </AlertDescription>
+              </Alert>
+              <div className="flex gap-4">
+                <Button 
+                  onClick={verifyPayment}
+                  className="flex-1"
+                  variant="default"
+                >
+                  Yes, Payment Done
+                </Button>
+                <Button 
+                  onClick={cancelPayment}
+                  className="flex-1"
+                  variant="outline"
+                >
+                  No, Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 // Enhanced Loader Component
 function EnhancedLoader({ message = "Loading...", size = "default" }) {
@@ -48,19 +199,9 @@ function EnhancedLoader({ message = "Loading...", size = "default" }) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[300px] space-y-4">
-      <div className="relative">
-        <Loader2 className={`${sizeClasses[size]} animate-spin text-primary`} />
-        <div className="absolute inset-0 rounded-full border-2 border-primary/20 animate-pulse"></div>
-      </div>
-      <div className="text-center space-y-2">
-        <p className="text-muted-foreground font-medium">{message}</p>
-        <div className="flex space-x-1">
-          <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-          <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-          <div className="w-2 h-2 bg-primary/60 rounded-full animate-bounce"></div>
-        </div>
-      </div>
+    <div className="flex items-center justify-center p-4">
+      <Loader2 className={`${sizeClasses[size]} animate-spin`} />
+      <span className="ml-2">{message}</span>
     </div>
   )
 }
@@ -132,6 +273,8 @@ export default function ActiveContests() {
   const [processingContestId, setProcessingContestId] = useState(null)
   const [showSwitchDialog, setShowSwitchDialog] = useState(false)
   const [switchingContests, setSwitchingContests] = useState({ current: null, new: null })
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState(0)
   const navigate = useNavigate()
 
   // Fetch data
@@ -226,7 +369,8 @@ export default function ActiveContests() {
 
     // Check balance
     if (userBalance < entry_fee) {
-      navigate('/wallet')
+      setPaymentAmount(entry_fee - userBalance)
+      setShowPaymentDialog(true)
       setProcessingContestId(null)
       return
     }
@@ -367,7 +511,7 @@ export default function ActiveContests() {
         </div>
         <div className="flex items-center gap-3">
           <Card className="bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 shadow-sm">
-            <CardContent className="p-4 flex items-center gap-3">
+            <CardContent className="p-2 flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-full">
                 <Wallet className="h-5 w-5 text-green-600" />
               </div>
@@ -579,6 +723,17 @@ export default function ActiveContests() {
         currentContest={switchingContests.current}
         newContest={switchingContests.new}
         isLoading={processingContestId !== null}
+      />
+
+      {/* Payment Dialog */}
+      <PaymentDialog
+        isOpen={showPaymentDialog}
+        onClose={() => setShowPaymentDialog(false)}
+        amount={paymentAmount}
+        onPaymentComplete={() => {
+          refetchContests()
+          refetchUser()
+        }}
       />
     </div>
   )
