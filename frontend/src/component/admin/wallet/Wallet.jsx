@@ -59,13 +59,13 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
     
     switch(paymentMethod) {
       case "paytm":
-        deepLink = `paytmmp://pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       case "phonepe":
-        deepLink = `phonepe://pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       case "gpay":
-        deepLink = `tez://upi/pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       default:
         return;
@@ -173,7 +173,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
           {showQR && (
             <div className="flex flex-col items-center space-y-4">
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=7302597556@ibl%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`} 
                 alt="Payment QR Code" 
                 className="border p-2 rounded-lg"
               />
