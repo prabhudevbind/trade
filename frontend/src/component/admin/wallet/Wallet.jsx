@@ -1,15 +1,32 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { useGetWalletTransactionsQuery, useCreateWalletTransactionMutation } from "@/store/api/contest"
-import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
-import { toast } from "react-toastify"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState, useEffect } from "react";
+import {
+  useGetWalletTransactionsQuery,
+  useCreateWalletTransactionMutation,
+} from "@/store/api/contest";
+import { useGetUserByIdQuery } from "@/store/api/userSliceApi";
+import { toast } from "react-toastify";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   AlertCircle,
   ArrowDownCircle,
@@ -22,50 +39,52 @@ import {
   WalletIcon,
   QrCode,
   Smartphone,
-} from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { formatCurrency, formatDate } from "@/lib/utils"
+} from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+} from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
-  const [paymentMethod, setPaymentMethod] = useState("paytm")
-  const [paymentStatus, setPaymentStatus] = useState("pending")
-  const [showQR, setShowQR] = useState(false)
-  const [currentTransactionId, setCurrentTransactionId] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("paytm");
+  const [paymentStatus, setPaymentStatus] = useState("pending");
+  const [showQR, setShowQR] = useState(false);
+  const [currentTransactionId, setCurrentTransactionId] = useState("");
 
   // Generate transaction ID when dialog opens
   useEffect(() => {
     if (isOpen) {
-      setCurrentTransactionId(`TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+      setCurrentTransactionId(
+        `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      );
     }
-  }, [isOpen])
+  }, [isOpen]);
 
   const handlePaymentMethodChange = (value) => {
-    setPaymentMethod(value)
-    setShowQR(value === "qr")
-  }
+    setPaymentMethod(value);
+    setShowQR(value === "qr");
+  };
 
   const handlePayNow = () => {
     let deepLink = "";
-    
-    switch(paymentMethod) {
+
+    switch (paymentMethod) {
       case "paytm":
-        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
         break;
       case "phonepe":
-        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
         break;
       case "gpay":
-        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
+        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
         break;
       default:
         return;
@@ -74,21 +93,21 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
     if (!showQR) {
       window.location.href = deepLink;
     }
-    setPaymentStatus("verifying")
-  }
+    setPaymentStatus("verifying");
+  };
 
   const verifyPayment = () => {
-    setPaymentStatus("completed")
-    toast.success("Payment verified successfully!")
-    onPaymentComplete(currentTransactionId)
-    onClose()
-  }
+    setPaymentStatus("completed");
+    toast.success("Payment verified successfully!");
+    onPaymentComplete(currentTransactionId);
+    onClose();
+  };
 
   const cancelPayment = () => {
-    setPaymentStatus("pending")
-    toast.error("Payment cancelled")
-    onClose()
-  }
+    setPaymentStatus("pending");
+    toast.error("Payment cancelled");
+    onClose();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -140,11 +159,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
             </div>
 
             <div>
-              <RadioGroupItem
-                value="gpay"
-                id="gpay"
-                className="peer sr-only"
-              />
+              <RadioGroupItem value="gpay" id="gpay" className="peer sr-only" />
               <Label
                 htmlFor="gpay"
                 className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -155,11 +170,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
             </div>
 
             <div>
-              <RadioGroupItem
-                value="qr"
-                id="qr"
-                className="peer sr-only"
-              />
+              <RadioGroupItem value="qr" id="qr" className="peer sr-only" />
               <Label
                 htmlFor="qr"
                 className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
@@ -172,13 +183,15 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
 
           {showQR && (
             <div className="flex flex-col items-center space-y-4">
-              <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`} 
-                alt="Payment QR Code" 
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`}
+                alt="Payment QR Code"
                 className="border p-2 rounded-lg"
               />
               <p className="text-sm text-gray-500">Scan with any UPI app</p>
-              <p className="text-xs text-gray-400">Transaction ID: {currentTransactionId}</p>
+              <p className="text-xs text-gray-400">
+                Transaction ID: {currentTransactionId}
+              </p>
             </div>
           )}
 
@@ -196,14 +209,14 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
                 </AlertDescription>
               </Alert>
               <div className="flex gap-4">
-                <Button 
+                <Button
                   onClick={verifyPayment}
                   className="flex-1"
                   variant="default"
                 >
                   Yes, Payment Done
                 </Button>
-                <Button 
+                <Button
                   onClick={cancelPayment}
                   className="flex-1"
                   variant="outline"
@@ -216,69 +229,73 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 export default function Wallet() {
-  const [depositAmount, setDepositAmount] = useState("")
-  const [depositError, setDepositError] = useState(null)
-  const [depositSuccess, setDepositSuccess] = useState(null)
-  const [isDepositing, setIsDepositing] = useState(false)
-  const [showPaymentDialog, setShowPaymentDialog] = useState(false)
+  const [depositAmount, setDepositAmount] = useState("");
+  const [depositError, setDepositError] = useState(null);
+  const [depositSuccess, setDepositSuccess] = useState(null);
+  const [isDepositing, setIsDepositing] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
   // Fetch user data
-  const { data: user, isLoading: userLoading, error: userError, refetch: refetchUser } = useGetUserByIdQuery()
-  const [createWalletTransaction] = useCreateWalletTransactionMutation()
+  const {
+    data: user,
+    isLoading: userLoading,
+    error: userError,
+    refetch: refetchUser,
+  } = useGetUserByIdQuery();
+  const [createWalletTransaction] = useCreateWalletTransactionMutation();
 
   const handleDepositClick = () => {
-    setDepositError(null)
-    
+    setDepositError(null);
+
     // Validate amount
-    const amount = Number(depositAmount)
+    const amount = Number(depositAmount);
     if (!amount || amount <= 0) {
-      setDepositError("Please enter a valid amount")
-      return
+      setDepositError("Please enter a valid amount");
+      return;
     }
-    
+
     if (amount < 1) {
-      setDepositError("Minimum deposit amount is ₹1")
-      return
+      setDepositError("Minimum deposit amount is ₹1");
+      return;
     }
-    
-  
 
     // Show payment dialog
-    setShowPaymentDialog(true)
-  }
+    setShowPaymentDialog(true);
+  };
 
   const handlePaymentComplete = async (transactionId) => {
     try {
-      setIsDepositing(true)
-      
+      setIsDepositing(true);
+
       // Create wallet transaction with UPI transaction ID
       await createWalletTransaction({
         amount: Number(depositAmount),
-        type: 'CREDIT',
-        status: 'COMPLETED',
-        description: 'Wallet top up',
+        type: "CREDIT",
+        status: "COMPLETED",
+        description: "Wallet top up",
         transaction_id: transactionId,
-        payment_method: 'UPI'
-      }).unwrap()
+        payment_method: "UPI",
+      }).unwrap();
 
       // Show success message with transaction ID
-      setDepositSuccess(`Amount added to wallet successfully! (Transaction ID: ${transactionId})`)
-      setDepositAmount("")
-      
+      setDepositSuccess(
+        `Amount added to wallet successfully! (Transaction ID: ${transactionId})`
+      );
+      setDepositAmount("");
+
       // Refresh user data to show updated balance
-      refetchUser()
-      
+      refetchUser();
     } catch (error) {
-      setDepositError(error?.data?.message || "Failed to process payment")
+      setDepositError(error?.data?.message || "Failed to process payment");
     } finally {
-      setIsDepositing(false)
-      setShowPaymentDialog(false)
+      setIsDepositing(false);
+      setShowPaymentDialog(false);
     }
-  }
+  };
 
   return (
     <div className="container mx-auto p-6">
@@ -299,7 +316,9 @@ export default function Wallet() {
               {/* Balance Display */}
               <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Available Balance</p>
+                  <p className="text-sm text-muted-foreground">
+                    Available Balance
+                  </p>
                   <p className="text-3xl font-semibold">
                     {userLoading ? (
                       <Skeleton className="h-9 w-24" />
@@ -329,9 +348,9 @@ export default function Wallet() {
                       placeholder="Enter amount"
                       value={depositAmount}
                       onChange={(e) => {
-                        setDepositAmount(e.target.value)
-                        setDepositError(null)
-                        setDepositSuccess(null)
+                        setDepositAmount(e.target.value);
+                        setDepositError(null);
+                        setDepositSuccess(null);
                       }}
                       disabled={isDepositing}
                     />
@@ -362,7 +381,10 @@ export default function Wallet() {
                 )}
 
                 {depositSuccess && (
-                  <Alert variant="success" className="bg-green-50 border-green-200">
+                  <Alert
+                    variant="success"
+                    className="bg-green-50 border-green-200"
+                  >
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
                       {depositSuccess}
@@ -407,12 +429,16 @@ export default function Wallet() {
         </Card>
       </div>
     </div>
-  )
+  );
 }
 
 function TransactionTable({ transactions }) {
   if (transactions.length === 0) {
-    return <div className="text-center py-4 text-muted-foreground">No transactions in this category.</div>
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        No transactions in this category.
+      </div>
+    );
   }
 
   return (
@@ -435,18 +461,30 @@ function TransactionTable({ transactions }) {
               </TableCell>
               <TableCell>
                 <Badge
-                  variant={tx.type === "DEPOSIT" ? "success" : tx.type === "WITHDRAWAL" ? "destructive" : "secondary"}
+                  variant={
+                    tx.type === "DEPOSIT"
+                      ? "success"
+                      : tx.type === "WITHDRAWAL"
+                      ? "destructive"
+                      : "secondary"
+                  }
                   className="text-xs whitespace-nowrap"
                 >
                   <span className="flex items-center gap-1">
-                    {tx.type === "DEPOSIT" && <ArrowDownCircle className="h-3 w-3 hidden sm:inline" />}
+                    {tx.type === "DEPOSIT" && (
+                      <ArrowDownCircle className="h-3 w-3 hidden sm:inline" />
+                    )}
                     {tx.type}
                   </span>
                 </Badge>
               </TableCell>
-              <TableCell className={`font-medium text-xs sm:text-sm ${
-                tx.type === "DEPOSIT" || tx.type === "CREDIT" ? "text-green-600" : "text-red-600"
-              }`}>
+              <TableCell
+                className={`font-medium text-xs sm:text-sm ${
+                  tx.type === "DEPOSIT" || tx.type === "CREDIT"
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
                 {tx.type === "DEPOSIT" || tx.type === "CREDIT" ? "+" : "-"}
                 {formatCurrency(tx.amount)}
               </TableCell>
@@ -463,5 +501,5 @@ function TransactionTable({ transactions }) {
         </TableBody>
       </Table>
     </div>
-  )
+  );
 }
