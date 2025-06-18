@@ -73,35 +73,50 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
     setShowQR(value === "qr");
   };
 
+  const createUPIUrl = () => {
+    // Create a properly formatted UPI URL with all required parameters
+    const upiParams = {
+      pa: "8347232980@ptsbi", // Payee UPI ID
+      pn: "Fantasy Trading",   // Payee name
+      tn: currentTransactionId, // Transaction note/reference
+      am: amount.toString(),   // Amount
+      cu: "INR",              // Currency
+      mc: "",                 // Merchant code (optional)
+      tr: currentTransactionId, // Transaction reference
+      mode: "00"              // Mode (00 for basic UPI payment)
+    };
+
+    // Create the UPI URL with encoded parameters
+    const params = Object.entries(upiParams)
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join('&');
+
+    return `upi://pay?${params}`;
+  };
+
   const handlePayNow = () => {
-    let deepLink = "";
-
-    // Base UPI parameters
-    const upiParams = new URLSearchParams({
-      pa: "8347232980@ptsbi",
-      pn: "Fantasy",
-      am: amount.toString(),
-      cu: "INR",
-      tn: currentTransactionId
-    }).toString();
-
-    switch (paymentMethod) {
-      case "paytm":
-        deepLink = `upi://pay?${upiParams}`;
-        break;
-      case "phonepe":
-        deepLink = `upi://pay?${upiParams}`;
-        break;
-      case "gpay":
-        deepLink = `upi://pay?${upiParams}`;
-        break;
-      default:
-        return;
+    const upiUrl = createUPIUrl();
+    
+    // Check if running on Android
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (isAndroid) {
+      // Create an invisible anchor element
+      const intentLink = document.createElement('a');
+      intentLink.href = upiUrl;
+      intentLink.style.display = 'none';
+      document.body.appendChild(intentLink);
+      
+      // Trigger click to open UPI app chooser
+      intentLink.click();
+      
+      // Clean up
+      document.body.removeChild(intentLink);
+    } else {
+      // For non-Android devices, show QR code
+      setShowQR(true);
     }
-
-    if (!showQR) {
-      window.location.href = deepLink;
-    }
+    
     setPaymentStatus("verifying");
   };
 
@@ -139,42 +154,16 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
           >
             <div>
               <RadioGroupItem
-                value="paytm"
-                id="paytm"
+                value="upi"
+                id="upi"
                 className="peer sr-only"
               />
               <Label
-                htmlFor="paytm"
+                htmlFor="upi"
                 className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
               >
                 <Smartphone className="mb-2 h-6 w-6" />
-                PayTM
-              </Label>
-            </div>
-
-            <div>
-              <RadioGroupItem
-                value="phonepe"
-                id="phonepe"
-                className="peer sr-only"
-              />
-              <Label
-                htmlFor="phonepe"
-                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-              >
-                <Smartphone className="mb-2 h-6 w-6" />
-                PhonePe
-              </Label>
-            </div>
-
-            <div>
-              <RadioGroupItem value="gpay" id="gpay" className="peer sr-only" />
-              <Label
-                htmlFor="gpay"
-                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-              >
-                <Smartphone className="mb-2 h-6 w-6" />
-                Google Pay
+                Pay with UPI App
               </Label>
             </div>
 
@@ -185,7 +174,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
                 className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
               >
                 <QrCode className="mb-2 h-6 w-6" />
-                Scan QR
+                Scan QR Code
               </Label>
             </div>
           </RadioGroup>
