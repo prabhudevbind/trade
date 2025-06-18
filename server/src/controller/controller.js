@@ -1641,16 +1641,32 @@ const walletTransactionController = {
   // Create a new wallet transaction
   async createWalletTransaction(req, res) {
     try {
-      const { amount, type, status } = req.body;
+      const { amount, type, status, transaction_id, payment_method } = req.body;
 
       // Validate input
       if (!amount || !type || !status) {
         return res.status(400).json({ error: "Missing required fields" });
       }
+
+      // Validate transaction_id for CREDIT transactions
+      if (type === "CREDIT" && !transaction_id) {
+        return res.status(400).json({ error: "Transaction ID is required for credit transactions" });
+      }
+
       const parsedUserId = parseInt(req.user.userId);
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedUserId) || isNaN(parsedAmount) || parsedAmount <= 0) {
         return res.status(400).json({ error: "Invalid user_id or amount" });
+      }
+
+      // Check for duplicate transaction_id
+      if (transaction_id) {
+        const existingTransaction = await prisma.walletTransaction.findMany({
+          where: { transaction_id },
+        });
+        if (existingTransaction) {
+          return res.status(400).json({ error: "Duplicate transaction ID" });
+        }
       }
 
       // Find user
@@ -1674,7 +1690,7 @@ const walletTransactionController = {
         where: { id: parsedUserId },
         data: {
           amount:
-            type === "DEPOSIT" || type == "deposit"
+            type === "CREDIT"
               ? currentBalance + parsedAmount
               : currentBalance - parsedAmount,
         },
@@ -1687,6 +1703,8 @@ const walletTransactionController = {
           amount: parsedAmount,
           type,
           status,
+          transaction_id: transaction_id || null,
+          payment_method: payment_method || null,
           created_at: new Date(),
         },
       });
@@ -1731,9 +1749,11 @@ const walletTransactionController = {
       // Format the response
       const formattedTransactions = transactions.map((transaction) => ({
         id: transaction.id,
+        transaction_id: transaction.transaction_id,
         amount: parseFloat(transaction.amount),
         type: transaction.type,
         status: transaction.status,
+        payment_method: transaction.payment_method,
         created_at: transaction.created_at,
         user: {
           name: `${transaction.user.firstName} ${transaction.user.lastName}`,
@@ -1775,17 +1795,39 @@ const walletTransactionController = {
     }
   },
 
+  // Get transaction by transaction_id
+  async getWalletTransactionByTransactionId(req, res) {
+    try {
+      const { transaction_id } = req.params;
+      const transaction = await prisma.walletTransaction.findFirst({
+        where: { transaction_id },
+        include: { user: true },
+      });
+      if (!transaction) {
+        return res.status(404).json({ error: "Transaction not found" });
+      }
+      res.status(200).json(transaction);
+    } catch (error) {
+      res
+        .status(500)
+        .json({ error: "Failed to fetch transaction", details: error.message });
+    }
+  },
+
   // Update a wallet transaction
   async updateWalletTransaction(req, res) {
     try {
       const { id } = req.params;
-      const { amount, type, status } = req.body;
+      const { amount, type, status, payment_method } = req.body;
+      
+      // Don't allow updating transaction_id
       const transaction = await prisma.walletTransaction.update({
         where: { id: parseInt(id) },
         data: {
           amount: amount ? parseFloat(amount) : undefined,
           type,
           status,
+          payment_method,
         },
       });
       res.status(200).json(transaction);

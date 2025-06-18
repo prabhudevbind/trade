@@ -18,7 +18,7 @@ let protobufRoot = null;
 let defaultClient = UpstoxClient.ApiClient.instance;
 let apiVersion = "2.0";
 let OAUTH2 = defaultClient.authentications["OAUTH2"];
-OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODRmYmQ5MmVjM2Q3NTRhYWYxMDJlMzIiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc1MDA1NjMzOCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzUwMTExMjAwfQ.nchQm3TbLf-wXVbTcp_ViMfFBzFKXIWEjG5LNagiHTE"; // Replace with your actual token
+OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODUyNmI3MGI3NTA0YzQ3ZWM1MTRlMTciLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc1MDIzMTkyMCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzUwMjg0MDAwfQ.Mj-YgSsW9vQPccuF2jLfP6gyO1-2s7l8YzgLsuFpKt0"; // Replace with your actual token
 let upstoxWs = null;
 const streamingResponses = new Map();
 

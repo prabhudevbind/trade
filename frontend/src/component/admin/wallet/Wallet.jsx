@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useGetWalletTransactionsQuery, useCreateWalletTransactionMutation } from "@/store/api/contest"
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
 import { toast } from "react-toastify"
@@ -36,14 +36,18 @@ import {
 } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 
-
-// Payment Dialog Component
 function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
   const [paymentMethod, setPaymentMethod] = useState("paytm")
   const [paymentStatus, setPaymentStatus] = useState("pending")
   const [showQR, setShowQR] = useState(false)
+  const [currentTransactionId, setCurrentTransactionId] = useState("")
 
-  const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  // Generate transaction ID when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setCurrentTransactionId(`TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+    }
+  }, [isOpen])
 
   const handlePaymentMethodChange = (value) => {
     setPaymentMethod(value)
@@ -55,13 +59,13 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
     
     switch(paymentMethod) {
       case "paytm":
-        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `paytmmp://pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       case "phonepe":
-        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `phonepe://pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       case "gpay":
-        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${transactionId}`
+        deepLink = `tez://upi/pay?pa=7302597556@ibl&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}`
         break;
       default:
         return;
@@ -76,7 +80,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
   const verifyPayment = () => {
     setPaymentStatus("completed")
     toast.success("Payment verified successfully!")
-    onPaymentComplete()
+    onPaymentComplete(currentTransactionId)
     onClose()
   }
 
@@ -93,6 +97,9 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
           <DialogTitle>Add Money to Wallet</DialogTitle>
           <DialogDescription>
             Choose your preferred payment method to add ₹{amount}
+            <div className="mt-2 text-xs text-gray-500">
+              Transaction ID: {currentTransactionId}
+            </div>
           </DialogDescription>
         </DialogHeader>
 
@@ -166,11 +173,12 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
           {showQR && (
             <div className="flex flex-col items-center space-y-4">
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=your.upi.id@okaxis%26pn=Fantasy Trading%26am=${amount}%26tn=${transactionId}`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=7302597556@ibl%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`} 
                 alt="Payment QR Code" 
                 className="border p-2 rounded-lg"
               />
               <p className="text-sm text-gray-500">Scan with any UPI app</p>
+              <p className="text-xs text-gray-400">Transaction ID: {currentTransactionId}</p>
             </div>
           )}
 
@@ -232,34 +240,33 @@ export default function Wallet() {
       return
     }
     
-    if (amount < 100) {
-      setDepositError("Minimum deposit amount is ₹100")
+    if (amount < 1) {
+      setDepositError("Minimum deposit amount is ₹1")
       return
     }
     
-    if (amount > 10000) {
-      setDepositError("Maximum deposit amount is ₹10,000")
-      return
-    }
+  
 
     // Show payment dialog
     setShowPaymentDialog(true)
   }
 
-  const handlePaymentComplete = async () => {
+  const handlePaymentComplete = async (transactionId) => {
     try {
       setIsDepositing(true)
       
-      // Create wallet transaction
+      // Create wallet transaction with UPI transaction ID
       await createWalletTransaction({
         amount: Number(depositAmount),
         type: 'CREDIT',
         status: 'COMPLETED',
-        description: 'Wallet top up'
+        description: 'Wallet top up',
+        transaction_id: transactionId,
+        payment_method: 'UPI'
       }).unwrap()
 
-      // Show success message
-      setDepositSuccess("Amount added to wallet successfully!")
+      // Show success message with transaction ID
+      setDepositSuccess(`Amount added to wallet successfully! (Transaction ID: ${transactionId})`)
       setDepositAmount("")
       
       // Refresh user data to show updated balance
@@ -376,7 +383,28 @@ export default function Wallet() {
         />
 
         {/* Transaction History */}
-        {/* ... rest of your component ... */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Transaction History</CardTitle>
+            <CardDescription>Your recent wallet transactions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Transaction ID</TableHead>
+                  <TableHead>Amount</TableHead>
+                  <TableHead>Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {/* ... rest of your transaction history UI ... */}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
