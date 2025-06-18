@@ -76,15 +76,24 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
   const handlePayNow = () => {
     let deepLink = "";
 
+    // Base UPI parameters
+    const upiParams = new URLSearchParams({
+      pa: "8347232980@ptsbi",
+      pn: "Fantasy",
+      am: amount.toString(),
+      cu: "INR",
+      tn: currentTransactionId
+    }).toString();
+
     switch (paymentMethod) {
       case "paytm":
-        deepLink = `paytmmp://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
+        deepLink = `upi://pay?${upiParams}`;
         break;
       case "phonepe":
-        deepLink = `phonepe://pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
+        deepLink = `upi://pay?${upiParams}`;
         break;
       case "gpay":
-        deepLink = `tez://upi/pay?pa=8347232980@ptsbi&pn=Fantasy Trading&am=${amount}&tn=${currentTransactionId}&cu=INR`;
+        deepLink = `upi://pay?${upiParams}`;
         break;
       default:
         return;
@@ -184,7 +193,7 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
           {showQR && (
             <div className="flex flex-col items-center space-y-4">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy Trading%26am=${amount}%26tn=${currentTransactionId}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy%20Trading%26am=${amount}%26cu=INR%26tn=${currentTransactionId}`}
                 alt="Payment QR Code"
                 className="border p-2 rounded-lg"
               />
