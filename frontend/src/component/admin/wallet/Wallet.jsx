@@ -62,8 +62,12 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
   // Generate transaction ID when dialog opens
   useEffect(() => {
     if (isOpen) {
+      // Generate a unique transaction ID with timestamp, random string and current milliseconds
+      const timestamp = Date.now();
+      const random = Math.random().toString(36).substr(2, 9);
+      const milliseconds = new Date().getMilliseconds().toString().padStart(3, '0');
       setCurrentTransactionId(
-        `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        `FT${timestamp}${milliseconds}${random.toUpperCase()}`
       );
     }
   }, [isOpen]);

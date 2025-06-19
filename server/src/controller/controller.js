@@ -1662,9 +1662,9 @@ const walletTransactionController = {
       // Check for duplicate transaction_id
       if (transaction_id) {
         const existingTransaction = await prisma.walletTransaction.findMany({
-          where: { transaction_id },
+          where: {transaction_id: transaction_id },
         });
-        if (existingTransaction) {
+        if (existingTransaction.transaction_id=== transaction_id) {
           return res.status(400).json({ error: "Duplicate transaction ID" });
         }
       }

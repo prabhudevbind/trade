@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const WebSocket = require("ws");
@@ -13,12 +14,22 @@ const app = express();
 const PORT = process.env.PORT || 5001;
 const server = require('http').createServer(app);
 
+// Import configuration
+const config = require('./config/config');
+
 // Initialize Upstox client
 let protobufRoot = null;
 let defaultClient = UpstoxClient.ApiClient.instance;
 let apiVersion = "2.0";
 let OAUTH2 = defaultClient.authentications["OAUTH2"];
-OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODUyNmI3MGI3NTA0YzQ3ZWM1MTRlMTciLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc1MDIzMTkyMCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzUwMjg0MDAwfQ.Mj-YgSsW9vQPccuF2jLfP6gyO1-2s7l8YzgLsuFpKt0"; // Replace with your actual token
+
+// Use access token from configuration
+if (!config.upstox.accessToken) {
+    console.error('Error: Upstox access token is not configured. Please set ACCESS_TOKEN in your .env file');
+    process.exit(1);
+}
+
+OAUTH2.accessToken = config.upstox.accessToken;
 let upstoxWs = null;
 const streamingResponses = new Map();
 
