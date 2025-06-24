@@ -31,6 +31,22 @@ import { loginUser } from "@/store/reducer/authSlice"
 import { fetchUserDetails } from "@/store/reducer/userDetailsSlice"
 import { useDispatch } from "react-redux"
 
+const loginTheme = {
+  gradientBg: "bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800",
+  card: "bg-white/10 backdrop-blur-sm border-white/20 hover:bg-white/20 transition-all duration-300",
+  cardHeader: "bg-gradient-to-r from-green-600 to-blue-600",
+  cardTitle: "text-xl font-bold text-gray-900",
+  button: "bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white",
+  badge: "bg-green-100 text-green-800 hover:bg-green-100",
+  highlight: "bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent",
+  input: "focus:ring-green-600 border-gray-300",
+  border: "border-green-200",
+  text: "text-gray-900",
+  textMuted: "text-gray-500",
+  textSecondary: "text-gray-600",
+  link: "text-green-700 hover:text-green-900 underline underline-offset-4",
+}
+
 function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -161,7 +177,7 @@ function LoginForm() {
         <Button
           type="submit"
           disabled={isLoading || isSubmitting}
-          className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all duration-200 transform active:scale-[0.98]"
+          className="w-full h-12 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-medium transition-all duration-200 transform active:scale-[0.98]"
         >
           {isLoading ? (
             <>
@@ -393,7 +409,7 @@ function RegisterForm() {
         <Button
           type="submit"
           disabled={isLoading || isSubmitting}
-          className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-medium transition-all duration-200 transform active:scale-[0.98]"
+          className="w-full h-12 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-medium transition-all duration-200 transform active:scale-[0.98]"
         >
           {isLoading ? (
             <>
@@ -439,10 +455,10 @@ export default function StockverseLogin() {
   const [isLogin, setIsLogin] = useState(true)
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
+    <div className={`min-h-screen ${loginTheme.gradientBg}`}>
       <div className="container relative min-h-screen flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
         {/* Left Panel - Hidden on mobile, shown on lg screens */}
-        <div className="relative hidden h-full flex-col bg-gradient-to-br from-blue-600 via-purple-600 to-indigo-700 p-6 sm:p-10 text-white lg:flex">
+        <div className="relative hidden h-full flex-col bg-gradient-to-br from-green-600 via-blue-600 to-indigo-700 p-6 sm:p-10 text-white lg:flex">
           <div className="absolute inset-0">
             <svg
               className="absolute inset-0 h-full w-full"
@@ -464,7 +480,7 @@ export default function StockverseLogin() {
               <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
                 <TrendingUp className="h-8 w-8 text-white" />
               </div>
-              <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">Stockverse</span>
+              <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">StockVerses</span>
             </div>
           </div>
 
@@ -509,20 +525,20 @@ export default function StockverseLogin() {
         <div className="flex items-center justify-center p-4 sm:p-8">
           <div className="w-full max-w-[400px] space-y-6">
             <div className="flex items-center justify-center space-x-3 lg:hidden mb-6">
-              <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-3 rounded-xl">
+              <div className="bg-gradient-to-r from-green-600 to-blue-600 p-3 rounded-xl">
                 <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
-              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Stockverse
+              <span className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
+                StockVerses
               </span>
             </div>
 
             <div className="space-y-6">
               <div className="space-y-2 text-center">
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
                   {isLogin ? "Welcome Back" : "Create Account"}
                 </h1>
-                <p className="text-sm sm:text-base text-muted-foreground">
+                <p className="text-sm sm:text-base text-gray-600">
                   {isLogin ? "Trade Smart, Win Big! 🚀" : "Start your trading journey today! 🚀"}
                 </p>
               </div>
@@ -563,13 +579,13 @@ export default function StockverseLogin() {
               </CardContent>
             </Card>
 
-            <p className="px-4 sm:px-8 text-center text-xs sm:text-sm text-muted-foreground">
-              By {isLogin ? "logging in" : "creating an account"}, you agree to our{" "}
-              <a href="/terms" className="text-primary hover:text-primary/80 underline underline-offset-4">
+            <p className="px-4 sm:px-8 text-center text-xs sm:text-sm text-gray-500">
+              By {isLogin ? "logging in" : "creating an account"}, you agree to our {" "}
+              <a href="/terms" className="text-green-700 hover:text-green-900 underline underline-offset-4">
                 Terms of Service
               </a>{" "}
-              and{" "}
-              <a href="/privacy" className="text-primary hover:text-primary/80 underline underline-offset-4">
+              and {" "}
+              <a href="/privacy" className="text-green-700 hover:text-green-900 underline underline-offset-4">
                 Privacy Policy
               </a>
               .
@@ -577,7 +593,6 @@ export default function StockverseLogin() {
           </div>
         </div>
       </div>
-    
     </div>
   )
 }

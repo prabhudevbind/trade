@@ -39,6 +39,7 @@ import {
   WalletIcon,
   QrCode,
   Smartphone,
+  Download,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -51,13 +52,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import WithDrawUpiId from "./WithDrawUpiId";
 
 function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
-  const [paymentMethod, setPaymentMethod] = useState("paytm");
-  const [paymentStatus, setPaymentStatus] = useState("pending");
-  const [showQR, setShowQR] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState("qr_display"); // qr_display -> payment_confirm -> utr_input -> processing
   const [currentTransactionId, setCurrentTransactionId] = useState("");
+  const [upiRefNo, setUpiRefNo] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Generate transaction ID when dialog opens
   useEffect(() => {
@@ -65,161 +66,172 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
       // Generate a unique transaction ID with timestamp, random string and current milliseconds
       const timestamp = Date.now();
       const random = Math.random().toString(36).substr(2, 9);
-      const milliseconds = new Date().getMilliseconds().toString().padStart(3, '0');
+      const milliseconds = new Date()
+        .getMilliseconds()
+        .toString()
+        .padStart(3, "0");
       setCurrentTransactionId(
         `FT${timestamp}${milliseconds}${random.toUpperCase()}`
       );
+      setPaymentStatus("qr_display");
+      setUpiRefNo("");
+      setIsSubmitting(false);
     }
   }, [isOpen]);
-
-  const handlePaymentMethodChange = (value) => {
-    setPaymentMethod(value);
-    setShowQR(value === "qr");
-  };
 
   const createUPIUrl = () => {
     // Create a properly formatted UPI URL with all required parameters
     const upiParams = {
-      pa: "8347232980@ptsbi", // Payee UPI ID
-      pn: "Fantasy Trading",   // Payee name
+      pa: "8368552483@ybl", // Payee UPI ID
+      pn: "Fantasy Trading", // Payee name
       tn: currentTransactionId, // Transaction note/reference
-      am: amount.toString(),   // Amount
-      cu: "INR",              // Currency
-      mc: "",                 // Merchant code (optional)
+      am: amount.toString(), // Amount
+      cu: "INR", // Currency
+      mc: "", // Merchant code (optional)
       tr: currentTransactionId, // Transaction reference
-      mode: "00"              // Mode (00 for basic UPI payment)
+      mode: "00", // Mode (00 for basic UPI payment)
     };
 
     // Create the UPI URL with encoded parameters
     const params = Object.entries(upiParams)
       .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
-      .join('&');
+      .join("&");
 
     return `upi://pay?${params}`;
   };
 
-  const handlePayNow = () => {
-    const upiUrl = createUPIUrl();
-    
-    // Check if running on Android
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    
-    if (isAndroid) {
-      // Create an invisible anchor element
-      const intentLink = document.createElement('a');
-      intentLink.href = upiUrl;
-      intentLink.style.display = 'none';
-      document.body.appendChild(intentLink);
-      
-      // Trigger click to open UPI app chooser
-      intentLink.click();
-      
-      // Clean up
-      document.body.removeChild(intentLink);
-    } else {
-      // For non-Android devices, show QR code
-      setShowQR(true);
-    }
-    
-    setPaymentStatus("verifying");
+  const handleDownloadQR = () => {
+    const img = document.getElementById("upi-qr-img");
+    const link = document.createElement("a");
+    link.href = img.src;
+    link.download = `upi-qr-${currentTransactionId}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
-  const verifyPayment = () => {
-    setPaymentStatus("completed");
-    toast.success("Payment verified successfully!");
-    onPaymentComplete(currentTransactionId);
-    onClose();
+  const handlePaymentYes = () => {
+    setPaymentStatus("utr_input");
   };
 
-  const cancelPayment = () => {
-    setPaymentStatus("pending");
+  const handlePaymentNo = () => {
+    setPaymentStatus("qr_display");
     toast.error("Payment cancelled");
     onClose();
   };
 
+  const handleUTRSubmit = async () => {
+    if (!upiRefNo.trim()) {
+      toast.error("Please enter UPI Reference Number");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Simulate processing delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      toast.success("Payment verified successfully!");
+      onPaymentComplete(currentTransactionId, upiRefNo.trim());
+    } catch (error) {
+      toast.error("Failed to verify payment");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleClose = () => {
+    setPaymentStatus("qr_display");
+    setUpiRefNo("");
+    setIsSubmitting(false);
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Add Money to Wallet</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <QrCode className="h-5 w-5" />
+            Add Money to Wallet
+          </DialogTitle>
           <DialogDescription>
-            Choose your preferred payment method to add ₹{amount}
-            <div className="mt-2 text-xs text-gray-500">
+            Amount: ₹{amount}
+            <div className="mt-2 text-xs text-gray-500 font-mono">
               Transaction ID: {currentTransactionId}
             </div>
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-4">
-          <RadioGroup
-            defaultValue={paymentMethod}
-            onValueChange={handlePaymentMethodChange}
-            className="grid grid-cols-2 gap-4"
-          >
-            <div>
-              <RadioGroupItem
-                value="upi"
-                id="upi"
-                className="peer sr-only"
-              />
-              <Label
-                htmlFor="upi"
-                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-              >
-                <Smartphone className="mb-2 h-6 w-6" />
-                Pay with UPI App
-              </Label>
-            </div>
-
-            <div>
-              <RadioGroupItem value="qr" id="qr" className="peer sr-only" />
-              <Label
-                htmlFor="qr"
-                className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary"
-              >
-                <QrCode className="mb-2 h-6 w-6" />
-                Scan QR Code
-              </Label>
-            </div>
-          </RadioGroup>
-
-          {showQR && (
+          {/* Step 1: Show QR Code */}
+          {paymentStatus === "qr_display" && (
             <div className="flex flex-col items-center space-y-4">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=8347232980@ptsbi%26pn=Fantasy%20Trading%26am=${amount}%26cu=INR%26tn=${currentTransactionId}`}
-                alt="Payment QR Code"
-                className="border p-2 rounded-lg"
-              />
-              <p className="text-sm text-gray-500">Scan with any UPI app</p>
-              <p className="text-xs text-gray-400">
-                Transaction ID: {currentTransactionId}
-              </p>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <img
+                  id="upi-qr-img"
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(
+                    createUPIUrl()
+                  )}`}
+                  alt="Payment QR Code"
+                  className="border-2 border-gray-200 rounded-lg"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadQR}
+                className="flex items-center gap-2"
+              >
+                <Download className="h-4 w-4" />
+                Download QR Code
+              </Button>
+
+              <div className="text-center space-y-2">
+                <p className="text-sm font-medium">
+                  Scan with any UPI app to pay
+                </p>
+                <p className="text-xs text-gray-500">
+                  Pay ₹{amount} to complete the transaction
+                </p>
+              </div>
+
+              <div className="w-full pt-4">
+                <Button
+                  onClick={() => setPaymentStatus("payment_confirm")}
+                  className="w-full"
+                  size="lg"
+                >
+                  I have made the payment
+                </Button>
+              </div>
             </div>
           )}
 
-          {paymentStatus === "pending" ? (
-            <Button onClick={handlePayNow} className="w-full">
-              Pay Now ₹{amount}
-            </Button>
-          ) : paymentStatus === "verifying" ? (
+          {/* Step 2: Ask if payment is done */}
+          {paymentStatus === "payment_confirm" && (
             <div className="space-y-4">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Verify Payment</AlertTitle>
+                <AlertTitle>Confirm Payment</AlertTitle>
                 <AlertDescription>
-                  Did you complete the payment?
+                  Have you completed the payment of ₹{amount}?
                 </AlertDescription>
               </Alert>
-              <div className="flex gap-4">
+
+              <div className="flex gap-3">
                 <Button
-                  onClick={verifyPayment}
+                  onClick={handlePaymentYes}
                   className="flex-1"
                   variant="default"
                 >
+                  <CheckCircle2 className="mr-2 h-4 w-4" />
                   Yes, Payment Done
                 </Button>
                 <Button
-                  onClick={cancelPayment}
+                  onClick={handlePaymentNo}
                   className="flex-1"
                   variant="outline"
                 >
@@ -227,7 +239,65 @@ function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
                 </Button>
               </div>
             </div>
-          ) : null}
+          )}
+
+          {/* Step 3: UTR Input */}
+          {paymentStatus === "utr_input" && (
+            <div className="space-y-4">
+              <Alert className="bg-green-50 border-green-200">
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+                <AlertTitle className="text-green-800">
+                  Payment Confirmed
+                </AlertTitle>
+                <AlertDescription className="text-green-700">
+                  Please enter your UPI Reference Number to complete the
+                  verification
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Label htmlFor="utr-input" className="text-sm font-medium">
+                  UPI Reference Number (UTR)
+                </Label>
+                <Input
+                  id="utr-input"
+                  placeholder="Enter 12-digit UPI Ref No. (e.g. 123456789012)"
+                  value={upiRefNo}
+                  onChange={(e) => setUpiRefNo(e.target.value)}
+                  className="font-mono"
+                  maxLength={12}
+                  disabled={isSubmitting}
+                />
+                <p className="text-xs text-gray-500">
+                  You can find this in your UPI app's transaction history
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleUTRSubmit}
+                  className="flex-1"
+                  disabled={!upiRefNo.trim() || isSubmitting}
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Verifying...
+                    </>
+                  ) : (
+                    "Submit & Verify"
+                  )}
+                </Button>
+                <Button
+                  onClick={() => setPaymentStatus("payment_confirm")}
+                  variant="outline"
+                  disabled={isSubmitting}
+                >
+                  Back
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -241,6 +311,10 @@ export default function Wallet() {
   const [isDepositing, setIsDepositing] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
 
+  // Filter state
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
   // Fetch user data
   const {
     data: user,
@@ -249,6 +323,27 @@ export default function Wallet() {
     refetch: refetchUser,
   } = useGetUserByIdQuery();
   const [createWalletTransaction] = useCreateWalletTransactionMutation();
+
+  // Fetch wallet transactions
+  const {
+    data: transactionsData,
+    isLoading: transactionsLoading,
+    error: transactionsError,
+    refetch: refetchTransactions,
+  } = useGetWalletTransactionsQuery();
+  const transactions = transactionsData?.transactions || [];
+
+  // Filtered transactions
+  const filteredTransactions = transactions.filter((tx) => {
+    const typeMatch = typeFilter === "ALL" || tx.type === typeFilter;
+    const statusMatch = statusFilter === "ALL" || tx.status === statusFilter;
+    return typeMatch && statusMatch;
+  });
+
+  // Show warning if any completed transaction is not verified
+  const hasUnverifiedPayment = filteredTransactions.some(
+    (tx) => tx.status === "COMPLETED" && tx.payment_verify === false
+  );
 
   const handleDepositClick = () => {
     setDepositError(null);
@@ -269,7 +364,7 @@ export default function Wallet() {
     setShowPaymentDialog(true);
   };
 
-  const handlePaymentComplete = async (transactionId) => {
+  const handlePaymentComplete = async (transactionId, refNo) => {
     try {
       setIsDepositing(true);
 
@@ -281,11 +376,12 @@ export default function Wallet() {
         description: "Wallet top up",
         transaction_id: transactionId,
         payment_method: "UPI",
+        upi_ref_no: parseInt(refNo),
       }).unwrap();
 
       // Show success message with transaction ID
       setDepositSuccess(
-        `Amount added to wallet successfully! (Transaction ID: ${transactionId})`
+        `₹${depositAmount} added to wallet successfully! (Ref: ${refNo})`
       );
       setDepositAmount("");
 
@@ -300,104 +396,110 @@ export default function Wallet() {
   };
 
   return (
-    <div className="container mx-auto p-6">
+    <div className="">
       <div className="grid gap-6">
         {/* Balance Card */}
-        <Card>
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2">
-              <WalletIcon className="h-5 w-5" />
-              Your Wallet
-            </CardTitle>
-            <CardDescription>
-              Add or withdraw money from your wallet
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Balance Display */}
-              <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">
-                    Available Balance
-                  </p>
-                  <p className="text-3xl font-semibold">
-                    {userLoading ? (
-                      <Skeleton className="h-9 w-24" />
-                    ) : (
-                      formatCurrency(user?.amount || 0)
-                    )}
-                  </p>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => refetchUser()}
-                  disabled={userLoading}
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
-              </div>
-
-              {/* Deposit Form */}
-              <div className="space-y-4">
-                <Label htmlFor="amount">Deposit Amount</Label>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Input
-                      id="amount"
-                      type="number"
-                      placeholder="Enter amount"
-                      value={depositAmount}
-                      onChange={(e) => {
-                        setDepositAmount(e.target.value);
-                        setDepositError(null);
-                        setDepositSuccess(null);
-                      }}
-                      disabled={isDepositing}
-                    />
+        <div  className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+        
+          <Card>
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2">
+                <WalletIcon className="h-5 w-5" />
+                Your Wallet
+              </CardTitle>
+              <CardDescription>
+                Add or withdraw money from your wallet
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {/* Balance Display */}
+                <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Available Balance
+                    </p>
+                    <p className="text-3xl font-semibold">
+                      {userLoading ? (
+                        <Skeleton className="h-9 w-24" />
+                      ) : (
+                        formatCurrency(user?.amount || 0)
+                      )}
+                    </p>
                   </div>
                   <Button
-                    onClick={handleDepositClick}
-                    disabled={!depositAmount || isDepositing}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchUser()}
+                    disabled={userLoading}
                   >
-                    {isDepositing ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <ArrowUpCircle className="mr-2 h-4 w-4" />
-                        Deposit
-                      </>
-                    )}
+                    <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
 
-                {depositError && (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{depositError}</AlertDescription>
-                  </Alert>
-                )}
+                {/* Deposit Form */}
+                <div className="space-y-4">
+                  <Label htmlFor="amount">Deposit Amount</Label>
+                  <div className="flex gap-4">
+                    <div className="flex-1">
+                      <Input
+                        id="amount"
+                        type="number"
+                        placeholder="Enter amount"
+                        value={depositAmount}
+                        onChange={(e) => {
+                          setDepositAmount(e.target.value);
+                          setDepositError(null);
+                          setDepositSuccess(null);
+                        }}
+                        disabled={isDepositing}
+                      />
+                    </div>
+                    <Button
+                      onClick={handleDepositClick}
+                      disabled={!depositAmount || isDepositing}
+                    >
+                      {isDepositing ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <ArrowUpCircle className="mr-2 h-4 w-4" />
+                          Deposit
+                        </>
+                      )}
+                    </Button>
+                  </div>
 
-                {depositSuccess && (
-                  <Alert
-                    variant="success"
-                    className="bg-green-50 border-green-200"
-                  >
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <AlertDescription className="text-green-800">
-                      {depositSuccess}
-                    </AlertDescription>
-                  </Alert>
-                )}
+                  {depositError && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{depositError}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  {depositSuccess && (
+                    <Alert
+                      variant="success"
+                      className="bg-green-50 border-green-200"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-green-800">
+                        {depositSuccess}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
+            </CardContent>
+          </Card>
+            <div>
+           
+            <WithDrawUpiId />
+          </div>
+        </div>
         {/* Payment Dialog */}
         <PaymentDialog
           isOpen={showPaymentDialog}
@@ -406,27 +508,193 @@ export default function Wallet() {
           onPaymentComplete={handlePaymentComplete}
         />
 
+        {/* Warning for unverified payment */}
+        {hasUnverifiedPayment && (
+          <Alert variant="info" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Information</AlertTitle>
+            <AlertDescription>
+              Your payment could not be verified. Your account may be blocked if
+              false payments are detected.
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Transaction History */}
         <Card>
           <CardHeader>
             <CardTitle>Transaction History</CardTitle>
             <CardDescription>Your recent wallet transactions</CardDescription>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <select
+                className="border rounded px-2 py-1 text-xs"
+                value={typeFilter}
+                onChange={(e) => setTypeFilter(e.target.value)}
+              >
+                <option value="ALL">All Types</option>
+                <option value="CREDIT">Credit</option>
+                <option value="DEBIT">Debit</option>
+              </select>
+              <select
+                className="border rounded px-2 py-1 text-xs"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="ALL">All Status</option>
+                <option value="COMPLETED">Completed</option>
+                <option value="PENDING">Pending</option>
+              </select>
+            </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Transaction ID</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {/* ... rest of your transaction history UI ... */}
-              </TableBody>
-            </Table>
+            {transactionsLoading ? (
+              <div className="py-8 text-center text-gray-400">Loading...</div>
+            ) : transactionsError ? (
+              <div className="py-8 text-center text-red-500">
+                Failed to load transactions
+              </div>
+            ) : filteredTransactions.length === 0 ? (
+              <div className="py-8 text-center text-gray-400">
+                No transactions found.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                {/* Desktop Table */}
+                <Table className="min-w-full hidden sm:table text-xs sm:text-sm">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Txn ID</TableHead>
+                      <TableHead>UPI Ref</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Verify</TableHead>
+                      {/* <TableHead>User ID</TableHead> */}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredTransactions.map((tx) => (
+                      <TableRow key={tx.id} className="hover:bg-gray-50">
+                        <TableCell>{formatDate(tx.created_at)}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              tx.type === "CREDIT"
+                                ? "success"
+                                : tx.type === "DEBIT"
+                                ? "destructive"
+                                : "secondary"
+                            }
+                            className="text-xs"
+                          >
+                            {tx.type}
+                          </Badge>
+                        </TableCell>
+                        <TableCell
+                          className={
+                            tx.type === "CREDIT"
+                              ? "text-green-600 font-semibold"
+                              : "text-red-600 font-semibold"
+                          }
+                        >
+                          {tx.type === "CREDIT" ? "+" : "-"}
+                          {formatCurrency(tx.amount)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs">
+                            {tx.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {tx.transaction_id}
+                        </TableCell>
+                        <TableCell className="font-mono">
+                          {tx.upi_ref_no || "-"}
+                        </TableCell>
+                        <TableCell>{tx.payment_method || "-"}</TableCell>
+                        <TableCell>
+                          {tx.payment_verify ? (
+                            <Badge className="bg-green-100 text-green-700 border-green-200">
+                              Verified
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-red-100 text-red-700 border-red-200">
+                              Not Verified
+                            </Badge>
+                          )}
+                        </TableCell>
+                        {/* <TableCell>{tx.user_id || '-'}</TableCell> */}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {/* Mobile-friendly cards */}
+                <div className="md:hidden space-y-3 mt-4">
+                  {filteredTransactions.map((tx) => (
+                    <div
+                      key={tx.id}
+                      className={`rounded-lg border p-3 bg-gray-50 flex flex-col gap-1`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-semibold text-sm">
+                          {formatDate(tx.created_at)}
+                        </span>
+                        <Badge
+                          variant={
+                            tx.type === "CREDIT"
+                              ? "success"
+                              : tx.type === "DEBIT"
+                              ? "destructive"
+                              : "secondary"
+                          }
+                          className="text-xs"
+                        >
+                          {tx.type}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span
+                          className={
+                            tx.type === "CREDIT"
+                              ? "text-green-600 font-bold"
+                              : "text-red-600 font-bold"
+                          }
+                        >
+                          {tx.type === "CREDIT" ? "+" : "-"}
+                          {formatCurrency(tx.amount)}
+                        </span>
+                        <Badge variant="outline" className="text-xs">
+                          {tx.status}
+                        </Badge>
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        Txn ID: {tx.transaction_id}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        UPI Ref: {tx.upi_ref_no || "-"}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        Method: {tx.payment_method || "-"}
+                      </div>
+                      <div className="text-xs truncate">
+                        {tx.payment_verify ? (
+                          <Badge className="bg-green-100 text-green-700 border-green-200 font-semibold">
+                            Verified
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-red-100 text-red-700 border-red-200 font-semibold animate-pulse">
+                            Not Verified
+                          </Badge>
+                        )}
+                      </div>
+                      {/* <div className="text-xs text-gray-500 truncate">User ID: {tx.user_id || '-'}</div> */}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

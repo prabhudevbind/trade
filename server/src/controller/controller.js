@@ -3,35 +3,181 @@ const prisma = require("../utils/prisma");
 // Contest Controller
 const contestController = {
   // Create a new contest
-  async createContest(req, res) {
-    try {
-      const {
-        name,
-        start_time,
-        end_time,
-        entry_fee,
-        maxTrade,
-        status,
-        trading_instrument,
-      } = req.body;
-      const contest = await prisma.contest.create({
-        data: {
-          name,
-          start_time: new Date(start_time),
-          end_time: new Date(end_time),
-          maxTrade: maxTrade,
-          entry_fee: parseFloat(entry_fee),
-          status: status || "upcoming",
-          trading_instrument: trading_instrument || "BOTH",
-        },
+ async createContest(req, res) {
+  try {
+    const {
+      name,
+      startTime,
+      endTime,
+      entryFee,
+      maxTrade,
+      status,
+      trading_instrument,
+    } = req.body;
+
+    // Validation
+    if (!name || !startTime || !endTime) {
+      return res.status(400).json({ 
+        error: 'Missing required fields', 
+        details: 'Name, startTime, and endTime are required' 
       });
-      res.status(201).json(contest);
-    } catch (error) {
-      res
-        .status(400)
-        .json({ error: "Failed to create contest", details: error.message });
     }
-  },
+
+    // Date validation
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const now = new Date();
+
+    if (start >= end) {
+      return res.status(400).json({ 
+        error: 'Invalid date range', 
+        details: 'Start time must be before end time' 
+      });
+    }
+
+    if (status === 'ongoing' && end <= now) {
+      return res.status(400).json({ 
+        error: 'Invalid ongoing contest', 
+        details: 'Cannot create ongoing contest that has already ended' 
+      });
+    }
+
+    // Check for existing ongoing contest if status is 'ongoing'
+    if (status === 'ongoing') {
+      const ongoing = await prisma.contest.findFirst({ 
+        where: { status: 'ongoing' },
+        select: { id: true, name: true, end_time: true }
+      });
+      
+      if (ongoing) {
+        return res.status(400).json({ 
+          error: 'Only one ongoing contest is allowed at a time.',
+          details: `Contest "${ongoing.name}" is currently ongoing until ${ongoing.end_time}`,
+          existingContest: {
+            id: ongoing.id,
+            name: ongoing.name,
+            endTime: ongoing.end_time
+          }
+        });
+      }
+    }
+
+    // Check for overlapping contests (optional - for better contest management)
+    const overlappingContest = await prisma.contest.findFirst({
+      where: {
+        AND: [
+          {
+            OR: [
+              { status: 'ongoing' },
+              { status: 'upcoming' }
+            ]
+          },
+          {
+            OR: [
+              // New contest starts before existing ends and after existing starts
+              {
+                AND: [
+                  { start_time: { lte: start } },
+                  { end_time: { gt: start } }
+                ]
+              },
+              // New contest ends after existing starts and before existing ends
+              {
+                AND: [
+                  { start_time: { lt: end } },
+                  { end_time: { gte: end } }
+                ]
+              },
+              // New contest completely encompasses existing contest
+              {
+                AND: [
+                  { start_time: { gte: start } },
+                  { end_time: { lte: end } }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      select: { id: true, name: true, start_time: true, end_time: true, status: true }
+    });
+
+    if (overlappingContest) {
+      return res.status(400).json({
+        error: 'Contest time overlap detected',
+        details: `This contest overlaps with "${overlappingContest.name}" (${overlappingContest.status})`,
+        overlappingContest: {
+          id: overlappingContest.id,
+          name: overlappingContest.name,
+          startTime: overlappingContest.start_time,
+          endTime: overlappingContest.end_time,
+          status: overlappingContest.status
+        }
+      });
+    }
+
+    // Auto-determine status based on dates if not provided
+    let contestStatus = status;
+    if (!contestStatus) {
+      if (start <= now && end > now) {
+        // Check if we can make it ongoing (no other ongoing contests)
+        const existingOngoing = await prisma.contest.findFirst({ 
+          where: { status: 'ongoing' } 
+        });
+        
+        if (existingOngoing) {
+          contestStatus = 'upcoming'; // Can't be ongoing, so make it upcoming
+        } else {
+          contestStatus = 'ongoing';
+        }
+      } else if (start > now) {
+        contestStatus = 'upcoming';
+      } else {
+        contestStatus = 'completed';
+      }
+    }
+
+    // Create the contest
+    const contest = await prisma.contest.create({
+      data: {
+        name,
+        start_time: start,
+        end_time: end,
+        maxTrade: maxTrade || 10, // Default max trades
+        entry_fee: parseFloat(entryFee) || 0,
+        status: contestStatus,
+        trading_instrument: trading_instrument || "BOTH",
+      },
+    });
+
+    // Log the creation for audit purposes
+    console.log(`Contest created: ${contest.name} (ID: ${contest.id}) - Status: ${contest.status}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Contest created successfully',
+      contest,
+      autoStatus: !status ? `Status auto-determined as '${contestStatus}'` : null
+    });
+
+  } catch (error) {
+    console.error('Error creating contest:', error);
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2002') {
+      return res.status(400).json({ 
+        error: 'Contest with this name already exists',
+        details: 'Please choose a different contest name'
+      });
+    }
+
+    res.status(400).json({ 
+      error: "Failed to create contest", 
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      success: false
+    });
+  }
+},
 
   // Get all contests
   async getAllContests(req, res) {
@@ -213,6 +359,20 @@ const contestController = {
         status,
         trading_instrument,
       } = req.body;
+
+      // Check for existing ongoing contest if updating to 'ongoing'
+      if (status === 'ongoing') {
+        const ongoing = await prisma.contest.findFirst({
+          where: {
+            status: 'ongoing',
+            NOT: { id: parseInt(id) },
+          },
+        });
+        if (ongoing) {
+          return res.status(400).json({ error: 'Only one ongoing contest is allowed at a time.' });
+        }
+      }
+
       const contest = await prisma.contest.update({
         where: { id: parseInt(id) },
         data: {
@@ -613,7 +773,7 @@ async getActiveContestForUser(req, res) {
             quantity: trade.quantity,
             price: parseFloat(trade.price),
           })),
-        })),
+      })),
 
         tradingHistory: historicalContestData.map((participant) => ({
           contestId: participant.contest_id,
@@ -639,7 +799,7 @@ async getActiveContestForUser(req, res) {
             quantity: trade.quantity,
             price: parseFloat(trade.price),
           })),
-        })),
+      })),
 
         summary: {
           activeContests: currentContestData.length,
@@ -654,7 +814,7 @@ async getActiveContestForUser(req, res) {
           ),
         },
       };
-
+    
       res.status(200).json(response);
     } catch (error) {
       console.error("Error fetching user trading data:", error);
@@ -790,7 +950,7 @@ async getActiveContestForUser(req, res) {
               id: true,
               name: true,
               email: true,
-              profile_image: true,
+              img: true,
             }
           },
           contest: true,
@@ -865,7 +1025,7 @@ async getActiveContestForUser(req, res) {
         return {
           userId: participant.user_id,
           userName: participant.user.name,
-          userImage: participant.user.profile_image,
+          userImage: participant.user.img,
           contestId: participant.contest_id,
           contestName: participant.contest.name,
           virtualCash: parseFloat(participant.virtual_cash),
@@ -930,26 +1090,69 @@ async getActiveContestForUser(req, res) {
   },
 
   // Get leaderboard for user's active contest
-  async getActiveContestLeaderboard(req, res) {
-    try {
-      // Check if user ID exists
-      if (!req.user || !req.user.userId) {
-        return res.status(401).json({
-          error: "Unauthorized",
-          details: "User not authenticated"
+async getActiveContestLeaderboard(req, res) {
+  try {
+    // Check if user ID exists
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({
+        error: "Unauthorized",
+        details: "User not authenticated"
+      });
+    }
+
+    const userId = req.user.userId;
+    const userRole = req.user.role;
+    const isAdmin = userRole === 'admin';
+
+    // Verify Prisma connection
+    if (!prisma) {
+      throw new Error("Database connection not established");
+    }
+
+    console.log('User requesting leaderboard:', req.user);
+
+    // For admin, find any active contest; for users, find their participation
+    let activeContestId = null;
+    let activeParticipation = null;
+
+    if (isAdmin) {
+      // Admin can view any active contest - get the first active contest
+      const activeContest = await prisma.contest.findFirst({
+        where: {
+          status: 'ongoing',
+        },
+      });
+
+      if (!activeContest) {
+        return res.status(404).json({
+          error: "No active contest found",
+          isParticipating: false,
         });
       }
 
-      const userId = req.user.userId;
+      activeContestId = activeContest.id;
+      
+      // Check if admin is also participating
+      activeParticipation = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest_id: activeContestId,
+        },
+        include: {
+          contest: true,
+        },
+      });
 
-      // Verify Prisma connection
-      if (!prisma) {
-        throw new Error("Database connection not established");
+      // If admin is not participating, create a mock participation object
+      if (!activeParticipation) {
+        activeParticipation = {
+          contest_id: activeContestId,
+          contest: activeContest,
+        };
       }
-      console.log(`Fetching leaderboard for user ID: ${userId}`);
-
-      // First find if user is participating in any active contest
-      const activeParticipation = await prisma.contestParticipant.findFirst({
+    } else {
+      // Regular user - find their active participation
+      activeParticipation = await prisma.contestParticipant.findFirst({
         where: {
           user_id: userId,
           contest: {
@@ -961,8 +1164,6 @@ async getActiveContestForUser(req, res) {
         },
       });
 
-      console.log(activeParticipation);
-      // If user is not in any active contest
       if (!activeParticipation) {
         return res.status(404).json({
           error: "You are not participating in any active contest",
@@ -970,134 +1171,249 @@ async getActiveContestForUser(req, res) {
         });
       }
 
-      // Get all participants in the same contest
-      const contestParticipants = await prisma.contestParticipant.findMany({
-        where: {
-          contest_id: activeParticipation.contest_id,
+      activeContestId = activeParticipation.contest_id;
+    }
+
+    console.log('Active participation:', activeParticipation);
+
+    // Get all participants in the contest
+    const contestParticipants = await prisma.contestParticipant.findMany({
+      where: {
+        contest_id: activeContestId,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            username: true,
+            img: true,
+            email: true, // Include email for admin view
+          }
         },
-        include: {
-          user: true,
-          positions: {
-            include: {
-              option: {
-                select: {
-                  symbol: true,
-                  strike_price: true,
-                  option_type: true,
-                  expiry_date: true,
-                  ltp: true,
-                }
+        positions: {
+          include: {
+            option: {
+              select: {
+                symbol: true,
+                strike_price: true,
+                option_type: true,
+                expiry_date: true,
+                ltp: true,
               }
-            }
-          },
-          trades: {
-            include: {
-              option: {
-                select: {
-                  symbol: true,
-                  strike_price: true,
-                  option_type: true,
-                  expiry_date: true,
-                  ltp: true,
-                }
-              }
-            },
-            orderBy: {
-              timestamp: 'desc'
             }
           }
+        },
+        trades: {
+          include: {
+            option: {
+              select: {
+                symbol: true,
+                strike_price: true,
+                option_type: true,
+                expiry_date: true,
+                ltp: true,
+              }
+            }
+          },
+          orderBy: {
+            timestamp: 'desc'
+          }
         }
+      }
+    });
+
+    if (contestParticipants.length === 0) {
+      return res.status(404).json({
+        error: "No participants found in the active contest",
+        isParticipating: false,
+      });
+    }
+
+    // Get current date for expiry comparison
+    const currentDate = new Date();
+    
+    // Calculate statistics for each participant
+    const participantStats = contestParticipants.map(participant => {
+      // Filter active positions (non-expired and non-zero quantity)
+      const activePositions = participant.positions.filter(position => {
+        const expiryDate = new Date(position.option.expiry_date);
+        return position.net_quantity !== 0 && expiryDate > currentDate;
       });
 
-      // Calculate statistics for each participant
-      const participantStats = contestParticipants.map(participant => {
-        // Calculate positions P&L
-        const positionsPnL = participant.positions.reduce((total, position) => {
-          const currentValue = parseFloat(position.option.ltp) * position.net_quantity;
-          const costBasis = parseFloat(position.average_entry_price) * position.net_quantity;
-          return total + (currentValue - costBasis);
-        }, 0);
+      // Calculate positions P&L only for active (non-expired) positions
+      const positionsPnL = activePositions.reduce((total, position) => {
+        if (!position.option.ltp || position.net_quantity === 0) return total;
+        
+        const currentValue = parseFloat(position.option.ltp) * position.net_quantity;
+        const costBasis = parseFloat(position.average_entry_price) * position.net_quantity;
+        return total + (currentValue - costBasis);
+      }, 0);
 
-        // Calculate realized P&L from trades
-        const realizedPnL = participant.trades.reduce((total, trade) => {
-          const tradeValue = parseFloat(trade.price) * trade.quantity;
-          return trade.action === 'sell' ? total + tradeValue : total - tradeValue;
-        }, 0);
+      // Calculate realized P&L from trades
+      const realizedPnL = participant.trades.reduce((total, trade) => {
+        const tradeValue = parseFloat(trade.price) * Math.abs(trade.quantity);
+        return trade.action === 'sell' ? total + tradeValue : total - tradeValue;
+      }, 0);
 
-        // Calculate current portfolio value
-        const portfolioValue = parseFloat(participant.virtual_cash) + positionsPnL + realizedPnL;
+      // Calculate current portfolio value
+      const virtualCash = parseFloat(participant.virtual_cash) || 0;
+      const portfolioValue = virtualCash + positionsPnL;
+      const initialCash = 100000; // Assuming initial cash was 100000
+      const totalPnL = portfolioValue - initialCash;
 
-        return {
-          userId: participant.user.id,
-          
-          userName: participant.user.username,
-          userImage: participant.user.profile_image,
-          isCurrentUser: participant.user.id === userId,
-          virtualCash: parseFloat(participant.virtual_cash),
-          unrealizedPnL: positionsPnL,
-          realizedPnL: realizedPnL,
-          totalPnL: positionsPnL + realizedPnL,
-          portfolioValue: portfolioValue,
-          roi: ((portfolioValue - 100000) / 100000) * 100, // Assuming initial cash was 100000
-          tradingStats: {
-            totalTrades: participant.trades.length,
-            buyTrades: participant.trades.filter(t => t.action === 'buy').length,
-            sellTrades: participant.trades.filter(t => t.action === 'sell').length,
-          },
-          activePositions: participant.positions.map(pos => ({
+      const userStats = {
+        userId: participant.user.id,
+        userName: participant.user.username,
+        userImage: participant.user.img,
+        isCurrentUser: participant.user.id === userId,
+        virtualCash: virtualCash,
+        unrealizedPnL: positionsPnL,
+        realizedPnL: realizedPnL,
+        totalPnL: totalPnL,
+        portfolioValue: portfolioValue,
+        roi: ((portfolioValue - initialCash) / initialCash) * 100,
+        tradingStats: {
+          totalTrades: participant.trades.length,
+          buyTrades: participant.trades.filter(t => t.action === 'buy').length,
+          sellTrades: participant.trades.filter(t => t.action === 'sell').length,
+          profitableTrades: participant.trades.filter(t => 
+            t.action === 'sell' && parseFloat(t.price) > 0
+          ).length,
+        },
+        activePositions: activePositions.map(pos => ({
+          symbol: pos.option.symbol,
+          strikePrice: pos.option.strike_price,
+          optionType: pos.option.option_type,
+          expiryDate: pos.option.expiry_date,
+          quantity: pos.net_quantity,
+          averagePrice: parseFloat(pos.average_entry_price),
+          currentPrice: parseFloat(pos.option.ltp),
+          pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity,
+          isExpired: false, // All positions here are active/non-expired
+        })),
+        expiredPositions: participant.positions
+          .filter(pos => {
+            const expiryDate = new Date(pos.option.expiry_date);
+            return pos.net_quantity !== 0 && expiryDate <= currentDate;
+          })
+          .map(pos => ({
             symbol: pos.option.symbol,
             strikePrice: pos.option.strike_price,
             optionType: pos.option.option_type,
+            expiryDate: pos.option.expiry_date,
             quantity: pos.net_quantity,
             averagePrice: parseFloat(pos.average_entry_price),
-            currentPrice: parseFloat(pos.option.ltp),
-            pnl: (parseFloat(pos.option.ltp) - parseFloat(pos.average_entry_price)) * pos.net_quantity,
+            isExpired: true,
+            expiredOn: pos.option.expiry_date,
           })),
+      };
 
-        };
-      });
+      // Add admin-only fields
+      if (isAdmin) {
+        userStats.userEmail = participant.user.email;
+        userStats.joinedAt = participant.joined_at;
+        userStats.lastTradeTime = participant.trades.length > 0 ? participant.trades[0].timestamp : null;
+      }
 
-      // Sort by portfolio value for ranking
-      const leaderboard = participantStats
-        .sort((a, b) => b.portfolioValue - a.portfolioValue)
-        .map((participant, index) => ({
-          ...participant,
-          rank: index + 1
-        }));
+      return userStats;
+    });
 
-      // Get user's ranking
-      const userRank = leaderboard.find(p => p.userId === userId)?.rank || 0;
+    // Sort by portfolio value for ranking
+    const leaderboard = participantStats
+      .sort((a, b) => b.portfolioValue - a.portfolioValue)
+      .map((participant, index) => ({
+        ...participant,
+        rank: index + 1
+      }));
 
+    // Get user's ranking (if user is participating)
+    const userRank = leaderboard.find(p => p.userId === userId)?.rank || null;
+
+    // Calculate contest statistics
+    const contestStats = {
+      averageROI: leaderboard.length > 0 ? 
+        leaderboard.reduce((sum, p) => sum + p.roi, 0) / leaderboard.length : 0,
+      highestPnL: leaderboard.length > 0 ? 
+        Math.max(...leaderboard.map(p => p.totalPnL)) : 0,
+      lowestPnL: leaderboard.length > 0 ? 
+        Math.min(...leaderboard.map(p => p.totalPnL)) : 0,
+      totalTradingVolume: participantStats.reduce((sum, p) => 
+        sum + p.tradingStats.totalTrades, 0
+      ),
+      activeTraders: participantStats.filter(p => p.tradingStats.totalTrades > 0).length,
+      profitableTraders: participantStats.filter(p => p.totalPnL > 0).length,
+    };
+
+    // Prepare contest info
+    const contestInfo = {
+      id: activeParticipation.contest_id,
+      name: activeParticipation.contest.name,
+      startTime: activeParticipation.contest.start_time,
+      endTime: activeParticipation.contest.end_time,
+      maxTrade: activeParticipation.contest.maxTrade,
+      entryFee: activeParticipation.contest.entry_fee,
+      status: activeParticipation.contest.status,
+    };
+
+    // Role-based response
+    if (isAdmin) {
+      // Admin: return full leaderboard with additional stats
       return res.json({
-        isParticipating: true,
-        contestInfo: {
-          id: activeParticipation.contest_id,
-          name: activeParticipation.contest.name,
-          startTime: activeParticipation.contest.start_time,
-          endTime: activeParticipation.contest.end_time,
-          maxTrade: activeParticipation.contest.maxTrade,
-          entryFee: activeParticipation.contest.entry_fee,
-        },
+        success: true,
+        isParticipating: userRank !== null,
+        isAdmin: true,
+        contestInfo,
         userRank,
         totalParticipants: contestParticipants.length,
-        leaderboard,
-        contestStats: {
-          averageROI: leaderboard.reduce((sum, p) => sum + p.roi, 0) / leaderboard.length,
-          highestPnL: Math.max(...leaderboard.map(p => p.totalPnL)),
-          totalTradingVolume: participantStats.reduce((sum, p) => 
-            sum + p.tradingStats.totalTrades, 0
-          ),
+        leaderboard, // Full leaderboard for admin
+        contestStats,
+        adminStats: {
+          totalParticipants: contestParticipants.length,
+          participantsWithPositions: participantStats.filter(p => p.activePositions.length > 0).length,
+          participantsWithExpiredPositions: participantStats.filter(p => p.expiredPositions.length > 0).length,
+          totalPortfolioValue: participantStats.reduce((sum, p) => sum + p.portfolioValue, 0),
+          averagePortfolioValue: participantStats.length > 0 ? 
+            participantStats.reduce((sum, p) => sum + p.portfolioValue, 0) / participantStats.length : 0,
+          totalActivePositions: participantStats.reduce((sum, p) => sum + p.activePositions.length, 0),
+          totalExpiredPositions: participantStats.reduce((sum, p) => sum + p.expiredPositions.length, 0),
         }
       });
-
-    } catch (error) {
-      console.error('Error fetching contest leaderboard:', error);
-      return res.status(500).json({
-        error: "Failed to fetch contest leaderboard",
-        details: error.message,
+    } else {
+      // Non-admin: return only current user's data
+      const userEntry = leaderboard.find(p => p.userId === userId);
+      
+      return res.json({
+        success: true,
+        isParticipating: true,
+        isAdmin: false,
+        contestInfo,
+        userRank,
+        totalParticipants: contestParticipants.length,
+        leaderboard: userEntry ? [userEntry] : [], // Only user's entry
+        contestStats: {
+          averageROI: contestStats.averageROI,
+          highestPnL: contestStats.highestPnL,
+          totalTradingVolume: contestStats.totalTradingVolume,
+        },
+        userPosition: userEntry || null,
       });
     }
-  },
+
+  } catch (error) {
+    console.error('Error fetching contest leaderboard:', error);
+    
+    // More detailed error logging for debugging
+    if (error.code) {
+      console.error('Database error code:', error.code);
+    }
+    
+    return res.status(500).json({
+      error: "Failed to fetch contest leaderboard",
+      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      success: false,
+    });
+  }
+}
 };
 
 // Option Controller
@@ -1418,8 +1734,7 @@ const tradeController = {
       if (!optionId || !contestId || !action || !quantity || !price) {
         return res.status(400).json({
           error: "Missing required fields",
-          details:
-            "All fields are required: optionId, contestId, action, quantity, price",
+          details: "All fields are required: optionId, contestId, action, quantity, price",
         });
       }
 
@@ -1641,15 +1956,15 @@ const walletTransactionController = {
   // Create a new wallet transaction
   async createWalletTransaction(req, res) {
     try {
-      const { amount, type, status, transaction_id, payment_method } = req.body;
-
+      const { amount, type, status, transaction_id, payment_method,upi_ref_no } = req.body;
+console.log(upi_ref_no);
       // Validate input
-      if (!amount || !type || !status) {
+      if (!amount || !type || !status ) {
         return res.status(400).json({ error: "Missing required fields" });
       }
 
       // Validate transaction_id for CREDIT transactions
-      if (type === "CREDIT" && !transaction_id) {
+      if (type === "CREDIT" && !transaction_id && !upi_ref_no) {
         return res.status(400).json({ error: "Transaction ID is required for credit transactions" });
       }
 
@@ -1703,6 +2018,7 @@ const walletTransactionController = {
           amount: parsedAmount,
           type,
           status,
+          upi_ref_no:parseInt(upi_ref_no),
           transaction_id: transaction_id || null,
           payment_method: payment_method || null,
           created_at: new Date(),
@@ -1726,40 +2042,48 @@ const walletTransactionController = {
   // Get all wallet transactions
   async getAllWalletTransactions(req, res) {
     try {
-      const userId = parseInt(req.user.userId);
-
-      const transactions = await prisma.walletTransaction.findMany({
-        where: {
-          user_id: userId,
-        },
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
+      const isAdmin = req.user.role === 'admin';
+      let transactions;
+      if (isAdmin) {
+        // Admin: fetch all transactions for all users
+        transactions = await prisma.walletTransaction.findMany({
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
             },
           },
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-      });
+          orderBy: {
+            created_at: "desc",
+          },
+        });
+      } else {
+        // Not admin: fetch only current user's transactions
+        const userId = parseInt(req.user.userId);
+        transactions = await prisma.walletTransaction.findMany({
+          where: {
+            user_id: userId,
+          },
+          orderBy: {
+            created_at: "desc",
+          },
+        });
+      }
 
       // Format the response
-      const formattedTransactions = transactions.map((transaction) => ({
-        id: transaction.id,
-        transaction_id: transaction.transaction_id,
-        amount: parseFloat(transaction.amount),
-        type: transaction.type,
-        status: transaction.status,
-        payment_method: transaction.payment_method,
-        created_at: transaction.created_at,
-        user: {
-          name: `${transaction.user.firstName} ${transaction.user.lastName}`,
-          email: transaction.user.email,
-        },
-      }));
+      const formattedTransactions = transactions.map((transaction) => {
+        const base = transaction;
+        if (isAdmin && transaction.user) {
+          base.user = {
+            name: `${transaction.user.firstName} ${transaction.user.lastName}`,
+            email: transaction.user.email,
+          };
+        }
+        return base;
+      });
 
       res.status(200).json({
         success: true,
@@ -1852,6 +2176,37 @@ const walletTransactionController = {
         error: "Failed to delete transaction",
         details: error.message,
       });
+    }
+  },
+
+  // Get all withdrawal transactions (admin: all, user: only own)
+  async getAllWithdrawalTransactions(req, res) {
+    try {
+      const isAdmin = req.user.role === 'admin';
+      let transactions;
+      if (isAdmin) {
+        // Admin: fetch all withdrawal transactions
+        transactions = await prisma.walletTransaction.findMany({
+          where: {
+            type: 'DEBIT',
+            payment_method: 'WITHDRAWAL',
+          },
+          orderBy: { created_at: 'desc' },
+        });
+      } else {
+        // User: fetch only own withdrawal transactions
+        transactions = await prisma.walletTransaction.findMany({
+          where: {
+            user_id: req.user.userId,
+            type: 'DEBIT',
+            payment_method: 'WITHDRAWAL',
+          },
+          orderBy: { created_at: 'desc' },
+        });
+      }
+      res.json({ success: true, count: transactions.length, transactions });
+    } catch (error) {
+      res.status(500).json({ success: false, error: error.message });
     }
   },
 };

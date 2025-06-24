@@ -66,14 +66,14 @@ router.post('/', validateSmtpDetails, async (req, res) => {
     }
 
     // Log the activity
-    await prisma.userActivityLog.create({
-      data: {
-        userId: req.user.userId,
-        activityType,
-        description,
-        ipAddress: req.ip
-      }
-    });
+    // await prisma.userActivityLog.create({
+    //   data: {
+    //     userId: req.user.userId,
+    //     activityType,
+    //     description,
+    //     ipAddress: req.ip
+    //   }
+    // });
 
     res.status(existingSmtpDetails ? 200 : 201).json(smtpDetails);
   } catch (error) {
@@ -91,7 +91,7 @@ router.post('/', validateSmtpDetails, async (req, res) => {
 router.get('/:id',  async (req, res) => {
   try {
     const smtpDetails = await prisma.smtpDetails.findUnique({
-      where: { id: parseInt(req.params.id) }
+      where: { userId: parseInt(req.user.userId) }
     });
 
     if (!smtpDetails) {
@@ -121,7 +121,8 @@ router.get('/:id',  async (req, res) => {
 // Get SMTP Details by User ID
 router.get('/user/:userId',  async (req, res) => {
   try {
-    const userId = parseInt(req.params.userId);
+    
+    const userId = parseInt(req.user.userId);
 
 
     const smtpDetails = await prisma.smtpDetails.findUnique({
@@ -132,14 +133,14 @@ router.get('/user/:userId',  async (req, res) => {
       return res.status(404).json({ message: 'SMTP details not found for this user' });
     }
 
-    await prisma.userActivityLog.create({
-      data: {
-        userId: req.user.userId,
-        activityType: 'SMTP_DETAILS_ACCESSED',
-        description: `Accessed SMTP details for user ${userId}`,
-        ipAddress: req.ip
-      }
-    });
+    // await prisma.userActivityLog.create({
+    //   data: {
+    //     userId: req.user.userId,
+    //     activityType: 'SMTP_DETAILS_ACCESSED',
+    //     description: `Accessed SMTP details for user ${userId}`,
+    //     ipAddress: req.ip
+    //   }
+    // });
 
     res.json(smtpDetails);
   } catch (error) {

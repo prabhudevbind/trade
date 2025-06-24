@@ -47,9 +47,9 @@ import { useUpdateUserMutation } from "@/store/api/userSliceApi"
 import Loader from "../admin/option/Loader"
 
 export default function Users() {
-  const { data: users = [], isLoading: isLoadingUsers, refetch } = useGetUsersQuery()
+  const { data: users = [], isLoading: isLoadingUsers, refetch } = useGetUsersQuery({ limit: 20000 })
   const { data: permissions = [], isLoading: isLoadingPermissions } = useGetPermissionsQuery()
-  const { data: roles = [], isLoading: isLoadingRoles } = useGetRolesDataQuery({ page: 1, limit: 10 });
+  const { data: roles = [], isLoading: isLoadingRoles } = useGetRolesDataQuery({ page: 1, limit: 10000 });
   const [updateUserStatus] = useUpdateUserStatusMutation();
 
   const [updateRole] = useUpdateUserRoleMutation();

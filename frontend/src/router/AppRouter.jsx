@@ -24,6 +24,8 @@ import HistoryChart from "@/component/admin/option/HistoryChart";
 import Positions from "@/component/admin/positions/Positions";
 import StockverseLogin from "../component/welcome/login/Login";
 import Leaderboard from "@/component/admin/option/components/leaderboard/Leaderboard";
+import Withdrawals from "@/component/admin/withdrawals/Withdrawals";
+import Deposit from "@/component/admin/deposit/Deposit";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -96,12 +98,22 @@ export const createAppRouter = (isAuthenticated) =>
                 <Setting />
               </ProtectedRoute>)
         },
-
+       {
+        path:"withdrawals",
+        element: <ProtectedRoute requiredPermissions={["request-withdrawal"]}>
+          <Withdrawals />
+        </ProtectedRoute>
+       },
         {
           path: "profile",
           element: <Profile />,
         },
-       
+       {
+        path:"admin/deposits",
+        element: <ProtectedRoute requiredPermissions={["manage-deposits"]}>
+          <Deposit />
+        </ProtectedRoute>
+      },
         {
          path:"contests",
          element:<ActiveContest/>

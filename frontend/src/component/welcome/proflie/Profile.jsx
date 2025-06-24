@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import LoginDevices from './LoginDevices';
 import RecentActivity from './RecentActivity';
 import ImageUploader from './ImageUploader';
+import WithDrawUpiId from '@/component/admin/wallet/WithDrawUpiId';
 
 const CreativeProfileView = () => {
   // Move all hooks to the top
@@ -123,7 +124,7 @@ const CreativeProfileView = () => {
               <ImageUploader />
             </div>
           </div>
-          
+          <WithDrawUpiId/>
           <LoginDevices user={user} />
           <RecentActivity user={user} />
 

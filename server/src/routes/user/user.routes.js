@@ -3,7 +3,7 @@ const { body, validationResult } = require('express-validator');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { authenticateToken, authorizeRoles } = require('../../utils/verify');
+const {  authorizeRoles, authenticateToken } = require('../../utils/verify');
 const { z } = require('zod');
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -63,6 +63,31 @@ const hashPassword = async (password) => {
   const salt = await bcrypt.genSalt(10);
   return bcrypt.hash(password, salt);
 };
+
+// Update only upiId for the current user
+router.patch('/update-upi', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    console.log('User ID from token:', userId);
+    const { upiId } = req.body;
+    if (!upiId || typeof upiId !== 'string' || upiId.length < 5) {
+      return res.status(400).json({ message: 'Valid upiId is required' });
+    }
+    const updatedUser = await prisma.user.update({
+      where: { id: Number(userId) },
+      data: { upiId },
+      select: {
+        id: true,
+        upiId: true
+      }
+    });
+    res.json({ message: 'UPI ID updated successfully', user: updatedUser });
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ message: 'Failed to update UPI ID', error: error.message });
+  }
+});
+
 
 // Create User
 router.post('/', async (req, res) => {
@@ -366,6 +391,7 @@ router.get('/',
           lastName: true,
           isActive: true,
           lastLogin: true,
+          upiId: true,
           amount:true,
           createdAt: true,
           img: true,
@@ -680,4 +706,7 @@ router.patch('/:id/status',
     }
   }
 );
+
+
+
 module.exports = router;

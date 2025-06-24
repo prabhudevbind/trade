@@ -120,7 +120,17 @@ export const userApi = apiSlice.injectEndpoints({
         { type: 'User', id: userId },
         'Users'
       ]
-    })
+    }),
+
+    // Update UPI ID for current user
+    updateUpiId: builder.mutation({
+      query: (upiId) => ({
+        url: '/users/update-upi',
+        method: 'PATCH',
+        body: { upiId },
+      }),
+      invalidatesTags: ['User']
+    }),
   }),
 });
 
@@ -136,5 +146,5 @@ export const {
   useDeleteUserMutation,
   useUploadProfileImageMutation,
   useUpdateUserRoleMutation,
- 
+  useUpdateUpiIdMutation,
 } = userApi;

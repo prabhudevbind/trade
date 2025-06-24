@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, HelpCircle, ScissorsSquareIcon } from "lucide-react";
+import { ChevronDown, HelpCircle, ScissorsSquareIcon, TrendingUp } from "lucide-react";
 import {
   // Overview Icons
   LayoutDashboard, // Dashboard icon
@@ -166,12 +166,12 @@ const navigation = [
             url: "/admin/contests/create",
             permission: "create-contest",
           },
-          {
-            title: "Manage Contests",
-            icon: Settings2,
-            url: "/admin/contests",
-            permission: "manage-contests",
-          }
+          // {
+          //   title: "Manage Contests",
+          //   icon: Settings2,
+          //   url: "/admin/contests",
+          //   permission: "manage-contests",
+          // }
         ],
       },
       {
@@ -360,10 +360,15 @@ export default function DashboardSidebar() {
   return (
     <Sidebar className="scrollbar-thin">
       <SidebarHeader className="px-6 py-4 ">
-        <div className="flex items-center justify-center  gap-2 text-xl font-semibold">
-          <Link to="/" className="flex items-center">
-          <img src={logo} alt="shantipatra logo" className="  w-24" />
-          </Link>
+        <div className="flex items-center justify-center  text-xl font-semibold">
+         <div className="flex items-center space-x-2 w-full">
+              <div className="w-8 h-8 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-xl font-bold text-gray-900">
+                StockVerses
+              </span>
+            </div>
         </div>
       </SidebarHeader>
 

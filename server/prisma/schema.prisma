@@ -26,6 +26,7 @@ model User {
   firstName            String               @db.VarChar(50)
   lastName             String               @db.VarChar(50)
   isActive             Boolean              @default(true)
+  upiId                String?
   lastLogin            DateTime?
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -207,7 +208,8 @@ model WalletTransaction {
   status       TransactionStatus
   transaction_id String?
 payment_method   String?
-
+  upi_ref_no   Int?
+  payment_verify Boolean? @default(false)
   created_at   DateTime            @default(now())
   updated_at   DateTime            @updatedAt
 

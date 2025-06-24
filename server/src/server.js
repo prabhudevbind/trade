@@ -8,6 +8,8 @@ const UpstoxClient = require("upstox-js-sdk");
 const { errorHandler } = require('./middleware/error.middleware');
 const { initializeMarketDataService } = require('./services/marketData.service');
 const os = require('os');
+const cron = require('node-cron');
+const axios = require('axios');
 
 // Create Express app
 const app = express();
@@ -16,6 +18,7 @@ const server = require('http').createServer(app);
 
 // Import configuration
 const config = require('./config/config');
+const { authenticateToken } = require('./utils/verify');
 
 // Initialize Upstox client
 let protobufRoot = null;
@@ -52,8 +55,9 @@ app.use('/api/v1/user-activity-logs', require('./routes/user/userActivityLogRout
 app.use('/api/v1/password-reset-tokens', require('./routes/user/passwordResetTokenRoutes'));
 app.use('/api/v1/sessions', require('./routes/user/auth.routes'));
 app.use('/api/v1/user-sessions', require('./routes/user/userSessionRoutes'));
-app.use('/api/v1/smtp-details', require('./routes/user/smtp.routes'));
+app.use('/api/v1/smtp-details',authenticateToken, require('./routes/user/smtp.routes'));
 app.use('/api/v1', require('./utils/profileupload'));
+app.use('/api/v1', require('./routes/contest/bulk.router'));
 
 // Error handling middleware
 app.use(errorHandler);
@@ -337,6 +341,40 @@ app.get('/stream/:instrumentKey', (req, res) => {
   });
 });
 
+// List of instrument keys to fetch expiry dates for
+const EXPIRY_INSTRUMENTS = [
+  'NSE_INDEX|Nifty 50',
+  'NSE_INDEX|Nifty Bank',
+  'NSE_INDEX|Nifty Fin Service',
+  // Add more as needed
+];
+
+// Function to fetch expiry dates for all instruments
+async function fetchAndCacheExpiryDates() {
+  console.log('⏰ [CRON] Fetching expiry dates for all instruments...');
+  for (const instrumentKey of EXPIRY_INSTRUMENTS) {
+    try {
+      const url = `http://localhost:${PORT}/api/v1/available-expiry-dates?instrument_key=${encodeURIComponent(instrumentKey)}`;
+      const res = await axios.get(url);
+      if (res.data && res.data.expiry_dates) {
+        console.log(`✅ [CRON] Expiry dates updated for ${instrumentKey}:`, res.data.expiry_dates.length, 'dates');
+      } else {
+        console.warn(`⚠️  [CRON] No expiry dates found for ${instrumentKey}`);
+      }
+    } catch (err) {
+      console.error(`❌ [CRON] Error fetching expiry dates for ${instrumentKey}:`, err.message);
+    }
+  }
+}
+
+// Schedule the cron job to run every day at 6:00 AM
+cron.schedule('0 6 * * *', fetchAndCacheExpiryDates, {
+  timezone: 'Asia/Kolkata',
+});
+
+// Optionally, run once at server start
+// fetchAndCacheExpiryDates();
+
 // Handle shutdown
 process.on('SIGINT', () => {
   console.log('Shutting down...');
@@ -351,7 +389,7 @@ process.on('SIGINT', () => {
     });
   });
   server.close(() => {
-    console.log('Server stopped');
+  console.log('Server stopped');
     if (upstoxWs) upstoxWs.close();
     process.exit(0);
   });

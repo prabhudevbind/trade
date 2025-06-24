@@ -1,5 +1,5 @@
 "use client"
-
+import React from "react"
 import { useState } from "react"
 import {
   useGetContestsQuery,
@@ -38,6 +38,7 @@ import {
   DollarSign,
   BarChart,
   AlertCircle,
+  IndianRupee,
 } from "lucide-react"
 import { toast } from "react-toastify"
 import { useNavigate } from "react-router-dom"
@@ -47,7 +48,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency } from "@/lib/utils"
 import { Alert } from "@/components/ui/alert"
 
-import { parseISO, format } from 'date-fns'
+import { parseISO, format, isSameDay } from 'date-fns'
 
 const formatDate = (dateString) => {
   try {
@@ -97,6 +98,7 @@ export default function ContestManager() {
   const [selectedContest, setSelectedContest] = useState(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedDateConflict, setSelectedDateConflict] = useState(false)
   const router = useNavigate()
 
   // RTK Query hooks
@@ -237,6 +239,22 @@ export default function ContestManager() {
     router.push(`/admin/contests/${contest.id}`)
   }
 
+  // Watch startTime field for conflict
+  const startTimeValue = createForm.watch('startTime')
+  // Check for contest on same day
+  React.useEffect(() => {
+    if (!startTimeValue || !contests?.contests) {
+      setSelectedDateConflict(false)
+      return
+    }
+    const selectedDate = new Date(startTimeValue)
+    const conflict = contests.contests.some(contest => {
+      if (!contest.start_time) return false
+      return isSameDay(new Date(contest.start_time), selectedDate)
+    })
+    setSelectedDateConflict(conflict)
+  }, [startTimeValue, contests])
+
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -267,7 +285,7 @@ export default function ContestManager() {
         </Card>
         <Card>
           <CardContent className="flex flex-col items-center justify-center p-6">
-            <DollarSign className="h-8 w-8 text-primary mb-2" />
+            <IndianRupee className="h-8 w-8 text-primary mb-2" />
             <CardTitle className="text-xl mb-2">Total Entry Fees</CardTitle>
             <p className="text-2xl font-bold">{formatCurrency(totalEntryFees)}</p>
           </CardContent>
@@ -513,6 +531,15 @@ export default function ContestManager() {
             <DialogTitle>Create New Contest</DialogTitle>
             <DialogDescription>Fill in the details to create a new trading contest</DialogDescription>
           </DialogHeader>
+          {selectedDateConflict && (
+            <Alert variant="destructive" className="mb-2">
+              <AlertCircle className="h-4 w-4" />
+              <div className="ml-3">
+                <p className="text-sm font-medium">A contest already exists for the selected date.</p>
+                <p className="text-sm text-muted-foreground">You cannot create more than one contest on the same day.</p>
+              </div>
+            </Alert>
+          )}
           <Form {...createForm}>
             <form onSubmit={createForm.handleSubmit(handleCreate)} className="space-y-4">
               <FormField
@@ -634,7 +661,7 @@ export default function ContestManager() {
                 <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={isCreating}>
+                <Button type="submit" disabled={isCreating || selectedDateConflict}>
                   {isCreating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Create Contest
                 </Button>
