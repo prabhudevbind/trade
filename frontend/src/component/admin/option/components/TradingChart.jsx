@@ -202,7 +202,7 @@ export function TradingChart({ instrumentKey }) {
       const encodedInstrumentKey = encodeURIComponent(instrumentKey);
 
       const url = `/api/v1/historical-data/${encodedInstrumentKey}/${interval}/${toDate}/${fromDate}`;
-      console.log("Fetching data from:", url);
+      // console.log("Fetching data from:", url);
 
       const response = await fetch(url, {
         method: "GET",

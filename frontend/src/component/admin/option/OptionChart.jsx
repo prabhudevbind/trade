@@ -31,7 +31,7 @@ import { MobileOptionChain } from "./option-chain/MobileOptionChain";
 import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
 
 const OptionChain = () => {
-  const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty Bank");
+  const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
   const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12");
   const { data: activeContest, isLoading: activeContestLoading } =
     useGetActiveContestForUserQuery();

@@ -54,7 +54,7 @@ router.get("/option-chain-stream", async (req, res) => {
           Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
         };
 
-        console.log(`📡 Fetching data from: ${url}`);
+        // console.log(`📡 Fetching data from: ${url}`);
         const response = await axios.get(url, { headers });
         const optionChainData = response.data.data || [];
 
