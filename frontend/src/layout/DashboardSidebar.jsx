@@ -1,7 +1,7 @@
 "use client";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, HelpCircle, ScissorsSquareIcon, TrendingUp } from "lucide-react";
+import { ChevronDown, HelpCircle, ScissorsSquareIcon, TrendingUp, TrophyIcon } from "lucide-react";
 import {
   // Overview Icons
   LayoutDashboard, // Dashboard icon
@@ -207,6 +207,12 @@ const navigation = [
             icon: ArrowUpFromLine,
             url: "/admin/withdrawals",
             permission: "manage-withdrawals",
+          },
+           {
+            title: "Price",
+            icon: TrophyIcon,
+            url: "/admin/price",
+            permission: "manage-price",
           }
         ],
       },

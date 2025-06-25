@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
 import RootLayout from "../layout/Layout";
 import NotFound from "../utils/NotFound";
 import Dashboard from "../component/welcome/Dashboard";
-import Setting from '../component/welcome/setting/Setting';
+import Setting from "../component/welcome/setting/Setting";
 import Login from "../component/welcome/login/Login";
 import Profile from "../component/welcome/proflie/Profile";
 import Users from "../component/users/Users";
@@ -10,7 +10,7 @@ import UserDetails from "../component/users/userDetails/UserDetails";
 import UserLayout from "@/component/users/UserLayout";
 import Permission from "@/component/users/permission/Permission";
 import Roles from "@/component/users/roles/Roles";
-import Activities from '@/component/activities/Activities';
+import Activities from "@/component/activities/Activities";
 import EditUserModal from "@/component/users/EditUserModal";
 import ProtectedRoute from "./ProtectedRoute.jsx"; // Import the ProtectedRoute componentimpo
 import ContestCreate from "@/component/admin/contest/Create";
@@ -27,22 +27,16 @@ import Leaderboard from "@/component/admin/option/components/leaderboard/Leaderb
 import Withdrawals from "@/component/admin/withdrawals/Withdrawals";
 import Deposit from "@/component/admin/deposit/Deposit";
 import WithDraw from "@/component/admin/withdrawals/WithDraw";
+import Price from "@/component/admin/price/Price";
+import ContestPrizeDistribution from "@/component/admin/price/Price";
 
 // import Activities from "@/component/activities/Activities";
-
-
 
 export const createAppRouter = (isAuthenticated) =>
   createBrowserRouter([
     {
       path: "/",
-      element: isAuthenticated ? (
-        
-          <RootLayout />
-       
-      ) : (
-        <Navigate to="/login" />
-      ),
+      element: isAuthenticated ? <RootLayout /> : <Navigate to="/login" />,
       children: [
         {
           index: true,
@@ -88,49 +82,68 @@ export const createAppRouter = (isAuthenticated) =>
           ),
         },
         {
-            path: 'activities', // New Route
-            element: <ProtectedRoute requiredPermissions={['read-activities']}>
+          path: "activities", // New Route
+          element: (
+            <ProtectedRoute requiredPermissions={["read-activities"]}>
               <Activities />
-            </ProtectedRoute>,
-          },
-        {
-            path:"settings",
-            element: (<ProtectedRoute requiredPermissions={["general-settings"]}>
-                <Setting />
-              </ProtectedRoute>)
+            </ProtectedRoute>
+          ),
         },
-       {
-        path:"withdrawals",
-        element: <ProtectedRoute requiredPermissions={["request-withdrawal"]}>
-          <Withdrawals />
-        </ProtectedRoute>
-       },
+        {
+          path: "settings",
+          element: (
+            <ProtectedRoute requiredPermissions={["general-settings"]}>
+              <Setting />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          path: "withdrawals",
+          element: (
+            <ProtectedRoute requiredPermissions={["request-withdrawal"]}>
+              <Withdrawals />
+            </ProtectedRoute>
+          ),
+        },
         {
           path: "profile",
           element: <Profile />,
         },
-       {
-        path:"admin/deposits",
-        element: <ProtectedRoute requiredPermissions={["manage-deposits"]}>
-          <Deposit />
-        </ProtectedRoute>
-      },
-      {path:"admin/withdrawals",
-        element: <ProtectedRoute requiredPermissions={["manage-withdrawals"]}>
-          <WithDraw />
-        </ProtectedRoute>
-      },
         {
-         path:"contests",
-         element:<ActiveContest/>
-        },{
-        path:"wallet",
-        element:<Wallet/>
-        
+          path: "admin/deposits",
+          element: (
+            <ProtectedRoute requiredPermissions={["manage-deposits"]}>
+              <Deposit />
+            </ProtectedRoute>
+          ),
         },
         {
-          path:"my-contests",
-          element:<MyContest/>
+          path: "admin/withdrawals",
+          element: (
+            <ProtectedRoute requiredPermissions={["manage-withdrawals"]}>
+              <WithDraw />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          path: "admin/price",
+          element: (
+            <ProtectedRoute requiredPermissions={["manage-price"]}>
+              <ContestPrizeDistribution />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          path: "contests",
+          element: <ActiveContest />,
+        },
+        {
+          path: "wallet",
+          element: <Wallet />,
+        },
+        {
+          path: "my-contests",
+          element: <MyContest />,
         },
 
         {
@@ -138,36 +151,35 @@ export const createAppRouter = (isAuthenticated) =>
           element: <NotFound />,
         },
         {
-          path:"option-chain/:id",
-          element:<OptionChart/>
-        },
-         {
-          path:"option-details/:id/:optionId",
-          element:<HistoryChart/>
+          path: "option-chain/:id",
+          element: <OptionChart />,
         },
         {
-          path:"leaderboard",
-          element:<Leaderboard/>
+          path: "option-details/:id/:optionId",
+          element: <HistoryChart />,
         },
         {
-          path:"positions",
-          element:<Positions/>
-
+          path: "leaderboard",
+          element: <Leaderboard />,
         },
         {
-          path:"admin",
-          element:<Outlet/>,
-          children:[
+          path: "positions",
+          element: <Positions />,
+        },
+        {
+          path: "admin",
+          element: <Outlet />,
+          children: [
             {
-              path:"contests/create",
-              element:<ContestCreate/>
+              path: "contests/create",
+              element: <ContestCreate />,
             },
             {
-              path:"contests/:id",
-              element:<ViewContest/>
-            }
-          ]
-        }
+              path: "contests/:id",
+              element: <ViewContest />,
+            },
+          ],
+        },
       ],
     },
     {

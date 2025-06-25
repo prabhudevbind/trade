@@ -63,7 +63,7 @@ export default function OptionDetails() {
       const fromDateStr = fromDate.toISOString().split('T')[0];
 
       const response = await fetch(
-        `http://localhost:5000/api/v1/historical-data/${encodeURIComponent(optionId)}?interval=${state.interval}&fromDate=${fromDateStr}&toDate=${toDateStr}`
+        `/api/v1/historical-data/${encodeURIComponent(optionId)}?interval=${state.interval}&fromDate=${fromDateStr}&toDate=${toDateStr}`
       );
 
       if (!response.ok) {

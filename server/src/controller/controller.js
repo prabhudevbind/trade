@@ -522,115 +522,117 @@ async getActiveContestForUser(req, res) {
 },
 
   // Get all contest participants
-  async getAllContestParticipants(req, res) {
-    try {
-      const userId = parseInt(req.user.userId);
+async getAllContestParticipants(req, res) {
+  try {
+    const userId = parseInt(req.user.userId);
+    const userRole = req.user.role;
 
-      const participants = await prisma.contestParticipant.findMany({
-        where: {
-          user_id: userId,
-        },
-        include: {
-          user: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
-            },
-          },
-          contest: {
-            select: {
-              name: true,
-              start_time: true,
-              end_time: true,
-              entry_fee: true,
-              maxTrade: true,
-              status: true,
-              trading_instrument: true,
-            },
-          },
-          positions: {
-            include: {
-              option: true,
-            },
-          },
-          trades: {
-            include: {
-              option: true,
-            },
-            orderBy: {
-              timestamp: "desc",
-            },
-          },
-        },
-        orderBy: {
-          created_at: "desc",
-        },
-      });
+    // Build the where clause based on user role
+    const whereClause = userRole === "admin" ? {} : { user_id: userId };
 
-      // Format the response
-      const formattedParticipants = participants.map((participant) => ({
-        id: participant.id,
-        contestInfo: {
-          id: participant.contest_id,
-          name: participant.contest.name,
-          status: participant.contest.status,
-          startTime: participant.contest.start_time,
-          endTime: participant.contest.end_time,
-          tradingInstrument: participant.contest.trading_instrument,
-          maxTrades: parseInt(participant.contest.maxTrade),
-          entryFee: parseFloat(participant.contest.entry_fee),
+    const participants = await prisma.contestParticipant.findMany({
+      where: whereClause,
+      include: {
+        user: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
         },
-        userInfo: {
-          name: `${participant.user.firstName} ${participant.user.lastName}`,
-          email: participant.user.email,
+        contest: {
+          select: {
+            name: true,
+            start_time: true,
+            end_time: true,
+            entry_fee: true,
+            maxTrade: true,
+            status: true,
+            trading_instrument: true,
+          },
         },
-        tradingInfo: {
-          virtualCash: parseFloat(participant.virtual_cash),
-          tradesUsed: participant.trades.length,
-          tradesRemaining:
-            parseInt(participant.contest.maxTrade) - participant.trades.length,
-          positions: participant.positions.map((pos) => ({
-            id: pos.id,
-            symbol: pos.option.symbol,
-            strikePrice: parseFloat(pos.option.strike_price),
-            optionType: pos.option.option_type,
-            quantity: pos.net_quantity,
-            averagePrice: parseFloat(pos.average_entry_price),
-            currentPrice: parseFloat(pos.option.ltp),
-            pnl:
-              (parseFloat(pos.option.ltp) -
-                parseFloat(pos.average_entry_price)) *
-              pos.net_quantity,
-          })),
-          recentTrades: participant.trades.slice(0, 5).map((trade) => ({
-            id: trade.id,
-            timestamp: trade.timestamp,
-            action: trade.action,
-            symbol: trade.option.symbol,
-            strikePrice: parseFloat(trade.option.strike_price),
-            quantity: trade.quantity,
-            price: parseFloat(trade.price),
-          })),
+        positions: {
+          include: {
+            option: true,
+          },
         },
-        created_at: participant.created_at,
-        updated_at: participant.updated_at,
-      }));
+        trades: {
+          include: {
+            option: true,
+          },
+          orderBy: {
+            timestamp: "desc",
+          },
+        },
+      },
+     
+    });
 
-      res.status(200).json({
-        success: true,
-        count: participants.length,
-        participants: formattedParticipants,
-      });
-    } catch (error) {
-      console.error("Error fetching participants:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch participants",
-        details: error.message,
-      });
-    }
-  },
+    // Format the response
+    const formattedParticipants = participants.map((participant) => ({
+      id: participant.id,
+      contestInfo: {
+        id: participant.contest_id,
+        name: participant.contest.name,
+        status: participant.contest.status,
+        startTime: participant.contest.start_time,
+        endTime: participant.contest.end_time,
+        tradingInstrument: participant.contest.trading_instrument,
+        maxTrades: parseInt(participant.contest.maxTrade),
+        entryFee: parseFloat(participant.contest.entry_fee),
+      },
+      userInfo: {
+        name: `${participant.user.firstName} ${participant.user.lastName}`,
+        email: participant.user.email,
+      },
+      tradingInfo: {
+        virtualCash: parseFloat(participant.virtual_cash),
+        tradesUsed: participant.trades.length,
+        tradesRemaining:
+          parseInt(participant.contest.maxTrade) - participant.trades.length,
+        positions: participant.positions.map((pos) => ({
+          id: pos.id,
+          symbol: pos.option.symbol,
+          strikePrice: parseFloat(pos.option.strike_price),
+          optionType: pos.option.option_type,
+          quantity: pos.net_quantity,
+          averagePrice: parseFloat(pos.average_entry_price),
+          currentPrice: parseFloat(pos.option.ltp),
+          pnl:
+            (parseFloat(pos.option.ltp) -
+              parseFloat(pos.average_entry_price)) *
+            pos.net_quantity,
+        })),
+        recentTrades: participant.trades.slice(0, 5).map((trade) => ({
+          id: trade.id,
+          timestamp: trade.timestamp,
+          action: trade.action,
+          symbol: trade.option.symbol,
+          strikePrice: parseFloat(trade.option.strike_price),
+          quantity: trade.quantity,
+          price: parseFloat(trade.price),
+        })),
+      },
+      created_at: participant.created_at,
+      updated_at: participant.updated_at,
+    }));
+
+    res.status(200).json({
+      success: true,
+      count: participants.length,
+      participants: formattedParticipants,
+      // Optional: Include metadata about the request scope
+      scope: userRole === "admin" ? "all_participants" : "user_participants",
+    });
+  } catch (error) {
+    console.error("Error fetching participants:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch participants",
+      details: error.message,
+    });
+  }
+},
 
   // Get a single contest participant by ID
   async getContestParticipantById(req, res) {

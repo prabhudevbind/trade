@@ -44,7 +44,7 @@ export default function AvatarDemo({ noFallback }) {
       <Avatar>
         {auth.user?.img && !imageError && (
           <AvatarImage
-            src={`http://localhost:5000${auth.user.img}`}
+            src={`${auth.user.img}`}
             alt={auth.user.username || "User Profile"}
             onError={() => setImageError(true)}
           />
