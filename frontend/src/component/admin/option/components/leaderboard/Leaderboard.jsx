@@ -825,7 +825,7 @@ export default function Leaderboard() {
                             ) : (
                               <TrendingDown className="h-3 w-3" />
                             )}
-                            // ...existing code...
+                            {/* // ...existing code... */}
 
 
 {/* <span className={`font-medium text-sm ${participant.realizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
