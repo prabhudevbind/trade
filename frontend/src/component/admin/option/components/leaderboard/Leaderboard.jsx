@@ -32,7 +32,7 @@ import { format, differenceInSeconds, formatDistanceToNow } from "date-fns"
 import "./leaderboard.css"
 
 export default function Leaderboard() {
-  const { data: leaderboardData, isLoading, isError, refetch } = useGetLeaderStateQuery();
+  const { data: leaderboardData, isLoading, error, refetch } = useGetLeaderStateQuery();
   const [realTimeData, setRealTimeData] = useState(null);
   const [expandedUser, setExpandedUser] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState('');
@@ -67,8 +67,14 @@ export default function Leaderboard() {
     if (leaderboardData) {
       setRealTimeData(leaderboardData);
     }
-  }, [leaderboardData]);
+    // Log error and data for debugging
+    if (error || leaderboardData?.error) {
+      console.log("Leaderboard API error:", leaderboardData);
+      console.log("error:", error);
+    }
+  }, [leaderboardData, error]);
 
+  console.log("Real-time data:", error);
   // Use the custom hook for price streams
   usePriceStreams(realTimeData, setRealTimeData);
 
@@ -118,24 +124,43 @@ export default function Leaderboard() {
     </div>
   );
 
-  if (isError) return (
-    <div className="min-h-[50vh] flex items-center justify-center p-6">
-      <Alert variant="destructive" className="max-w-md">
-        <Info className="h-5 w-5" />
-        <AlertTitle>Error loading leaderboard</AlertTitle>
-        <AlertDescription>
-          There was a problem loading the contest data. 
-          <Button
-            variant="link"
-            className="p-0 h-auto ml-2"
-            onClick={handleRefresh}
-          >
-            Try again
-          </Button>
-        </AlertDescription>
-      </Alert>
+ if (error) {
+  // If error object has data, show the API error message
+  let errorTitle = "Error";
+  let errorMsg = "There was a problem loading the leaderboard.";
+  let icon = <Info className="h-8 w-8 text-red-500 mb-2" />;
+  let bg = "bg-red-50 border-red-200 text-red-800";
+
+  // If error.data exists, use its message
+  if (error?.data?.error === "No participants found in the active contest") {
+    errorTitle = "No Participants";
+    errorMsg = "There are currently no participants in the active contest.";
+    if (error.data.isParticipating === false) {
+      errorMsg += " You are not participating in this contest.";
+    }
+    icon = <Users className="h-8 w-8 text-yellow-500 mb-2" />;
+    bg = "bg-yellow-50 border-yellow-200 text-yellow-800";
+  } else if (error?.data?.error) {
+    errorMsg = error.data.error;
+  }
+
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center p-6">
+      <div className={`max-w-md w-full border rounded-lg shadow-sm p-8 flex flex-col items-center ${bg}`}>
+        {icon}
+        <h2 className="text-xl font-bold mb-2">{errorTitle}</h2>
+        <p className="mb-4 text-center text-base">{errorMsg}</p>
+        <Button
+          variant="outline"
+          className="mt-2"
+          onClick={handleRefresh}
+        >
+          Try again
+        </Button>
+      </div>
     </div>
   );
+}
 
   if (!realTimeData) return null;
 

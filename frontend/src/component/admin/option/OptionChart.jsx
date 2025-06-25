@@ -469,7 +469,7 @@ const OptionChain = () => {
                   atmStrike={atmStrike}
                   disabled={showParticipationPrompt}
                 />
-                <DesktopOptionChain
+                {/* <DesktopOptionChain
                   data={optionChainData}
                   onOptionClick={handleOptionClick}
                   formatPrice={formatPrice}
@@ -477,7 +477,7 @@ const OptionChain = () => {
                   atmStrike={atmStrike}
                   calculatePriceChange={calculatePriceChange}
                   disabled={showParticipationPrompt}
-                />
+                /> */}
               </>
             )}
           </div>

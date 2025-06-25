@@ -321,14 +321,10 @@ export default function ActiveContests() {
     }
   }
 
-  // Format contest timing (9:15 AM to 3:15 PM)
-  const formatContestTime = (dateString) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    })
+  // Format contest timing in UTC
+  const formatContestTimeUTC = (dateString) => {
+    const date = new Date(dateString);
+    return date.toUTCString();
   }
 
   if (isLoading || userLoading) {
@@ -460,7 +456,7 @@ export default function ActiveContests() {
                         </div>
                         <div className="text-sm">
                           <p className="text-muted-foreground mb-1">Duration</p>
-                          <p className="font-medium">{formatContestTime(contest.start_time)} - {formatContestTime(contest.end_time)}</p>
+                          <p className="font-medium">{formatContestTimeUTC(contest.start_time)} - {formatContestTimeUTC(contest.end_time)}</p>
                           <p className="text-xs text-muted-foreground">9:15 AM - 3:15 PM daily</p>
                         </div>
                       </div>
@@ -681,7 +677,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground font-medium">Contest Period</p>
-              <p className="font-semibold text-sm">{formatDate(contest.start_time)} - {formatDate(contest.end_time)}</p>
+              {/* <p className="font-semibold text-sm">{formatDate(contest.start_time)} - {formatDate(contest.end_time)}</p> */}
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Daily: 9:15 AM - 3:15 PM

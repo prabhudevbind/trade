@@ -64,7 +64,7 @@ export function MobileOptionChain({
   return (
     <>
       <div
-        className={`md:hidden bg-slate-900 rounded-lg overflow-hidden ${disabled ? "opacity-60" : ""}`}
+        className={` bg-slate-900 rounded-lg overflow-hidden ${disabled ? "opacity-60" : ""}`}
         ref={listRef}
       >
         {/* Header with Toggle */}
