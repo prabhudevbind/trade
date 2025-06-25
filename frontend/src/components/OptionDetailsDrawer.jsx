@@ -153,7 +153,7 @@ export function OptionDetailsDrawer({
 
       // If successful, create a position
       const positionData = {
-        contestId: contestData.contest_id,
+         contestId: contestData.contest.id || id,
         optionId: option.option.id,
         quantity: quantity * lotSize,
         averagePrice: executionPrice,
@@ -316,7 +316,7 @@ export function OptionDetailsDrawer({
               <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-6">
                 <div className="text-center">
                   <div className="text-sm text-slate-600 mb-1">Market Price</div>
-                  <div className="text-3xl font-bold text-slate-900">₹{marketPrice.toFixed(2)}</div>
+                  <div className="text-3xl font-bold text-slate-900">₹{marketPrice?.toFixed(2)}</div>
                   <div className={`text-sm mt-1 ${tradeType === 'buy' ? 'text-orange-600' : 'text-blue-600'}`}>
                     {tradeType === 'buy' ? 'Ask Price' : 'Bid Price'}
                   </div>
@@ -368,7 +368,7 @@ export function OptionDetailsDrawer({
                   <span className="text-xl font-bold text-slate-900">₹{totalValue}</span>
                 </div>
                 <div className="text-xs text-slate-600 mt-1 text-right">
-                  {quantity} × {lotSize} × ₹{marketPrice.toFixed(2)}
+                  {quantity} × {lotSize} × ₹{marketPrice?.toFixed(2)}
                 </div>
               </div>
 
@@ -401,7 +401,7 @@ export function OptionDetailsDrawer({
               {/* Price Section */}
               <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-6">
                 <div className="flex items-baseline justify-between mb-3">
-                  <div className="text-3xl font-bold text-slate-900">₹{optionData.ltp.toFixed(2)}</div>
+                  <div className="text-3xl font-bold text-slate-900">₹{optionData.ltp?.toFixed(2)}</div>
                   <div
                     className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${
                       isPositive ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
@@ -409,10 +409,10 @@ export function OptionDetailsDrawer({
                   >
                     {isPositive ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                     {isPositive ? "+" : ""}
-                    {priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
+                    {priceChange?.toFixed(2)} ({priceChangePercent?.toFixed(2)}%)
                   </div>
                 </div>
-                <div className="text-sm text-slate-600">Previous Close: ₹{optionData.close_price.toFixed(2)}</div>
+                <div className="text-sm text-slate-600">Previous Close: ₹{optionData.close_price?.toFixed(2)}</div>
               </div>
 
               {/* Market Depth */}
@@ -422,7 +422,7 @@ export function OptionDetailsDrawer({
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-700">Bid</span>
                   </div>
-                  <div className="text-xl font-bold text-blue-900">₹{optionData.bid_price.toFixed(2)}</div>
+                  <div className="text-xl font-bold text-blue-900">₹{optionData.bid_price?.toFixed(2)}</div>
                   <div className="text-xs text-blue-600 mt-1">Qty: {optionData.bid_qty.toLocaleString()}</div>
                 </div>
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
@@ -430,7 +430,7 @@ export function OptionDetailsDrawer({
                     <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
                     <span className="text-sm font-medium text-orange-700">Ask</span>
                   </div>
-                  <div className="text-xl font-bold text-orange-900">₹{optionData.ask_price.toFixed(2)}</div>
+                  <div className="text-xl font-bold text-orange-900">₹{optionData.ask_price?.toFixed(2)}</div>
                   <div className="text-xs text-orange-600 mt-1">Qty: {optionData.ask_qty.toLocaleString()}</div>
                 </div>
               </div>
@@ -465,29 +465,29 @@ export function OptionDetailsDrawer({
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">Delta</span>
-                      <span className="font-medium">{optionData.greeks.delta.toFixed(4)}</span>
+                      <span className="font-medium">{optionData.greeks.delta?.toFixed(4)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">Gamma</span>
-                      <span className="font-medium">{optionData.greeks.gamma.toFixed(4)}</span>
+                      <span className="font-medium">{optionData.greeks.gamma?.toFixed(4)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">IV</span>
-                      <span className="font-medium">{optionData.greeks.iv.toFixed(2)}%</span>
+                      <span className="font-medium">{optionData.greeks.iv?.toFixed(2)}%</span>
                     </div>
                   </div>
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">Theta</span>
-                      <span className="font-medium">{optionData.greeks.theta.toFixed(2)}</span>
+                      <span className="font-medium">{optionData.greeks.theta?.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">Vega</span>
-                      <span className="font-medium">{optionData.greeks.vega.toFixed(2)}</span>
+                      <span className="font-medium">{optionData.greeks.vega?.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-sm text-slate-600">PoP</span>
-                      <span className="font-medium">{optionData.greeks.pop.toFixed(2)}%</span>
+                      <span className="font-medium">{optionData.greeks.pop?.toFixed(2)}%</span>
                     </div>
                   </div>
                 </div>

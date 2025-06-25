@@ -843,6 +843,7 @@ async getActiveContestForUser(req, res) {
         },
       });
 
+
       if (!activeParticipation) {
         return res.status(404).json({
           error: "No active contest found for this user",
@@ -1761,7 +1762,7 @@ const tradeController = {
       const contestParticipant = await prisma.contestParticipant.findFirst({
         where: {
           user_id: userId,
-          contest_id: parsedContestId,
+          contest_id: contestId,
           contest: {
             status: "ongoing",
           },
