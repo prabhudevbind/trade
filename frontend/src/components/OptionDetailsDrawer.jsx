@@ -13,6 +13,8 @@ import {
   useCreateTradeMutation,
 } from "@/store/api/contest"
 
+// Remove custom hook, use Tailwind CSS classes for responsive drawer
+
 export function OptionDetailsDrawer({
   isOpen,
   onClose,
@@ -55,7 +57,7 @@ export function OptionDetailsDrawer({
   const navigate = useNavigate()
   const { id } = useParams()
   
-  
+  console.log("Contest Data:", contestData)
   const [createOption] = useCreateOptionMutation()
   const [createPosition] = useCreatePositionMutation()
   const [createTrade] = useCreateTradeMutation()
@@ -139,7 +141,7 @@ export function OptionDetailsDrawer({
 
       // Create trade record
       const tradeData = {
-        contestId: contestData.contest_id,
+        contestId: contestData.contest.id || id,
         optionId: option.option.id,
         action: action,
         quantity: quantity * lotSize, // Total quantity (lots × lot size)
@@ -233,9 +235,16 @@ export function OptionDetailsDrawer({
   const increaseQuantity = () => setQuantity(prev => prev + 1)
   const decreaseQuantity = () => setQuantity(prev => prev > 1 ? prev - 1 : 1)
 
+  // Use Tailwind's responsive classes for SheetContent
+  // On desktop (lg:), open right; on mobile, open bottom
+  const sheetSide = typeof window !== 'undefined' && window.innerWidth >= 1024 ? 'right' : 'bottom';
+  const sheetClass = typeof window !== 'undefined' && window.innerWidth >= 1024
+    ? "w-[480px] max-w-full overflow-y-auto border-0 shadow-2xl rounded-l-3xl"
+    : "h-[75vh] overflow-y-auto rounded-t-3xl border-0 shadow-2xl";
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[75vh] overflow-y-auto rounded-t-3xl border-0 shadow-2xl">
+      <SheetContent side={sheetSide} className={sheetClass}>
         <SheetHeader className="pb-6 border-b">
           <SheetTitle className="flex items-center justify-between text-lg">
             {showTradeView ? (

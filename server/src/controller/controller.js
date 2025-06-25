@@ -1778,6 +1778,7 @@ const tradeController = {
         },
       });
 
+      console.log("Contest Participant:", contestParticipant);
       // Validate contest participation
       if (!contestParticipant) {
         return res.status(400).json({
