@@ -1,1 +1,7 @@
 node_modules
+./src/routes/chart/datas/*
+./src/routes/chart/datas/expiry_dates_nifty_50.json
+./src/routes/chart/datas/expiry_dates_bank_nifty.json
+./src/routes/chart/datas/expiry_dates_nifty_50.json
+./src/routes/chart/datas/expiry_dates_bank_nifty.json
+./src/routes/chart/datas/expiry_dates_nifty_50.json

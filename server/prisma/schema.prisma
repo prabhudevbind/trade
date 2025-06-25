@@ -133,7 +133,9 @@ model Contest {
 
   contestParticipants ContestParticipant[]
   contestWinners      ContestWinner[]
-price PrizeDistribution[]
+
+  price PrizeDistribution[]
+
 }
 
 // Participants in each contest

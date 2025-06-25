@@ -179,31 +179,28 @@ export default function ActiveContests() {
     }
   })
 
-  // Separate joined and available contests
-  const joinedContests = processedContests.filter(contest => contest.hasJoined)
-  const availableContests = processedContests.filter(contest => !contest.hasJoined)
+  // Show both ongoing and upcoming contests, but only allow joining ongoing contests
+  const now = new Date();
+  const allContests = processedContests;
+  // Fix: treat contest.status === 'upcoming' as upcoming, not just by date
+  const ongoingContests = allContests.filter(contest => {
+    const startTime = new Date(contest.start_time);
+    const endTime = new Date(contest.end_time);
+    return contest.status === 'ongoing' || (now >= startTime && now <= endTime);
+  });
+  const upcomingContests = allContests.filter(contest => {
+    const startTime = new Date(contest.start_time);
+    return contest.status === 'upcoming' || now < startTime;
+  });
 
   // Check if user has any active contest
-  const currentActiveContest = joinedContests.find(contest => {
+  const currentActiveContest = processedContests.find(contest => {
     const now = new Date()
     const endTime = new Date(contest.end_time)
-    return endTime > now // Contest hasn't ended yet
+    return contest.hasJoined && endTime > now // Contest hasn't ended yet
   })
 
   const hasActiveContest = !!currentActiveContest
-
-  // Categorize available contests
-  const now = new Date()
-  const upcomingContests = availableContests.filter(contest => {
-    const startTime = new Date(contest.start_time)
-    return startTime > now
-  })
-
-  const ongoingContests = availableContests.filter(contest => {
-    const startTime = new Date(contest.start_time)
-    const endTime = new Date(contest.end_time)
-    return now >= startTime && now <= endTime
-  })
 
   // Enhanced contest join handler with automatic switching
   const handleJoinContest = async (contestId, entry_fee, contestName) => {
@@ -409,157 +406,71 @@ export default function ActiveContests() {
         </Alert>
       )}
 
-      {/* Your Active Contests - Show First */}
-      {joinedContests.length > 0 && (
-        <Card className="shadow-lg border-primary/20">
-          <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 border-b">
-            <CardTitle className="text-xl flex items-center gap-2">
-              <Trophy className="h-6 w-6 text-primary" />
-              Your Active Contests
-              <Badge variant="secondary" className="ml-2">
-                {joinedContests.length}
-              </Badge>
-            </CardTitle>
-            <CardDescription>Contests you're currently participating in</CardDescription>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {joinedContests.map((contest) => {
-                const contestStatus = getContestStatus(contest)
-                return (
-                  <Card key={contest.id} className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 hover:shadow-md transition-all">
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-start gap-2">
-                        <CardTitle className="text-lg leading-tight">{contest.name}</CardTitle>
-                        <Badge variant={contestStatus.variant} className="shrink-0">
-                          {contestStatus.status === 'ongoing' && <div className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></div>}
-                          {contestStatus.label}
-                        </Badge>
-                      </div>
-                      <CardDescription className="flex items-center gap-1">
-                        <LineChart className="h-4 w-4" />
-                        {contest.trading_instrument}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="pb-3">
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Entry Fee</span>
-                          <span className="font-semibold">{formatCurrency(contest.entry_fee)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Participants</span>
-                          <span className="font-medium flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {contest.totalParticipants}
-                          </span>
-                        </div>
-                        <div className="text-sm">
-                          <p className="text-muted-foreground mb-1">Duration</p>
-                          <p className="font-medium">{formatContestTimeUTC(contest.start_time)} - {formatContestTimeUTC(contest.end_time)}</p>
-                          <p className="text-xs text-muted-foreground">9:15 AM - 3:15 PM daily</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => navigate("/my-contests")}
-                      >
-                        <TrendingUp className="h-4 w-4 mr-2" />
-                        View Dashboard
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                )
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Available Contests Section */}
+      {/* Ongoing Contests Section */}
       <Card className="shadow-lg">
         <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
           <CardTitle className="text-xl flex items-center gap-2">
             <Coins className="h-6 w-6 text-primary" />
-            Available Contests
+            Ongoing Contests
           </CardTitle>
-          <CardDescription>Join new contests to start trading</CardDescription>
+          <CardDescription>Participate in any ongoing contest</CardDescription>
         </CardHeader>
         <CardContent className="p-6">
-          {availableContests.length === 0 ? (
+          {ongoingContests.length === 0 ? (
             <div className="text-center py-12">
               <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground mb-2">No New Contests Available</h3>
-              <p className="text-sm text-muted-foreground">You've joined all available contests. Check back later for new contests.</p>
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">No Ongoing Contests</h3>
+              <p className="text-sm text-muted-foreground">No contests are live at the moment.</p>
             </div>
           ) : (
-            <Tabs defaultValue="ongoing" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 mb-6">
-                <TabsTrigger value="ongoing" className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                  Live Now
-                  <Badge variant="secondary" className="ml-1">
-                    {ongoingContests.length}
-                  </Badge>
-                </TabsTrigger>
-                <TabsTrigger value="upcoming" className="flex items-center gap-2">
-                  <Clock className="h-4 w-4" />
-                  Upcoming
-                  <Badge variant="secondary" className="ml-1">
-                    {upcomingContests.length}
-                  </Badge>
-                </TabsTrigger>
-              </TabsList>
+            <div className="space-y-4">
+              {ongoingContests.map((contest) => (
+                <ContestCard
+                  key={contest.id}
+                  contest={contest}
+                  userBalance={userBalance}
+                  handleJoinContest={handleJoinContest}
+                  isLoading={processingContestId === contest.id}
+                  hasActiveContest={hasActiveContest}
+                  currentActiveContest={currentActiveContest}
+                />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-              <TabsContent value="ongoing">
-                {ongoingContests.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Clock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">No ongoing contests available at the moment.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {ongoingContests.map((contest) => (
-                      <ContestCard
-                        key={contest.id}
-                        contest={contest}
-                        userBalance={userBalance}
-                        handleJoinContest={handleJoinContest}
-                        isLoading={processingContestId === contest.id}
-                        hasActiveContest={hasActiveContest}
-                        currentActiveContest={currentActiveContest}
-                      />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="upcoming">
-                {upcomingContests.length === 0 ? (
-                  <div className="text-center py-8">
-                    <CalendarIcon className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">No upcoming contests scheduled at the moment.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {upcomingContests.map((contest) => (
-                      <ContestCard
-                        key={contest.id}
-                        contest={contest}
-                        userBalance={userBalance}
-                        handleJoinContest={handleJoinContest}
-                        isLoading={processingContestId === contest.id}
-                        hasActiveContest={hasActiveContest}
-                        currentActiveContest={currentActiveContest}
-                      />
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
+      {/* Upcoming Contests Section (view only, no join) */}
+      <Card className="shadow-lg">
+        <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
+          <CardTitle className="text-xl flex items-center gap-2">
+            <CalendarIcon className="h-6 w-6 text-primary" />
+            Upcoming Contests
+          </CardTitle>
+          <CardDescription>Upcoming contests (joining will open when live)</CardDescription>
+        </CardHeader>
+        <CardContent className="p-6">
+          {upcomingContests.length === 0 ? (
+            <div className="text-center py-12">
+              <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">No Upcoming Contests</h3>
+              <p className="text-sm text-muted-foreground">No upcoming contests scheduled at the moment.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {upcomingContests.map((contest) => (
+                <ContestCard
+                  key={contest.id}
+                  contest={contest}
+                  userBalance={userBalance}
+                  handleJoinContest={() => {}} // Disable join for upcoming
+                  isLoading={false}
+                  hasActiveContest={hasActiveContest}
+                  currentActiveContest={currentActiveContest}
+                  disableJoinButton={true}
+                />
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>
@@ -581,7 +492,7 @@ export default function ActiveContests() {
 }
 
 // Enhanced Contest Card Component
-function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasActiveContest, currentActiveContest }) {
+function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasActiveContest, currentActiveContest, disableJoinButton }) {
   const navigate = useNavigate()
   const entry_fee = contest.entry_fee
   const canAfford = userBalance >= entry_fee
@@ -713,7 +624,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
         <div className="flex items-center justify-center p-6 bg-gradient-to-br from-muted/30 to-muted/50 lg:w-56">
           <Button
             onClick={handleButtonClick}
-            disabled={isLoading}
+            disabled={isLoading || disableJoinButton}
             className="w-full h-12 text-base font-semibold"
             variant={canAfford ? "default" : "secondary"}
           >
