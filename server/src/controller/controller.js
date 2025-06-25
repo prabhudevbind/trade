@@ -1732,7 +1732,7 @@ const tradeController = {
     try {
       const { optionId, contestId, action, quantity, price } = req.body;
       const userId = parseInt(req.user.userId);
-
+      console.log(req.user);
       // Validate required fields
       if (!optionId || !contestId || !action || !quantity || !price) {
         return res.status(400).json({
@@ -1765,9 +1765,9 @@ const tradeController = {
         where: {
           user_id: userId,
           contest_id: contestId,
-          contest: {
-            status: "ongoing",
-          },
+          // contest: {
+          //   status: "ongoing",
+          // },
         },
         include: {
           contest: true,
