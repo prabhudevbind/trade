@@ -1359,8 +1359,7 @@ async getActiveContestLeaderboard(req, res) {
     };
 
     // Role-based response
-    if (isAdmin) {
-      // Admin: return full leaderboard with additional stats
+    
       return res.json({
         success: true,
         isParticipating: userRank !== null,
@@ -1381,26 +1380,26 @@ async getActiveContestLeaderboard(req, res) {
           totalExpiredPositions: participantStats.reduce((sum, p) => sum + p.expiredPositions.length, 0),
         }
       });
-    } else {
-      // Non-admin: return only current user's data
-      const userEntry = leaderboard.find(p => p.userId === userId);
+    // } else {
+    //   // Non-admin: return only current user's data
+    //   const userEntry = leaderboard.find(p => p.userId === userId);
       
-      return res.json({
-        success: true,
-        isParticipating: true,
-        isAdmin: false,
-        contestInfo,
-        userRank,
-        totalParticipants: contestParticipants.length,
-        leaderboard: userEntry ? [userEntry] : [], // Only user's entry
-        contestStats: {
-          averageROI: contestStats.averageROI,
-          highestPnL: contestStats.highestPnL,
-          totalTradingVolume: contestStats.totalTradingVolume,
-        },
-        userPosition: userEntry || null,
-      });
-    }
+    //   return res.json({
+    //     success: true,
+    //     isParticipating: true,
+    //     isAdmin: false,
+    //     contestInfo,
+    //     userRank,
+    //     totalParticipants: contestParticipants.length,
+    //     leaderboard: userEntry ? [userEntry] : [], // Only user's entry
+    //     contestStats: {
+    //       averageROI: contestStats.averageROI,
+    //       highestPnL: contestStats.highestPnL,
+    //       totalTradingVolume: contestStats.totalTradingVolume,
+    //     },
+    //     userPosition: userEntry || null,
+    //   });
+    // }
 
   } catch (error) {
     console.error('Error fetching contest leaderboard:', error);
