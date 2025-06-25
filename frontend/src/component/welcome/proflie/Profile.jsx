@@ -79,7 +79,7 @@ const CreativeProfileView = () => {
               <div className="w-24 h-24 bg-white rounded-full overflow-hidden border-4 border-white">
                 <Avatar>
                   <AvatarImage 
-                    src={user.img ? `http://localhost:5000${user.img}` : undefined} 
+                    src={user.img ? `${user.img}` : undefined} 
                     alt={`${user.firstName} ${user.lastName}`} 
                   />
                   <AvatarFallback className={cn(`bg-${themeColor}-100 text-${themeColor}-500`)}>
