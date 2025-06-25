@@ -1,6 +1,6 @@
-"use client"
+"use client";
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect } from "react";
 import {
   Search,
   Filter,
@@ -18,44 +18,60 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { useToast } from "@/hooks/use-toast"
-import { useGetWalletTransactionsQuery } from "@/store/api/contest"
-
-
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { useGetWalletTransactionsQuery } from "@/store/api/contest";
 
 export default function DepositPage() {
-  const { toast } = useToast()
+  const { toast } = useToast();
 
   // States
   const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(false)
-  const [selectedTransaction, setSelectedTransaction] = useState(null)
-  const [uploadedFile, setUploadedFile] = useState(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
-  const [expandedRows, setExpandedRows] = useState(new Set())
-  const { data: txData, isLoading: txLoading, error: txError } = useGetWalletTransactionsQuery()
+  const [loading, setLoading] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const {
+    data: txData,
+    isLoading: txLoading,
+    error: txError,
+    refetch,
+  } = useGetWalletTransactionsQuery();
 
   useEffect(() => {
     // Simulate fetching transactions from an API
-    setTransactions(txData?.transactions || [])
+    setTransactions(txData?.transactions || []);
     if (txError) {
       toast({
         title: "Error fetching transactions",
-        description: "There was an error fetching the transactions. Please try again later.",
+        description:
+          "There was an error fetching the transactions. Please try again later.",
         variant: "destructive",
-      })
+      });
     }
-  }, [txData])
+  }, [txData]);
   // Filter states
   const [filters, setFilters] = useState({
     search: "",
@@ -69,35 +85,36 @@ export default function DepositPage() {
     amountMax: "",
     showOnlyCredit: true,
     groupBy: "none",
-  })
+  });
 
   // Pagination
-  const [currentPage, setCurrentPage] = useState(1)
-  const [itemsPerPage] = useState(10)
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
 
   // Filter and search logic
   const filteredTransactions = useMemo(
     () =>
       transactions.filter((tx) => {
-        if (filters.showOnlyCredit && tx.type !== "CREDIT") return false
+        if (filters.showOnlyCredit && tx.type !== "CREDIT") return false;
 
         if (filters.search) {
-          const searchTerm = filters.search.toLowerCase()
-          const searchIn = (value) => value?.toString().toLowerCase().includes(searchTerm)
+          const searchTerm = filters.search.toLowerCase();
+          const searchIn = (value) =>
+            value?.toString().toLowerCase().includes(searchTerm);
 
           switch (filters.searchField) {
             case "name":
-              if (!searchIn(tx.user.name)) return false
-              break
+              if (!searchIn(tx.user.name)) return false;
+              break;
             case "email":
-              if (!searchIn(tx.user.email)) return false
-              break
+              if (!searchIn(tx.user.email)) return false;
+              break;
             case "transaction_id":
-              if (!searchIn(tx.transaction_id)) return false
-              break
+              if (!searchIn(tx.transaction_id)) return false;
+              break;
             case "amount":
-              if (!searchIn(tx.amount)) return false
-              break
+              if (!searchIn(tx.amount)) return false;
+              break;
             case "all":
             default:
               if (
@@ -109,42 +126,62 @@ export default function DepositPage() {
                   searchIn(tx.payment_method)
                 )
               )
-                return false
+                return false;
           }
         }
 
-        if (filters.status !== "all" && tx.status !== filters.status) return false
-        if (filters.paymentMethod !== "all" && tx.payment_method !== filters.paymentMethod) return false
+        if (filters.status !== "all" && tx.status !== filters.status)
+          return false;
+        if (
+          filters.paymentMethod !== "all" &&
+          tx.payment_method !== filters.paymentMethod
+        )
+          return false;
 
         if (filters.verificationStatus !== "all") {
-          if (filters.verificationStatus === "verified" && !tx.payment_verify) return false
-          if (filters.verificationStatus === "unverified" && tx.payment_verify) return false
+          if (filters.verificationStatus === "verified" && !tx.payment_verify)
+            return false;
+          if (filters.verificationStatus === "unverified" && tx.payment_verify)
+            return false;
         }
 
         if (filters.dateFrom || filters.dateTo) {
-          const txDate = new Date(tx.created_at)
-          if (filters.dateFrom && txDate < new Date(filters.dateFrom)) return false
-          if (filters.dateTo && txDate > new Date(filters.dateTo + "T23:59:59")) return false
+          const txDate = new Date(tx.created_at);
+          if (filters.dateFrom && txDate < new Date(filters.dateFrom))
+            return false;
+          if (filters.dateTo && txDate > new Date(filters.dateTo + "T23:59:59"))
+            return false;
         }
 
         if (filters.amountMin || filters.amountMax) {
-          const amount = Number.parseFloat(tx.amount)
-          if (filters.amountMin && amount < Number.parseFloat(filters.amountMin)) return false
-          if (filters.amountMax && amount > Number.parseFloat(filters.amountMax)) return false
+          const amount = Number.parseFloat(tx.amount);
+          if (
+            filters.amountMin &&
+            amount < Number.parseFloat(filters.amountMin)
+          )
+            return false;
+          if (
+            filters.amountMax &&
+            amount > Number.parseFloat(filters.amountMax)
+          )
+            return false;
         }
 
-        return true
+        return true;
       }),
-    [transactions, filters],
-  )
+    [transactions, filters]
+  );
 
   // Pagination logic
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage)
-  const paginatedTransactions = filteredTransactions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage)
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+  const paginatedTransactions = filteredTransactions.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   // Handle file upload
   const handleFileUpload = (event) => {
-    const file = event.target.files[0]
+    const file = event.target.files[0];
     if (file && file.type === "application/pdf") {
       if (file.size > 10 * 1024 * 1024) {
         // 10MB limit
@@ -152,106 +189,125 @@ export default function DepositPage() {
           title: "File too large",
           description: "Please select a PDF file smaller than 10MB",
           variant: "destructive",
-        })
-        return
+        });
+        return;
       }
-      setUploadedFile(file)
+      setUploadedFile(file);
     } else {
       toast({
         title: "Invalid file type",
         description: "Please select a PDF file",
         variant: "destructive",
-      })
+      });
     }
-  }
+  };
 
   // Handle payment verification with PDF upload
   const handleVerifyPayment = async () => {
-    if (!uploadedFile || !selectedTransaction) return
+    if (!uploadedFile || !selectedTransaction) return;
 
-    setIsUploading(true)
+    setIsUploading(true);
     try {
-      const formData = new FormData()
-      formData.append("pdf", uploadedFile)
-      formData.append("transactionId", selectedTransaction.id.toString())
+      const formData = new FormData();
+      formData.append("pdf", uploadedFile);
+      formData.append("transactionId", selectedTransaction.id.toString());
 
       // Simulate API call
       const response = await fetch("/api/v1/upload-pdf", {
         method: "POST",
         body: formData,
-      })
+      });
 
       if (response.ok) {
         // Update transaction status
         setTransactions((prev) =>
           prev.map((tx) =>
-            tx.id === selectedTransaction.id ? { ...tx, payment_verify: true, status: "COMPLETED" } : tx,
-          ),
-        )
+            tx.id === selectedTransaction.id
+              ? { ...tx, payment_verify: true, status: "COMPLETED" }
+              : tx
+          )
+        );
 
         toast({
           title: "Payment verified successfully",
           description: `Transaction ${selectedTransaction.transaction_id} has been verified`,
-        })
+        });
 
-        setShowUploadModal(false)
-        setUploadedFile(null)
-        setSelectedTransaction(null)
+        refetch();
+        setShowUploadModal(false);
+        setUploadedFile(null);
+        setSelectedTransaction(null);
       } else {
-        throw new Error("Verification failed")
+        throw new Error("Verification failed");
       }
     } catch (error) {
       toast({
         title: "Verification failed",
         description: "Please try again or contact support",
         variant: "destructive",
-      })
+      });
     } finally {
-      setIsUploading(false)
+      setIsUploading(false);
     }
-  }
+  };
 
   // Handle one-click verification
-  const handleQuickVerify = async (transaction) => {
-    setLoading(true)
+  const handleSingleVerify = async (transaction) => {
+    setLoading(true);
     try {
-      const response = await fetch("/api/quick-verify", {
+      const response = await fetch("/api/v1/verify-single", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ transactionId: transaction.id }),
-      })
+        body: JSON.stringify({
+          utr_number: transaction.upi_ref_no,
+          amount: transaction.amount,
+          type: transaction.type,
+        }),
+      });
 
       if (response.ok) {
         setTransactions((prev) =>
-          prev.map((tx) => (tx.id === transaction.id ? { ...tx, payment_verify: true, status: "COMPLETED" } : tx)),
-        )
-
+          prev.map((tx) =>
+            tx.id === transaction.id
+              ? { ...tx, payment_verify: true, status: "COMPLETED" }
+              : tx
+          )
+        );
         toast({
           title: "Payment verified",
           description: `Transaction ${transaction.transaction_id} verified successfully`,
-        })
+        });
+        refetch();
       } else {
-        throw new Error("Quick verification failed")
+        throw new Error("Verification failed");
       }
     } catch (error) {
       toast({
         title: "Verification failed",
-        description: "Please try manual verification with PDF upload",
+        description: "Please try again or contact support",
         variant: "destructive",
-      })
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   // Export transactions
   const handleExport = () => {
     const csvContent = [
-      ["ID", "Transaction ID", "User Name", "Email", "Amount", "Status", "Payment Method", "Verified", "Date"].join(
-        ",",
-      ),
+      [
+        "ID",
+        "Transaction ID",
+        "User Name",
+        "Email",
+        "Amount",
+        "Status",
+        "Payment Method",
+        "Verified",
+        "Date",
+      ].join(","),
       ...filteredTransactions.map((tx) =>
         [
           tx.id,
@@ -263,108 +319,110 @@ export default function DepositPage() {
           tx.payment_method,
           tx.payment_verify ? "Yes" : "No",
           new Date(tx.created_at).toLocaleDateString(),
-        ].join(","),
+        ].join(",")
       ),
-    ].join("\n")
+    ].join("\n");
 
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `transactions_${new Date().toISOString().split("T")[0]}.csv`
-    a.click()
-    window.URL.revokeObjectURL(url)
-  }
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transactions_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   // Add state for bulk upload
-  const [bulkFiles, setBulkFiles] = useState([])
-  const [bulkUploading, setBulkUploading] = useState(false)
-  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false)
+  const [bulkFiles, setBulkFiles] = useState([]);
+  const [bulkUploading, setBulkUploading] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
 
   // Handle bulk file upload
   const handleBulkFileUpload = (event) => {
-    const files = Array.from(event.target.files)
-    const validFiles = files.filter((file) => file.type === "application/pdf" && file.size <= 10 * 1024 * 1024)
+    const files = Array.from(event.target.files);
+    const validFiles = files.filter(
+      (file) => file.type === "application/pdf" && file.size <= 10 * 1024 * 1024
+    );
     if (validFiles.length !== files.length) {
       toast({
         title: "Some files are invalid",
         description: "Only PDF files up to 10MB are allowed.",
         variant: "destructive",
-      })
+      });
     }
-    setBulkFiles(validFiles)
-  }
+    setBulkFiles(validFiles);
+  };
 
   // Handle bulk verification
   const handleBulkVerify = async () => {
-    if (!bulkFiles.length) return
-    setBulkUploading(true)
+    if (!bulkFiles.length) return;
+    setBulkUploading(true);
     try {
-      const formData = new FormData()
+      const formData = new FormData();
       bulkFiles.forEach((file) => {
-        formData.append(`pdf`, file)
-      })
+        formData.append(`pdf`, file);
+      });
       // Simulate API call
       const response = await fetch("/api/v1/upload-pdf", {
         method: "POST",
         body: formData,
-      })
+      });
       if (response.ok) {
         toast({
           title: "Bulk upload successful",
           description: `${bulkFiles.length} PDF(s) uploaded`,
-        })
-        setShowBulkUploadModal(false)
-        setBulkFiles([])
+        });
+        setShowBulkUploadModal(false);
+        setBulkFiles([]);
       } else {
-        throw new Error("Bulk upload failed")
+        throw new Error("Bulk upload failed");
       }
     } catch (error) {
       toast({
         title: "Bulk upload failed",
         description: "Please try again or contact support",
         variant: "destructive",
-      })
+      });
     } finally {
-      setBulkUploading(false)
+      setBulkUploading(false);
     }
-  }
+  };
 
   const getStatusIcon = (status) => {
     switch (status) {
       case "COMPLETED":
-        return <CheckCircle className="w-4 h-4 text-green-500" />
+        return <CheckCircle className="w-4 h-4 text-green-500" />;
       case "PENDING":
-        return <Clock className="w-4 h-4 text-yellow-500" />
+        return <Clock className="w-4 h-4 text-yellow-500" />;
       case "FAILED":
-        return <XCircle className="w-4 h-4 text-red-500" />
+        return <XCircle className="w-4 h-4 text-red-500" />;
       default:
-        return <AlertCircle className="w-4 h-4 text-gray-500" />
+        return <AlertCircle className="w-4 h-4 text-gray-500" />;
     }
-  }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
       case "COMPLETED":
-        return "bg-green-100 text-green-800 border-green-200"
+        return "bg-green-100 text-green-800 border-green-200";
       case "PENDING":
-        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+        return "bg-yellow-100 text-yellow-800 border-yellow-200";
       case "FAILED":
-        return "bg-red-100 text-red-800 border-red-200"
+        return "bg-red-100 text-red-800 border-red-200";
       default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
+        return "bg-gray-100 text-gray-800 border-gray-200";
     }
-  }
+  };
 
   const toggleRowExpansion = (id) => {
-    const newExpanded = new Set(expandedRows)
+    const newExpanded = new Set(expandedRows);
     if (newExpanded.has(id)) {
-      newExpanded.delete(id)
+      newExpanded.delete(id);
     } else {
-      newExpanded.add(id)
+      newExpanded.add(id);
     }
-    setExpandedRows(newExpanded)
-  }
+    setExpandedRows(newExpanded);
+  };
 
   return (
     <>
@@ -373,8 +431,12 @@ export default function DepositPage() {
         <div className="bg-white rounded-lg shadow-sm border p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Deposit Verification</h1>
-              <p className="text-gray-600 mt-1">Manage and verify payment transactions</p>
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">
+                Deposit Verification
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Manage and verify payment transactions
+              </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
@@ -384,9 +446,16 @@ export default function DepositPage() {
               >
                 <Filter className="w-4 h-4" />
                 Filters
-                {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {showFilters ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
               </Button>
-              <Button onClick={handleExport} className="flex items-center gap-2">
+              <Button
+                onClick={handleExport}
+                className="flex items-center gap-2"
+              >
                 <Download className="w-4 h-4" />
                 Export
               </Button>
@@ -408,8 +477,12 @@ export default function DepositPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Transactions</p>
-                  <p className="text-2xl font-bold text-gray-900">{filteredTransactions.length}</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Total Transactions
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {filteredTransactions.length}
+                  </p>
                 </div>
                 <FileText className="w-8 h-8 text-blue-500" />
               </div>
@@ -421,7 +494,11 @@ export default function DepositPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Pending</p>
                   <p className="text-2xl font-bold text-yellow-600">
-                    {filteredTransactions.filter((tx) => tx.status === "PENDING").length}
+                    {
+                      filteredTransactions.filter(
+                        (tx) => tx.status === "PENDING"
+                      ).length
+                    }
                   </p>
                 </div>
                 <Clock className="w-8 h-8 text-yellow-500" />
@@ -434,7 +511,10 @@ export default function DepositPage() {
                 <div>
                   <p className="text-sm font-medium text-gray-600">Verified</p>
                   <p className="text-2xl font-bold text-green-600">
-                    {filteredTransactions.filter((tx) => tx.payment_verify).length}
+                    {
+                      filteredTransactions.filter((tx) => tx.payment_verify)
+                        .length
+                    }
                   </p>
                 </div>
                 <CheckCircle className="w-8 h-8 text-green-500" />
@@ -445,9 +525,17 @@ export default function DepositPage() {
             <CardContent className="p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600">Total Amount</p>
+                  <p className="text-sm font-medium text-gray-600">
+                    Total Amount
+                  </p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ₹{filteredTransactions.reduce((sum, tx) => sum + Number.parseFloat(tx.amount), 0).toLocaleString()}
+                    ₹
+                    {filteredTransactions
+                      .reduce(
+                        (sum, tx) => sum + Number.parseFloat(tx.amount),
+                        0
+                      )
+                      .toLocaleString()}
                   </p>
                 </div>
                 <CreditCard className="w-8 h-8 text-purple-500" />
@@ -471,7 +559,12 @@ export default function DepositPage() {
                     <Input
                       placeholder="Search transactions..."
                       value={filters.search}
-                      onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          search: e.target.value,
+                        }))
+                      }
                       className="pl-10"
                     />
                   </div>
@@ -481,7 +574,9 @@ export default function DepositPage() {
                   <Label>Search In</Label>
                   <Select
                     value={filters.searchField}
-                    onValueChange={(value) => setFilters((prev) => ({ ...prev, searchField: value }))}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({ ...prev, searchField: value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -490,7 +585,9 @@ export default function DepositPage() {
                       <SelectItem value="all">All Fields</SelectItem>
                       <SelectItem value="name">Name</SelectItem>
                       <SelectItem value="email">Email</SelectItem>
-                      <SelectItem value="transaction_id">Transaction ID</SelectItem>
+                      <SelectItem value="transaction_id">
+                        Transaction ID
+                      </SelectItem>
                       <SelectItem value="amount">Amount</SelectItem>
                     </SelectContent>
                   </Select>
@@ -500,7 +597,9 @@ export default function DepositPage() {
                   <Label>Status</Label>
                   <Select
                     value={filters.status}
-                    onValueChange={(value) => setFilters((prev) => ({ ...prev, status: value }))}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({ ...prev, status: value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -518,7 +617,9 @@ export default function DepositPage() {
                   <Label>Payment Method</Label>
                   <Select
                     value={filters.paymentMethod}
-                    onValueChange={(value) => setFilters((prev) => ({ ...prev, paymentMethod: value }))}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({ ...prev, paymentMethod: value }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -526,7 +627,9 @@ export default function DepositPage() {
                     <SelectContent>
                       <SelectItem value="all">All Methods</SelectItem>
                       <SelectItem value="UPI">UPI</SelectItem>
-                      <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                      <SelectItem value="BANK_TRANSFER">
+                        Bank Transfer
+                      </SelectItem>
                       <SelectItem value="CARD">Card</SelectItem>
                     </SelectContent>
                   </Select>
@@ -536,7 +639,12 @@ export default function DepositPage() {
                   <Label>Verification Status</Label>
                   <Select
                     value={filters.verificationStatus}
-                    onValueChange={(value) => setFilters((prev) => ({ ...prev, verificationStatus: value }))}
+                    onValueChange={(value) =>
+                      setFilters((prev) => ({
+                        ...prev,
+                        verificationStatus: value,
+                      }))
+                    }
                   >
                     <SelectTrigger>
                       <SelectValue />
@@ -555,13 +663,23 @@ export default function DepositPage() {
                     <Input
                       type="date"
                       value={filters.dateFrom}
-                      onChange={(e) => setFilters((prev) => ({ ...prev, dateFrom: e.target.value }))}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          dateFrom: e.target.value,
+                        }))
+                      }
                       className="flex-1"
                     />
                     <Input
                       type="date"
                       value={filters.dateTo}
-                      onChange={(e) => setFilters((prev) => ({ ...prev, dateTo: e.target.value }))}
+                      onChange={(e) =>
+                        setFilters((prev) => ({
+                          ...prev,
+                          dateTo: e.target.value,
+                        }))
+                      }
                       className="flex-1"
                     />
                   </div>
@@ -600,7 +718,9 @@ export default function DepositPage() {
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <span>Transactions ({filteredTransactions.length})</span>
-              <Badge variant="secondary">{filteredTransactions.length} results</Badge>
+              <Badge variant="secondary">
+                {filteredTransactions.length} results
+              </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -643,14 +763,20 @@ export default function DepositPage() {
                             </div>
                           </div>
                           <div className="ml-3">
-                            <div className="text-sm font-medium text-gray-900">{tx.user.name}</div>
-                            <div className="text-sm text-gray-500">{tx.user.email}</div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {tx.user.name}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              {tx.user.email}
+                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-gray-900">#{tx.id}</div>
-                        <div className="text-xs text-gray-500 font-mono">{tx.upi_ref_no}</div>
+                        <div className="text-xs text-gray-500 font-mono">
+                          {tx.upi_ref_no}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -659,13 +785,19 @@ export default function DepositPage() {
                         <div className="text-xs text-gray-500">{tx.type}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge className={`${getStatusColor(tx.status)} flex items-center gap-1`}>
+                        <Badge
+                          className={`${getStatusColor(
+                            tx.status
+                          )} flex items-center gap-1`}
+                        >
                           {getStatusIcon(tx.status)}
                           {tx.status}
                         </Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900">{tx.payment_method}</div>
+                        <div className="text-sm text-gray-900">
+                          {tx.payment_method}
+                        </div>
                         <div className="text-xs">
                           {tx.payment_verify ? (
                             <Badge className="bg-green-100 text-green-800 border-green-200">
@@ -682,7 +814,9 @@ export default function DepositPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(tx.created_at).toLocaleDateString()}
-                        <div className="text-xs">{new Date(tx.created_at).toLocaleTimeString()}</div>
+                        <div className="text-xs">
+                          {new Date(tx.created_at).toLocaleTimeString()}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex flex-col gap-1">
@@ -690,17 +824,15 @@ export default function DepositPage() {
                             <>
                               <Button
                                 size="sm"
-                                onClick={() => handleQuickVerify(tx)}
+                                variant="outline"
+                                onClick={() => handleSingleVerify(tx)}
                                 disabled={loading}
-                                className="text-xs"
                               >
                                 <Check className="w-3 h-3 mr-1" />
                                 Quick Verify
                               </Button>
-                              
                             </>
                           )}
-                        
                         </div>
                       </td>
                     </tr>
@@ -720,11 +852,19 @@ export default function DepositPage() {
                           <User className="h-5 w-5 text-gray-600" />
                         </div>
                         <div>
-                          <div className="font-medium text-gray-900">{tx.user.name}</div>
-                          <div className="text-sm text-gray-500">{tx.user.email}</div>
+                          <div className="font-medium text-gray-900">
+                            {tx.user.name}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {tx.user.email}
+                          </div>
                         </div>
                       </div>
-                      <Badge className={`${getStatusColor(tx.status)} flex items-center gap-1`}>
+                      <Badge
+                        className={`${getStatusColor(
+                          tx.status
+                        )} flex items-center gap-1`}
+                      >
                         {getStatusIcon(tx.status)}
                         {tx.status}
                       </Badge>
@@ -733,7 +873,9 @@ export default function DepositPage() {
                     <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
                       <div>
                         <span className="text-gray-500">Amount:</span>
-                        <div className="font-medium">₹{Number.parseFloat(tx.amount).toLocaleString()}</div>
+                        <div className="font-medium">
+                          ₹{Number.parseFloat(tx.amount).toLocaleString()}
+                        </div>
                       </div>
                       <div>
                         <span className="text-gray-500">Method:</span>
@@ -741,11 +883,15 @@ export default function DepositPage() {
                       </div>
                       <div>
                         <span className="text-gray-500">Transaction ID:</span>
-                        <div className="font-mono text-xs">{tx.transaction_id}</div>
+                        <div className="font-mono text-xs">
+                          {tx.transaction_id}
+                        </div>
                       </div>
                       <div>
                         <span className="text-gray-500">Date:</span>
-                        <div>{new Date(tx.created_at).toLocaleDateString()}</div>
+                        <div>
+                          {new Date(tx.created_at).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
 
@@ -766,7 +912,11 @@ export default function DepositPage() {
                       <div className="flex gap-2">
                         {!tx.payment_verify && (
                           <>
-                            <Button size="sm" onClick={() => handleQuickVerify(tx)} disabled={loading}>
+                            <Button
+                              size="sm"
+                              onClick={() => handleQuickVerify(tx)}
+                              disabled={loading}
+                            >
                               <Check className="w-3 h-3 mr-1" />
                               Verify
                             </Button>
@@ -774,8 +924,8 @@ export default function DepositPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setSelectedTransaction(tx)
-                                setShowUploadModal(true)
+                                setSelectedTransaction(tx);
+                                setShowUploadModal(true);
                               }}
                             >
                               <Upload className="w-3 h-3" />
@@ -795,8 +945,12 @@ export default function DepositPage() {
             {filteredTransactions.length === 0 && (
               <div className="text-center py-12">
                 <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No transactions found</h3>
-                <p className="mt-1 text-sm text-gray-500">Try adjusting your filters</p>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">
+                  No transactions found
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Try adjusting your filters
+                </p>
               </div>
             )}
           </CardContent>
@@ -807,8 +961,11 @@ export default function DepositPage() {
           <div className="flex items-center justify-between">
             <div className="text-sm text-gray-700">
               Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-              {Math.min(currentPage * itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length}{" "}
-              results
+              {Math.min(
+                currentPage * itemsPerPage,
+                filteredTransactions.length
+              )}{" "}
+              of {filteredTransactions.length} results
             </div>
             <div className="flex gap-2">
               <Button
@@ -821,7 +978,7 @@ export default function DepositPage() {
               </Button>
               <div className="flex gap-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const page = i + 1
+                  const page = i + 1;
                   return (
                     <Button
                       key={page}
@@ -831,13 +988,15 @@ export default function DepositPage() {
                     >
                       {page}
                     </Button>
-                  )
+                  );
                 })}
               </div>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
                 disabled={currentPage === totalPages}
               >
                 Next
@@ -852,7 +1011,9 @@ export default function DepositPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Verify Payment</DialogTitle>
-            <DialogDescription>Upload bank statement PDF to verify the payment transaction</DialogDescription>
+            <DialogDescription>
+              Upload bank statement PDF to verify the payment transaction
+            </DialogDescription>
           </DialogHeader>
 
           {selectedTransaction && (
@@ -865,7 +1026,10 @@ export default function DepositPage() {
                   <strong>User:</strong> {selectedTransaction.user.name}
                 </div>
                 <div>
-                  <strong>Amount:</strong> ₹{Number.parseFloat(selectedTransaction.amount).toLocaleString()}
+                  <strong>Amount:</strong> ₹
+                  {Number.parseFloat(
+                    selectedTransaction.amount
+                  ).toLocaleString()}
                 </div>
                 <div>
                   <strong>Method:</strong> {selectedTransaction.payment_method}
@@ -876,14 +1040,22 @@ export default function DepositPage() {
 
           <div className="space-y-4">
             <div>
-              <Label className="text-sm font-medium">Upload Bank Statement (PDF)</Label>
+              <Label className="text-sm font-medium">
+                Upload Bank Statement (PDF)
+              </Label>
               <div className="mt-2 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                 <div className="space-y-1 text-center">
                   <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   <div className="flex text-sm text-gray-600">
                     <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
                       <span>Upload a file</span>
-                      <input type="file" multiple={false} accept=".pdf" onChange={handleFileUpload} className="sr-only" />
+                      <input
+                        type="file"
+                        multiple={false}
+                        accept=".pdf"
+                        onChange={handleFileUpload}
+                        className="sr-only"
+                      />
                     </label>
                     <p className="pl-1">or drag and drop</p>
                   </div>
@@ -902,15 +1074,19 @@ export default function DepositPage() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  setShowUploadModal(false)
-                  setUploadedFile(null)
-                  setSelectedTransaction(null)
+                  setShowUploadModal(false);
+                  setUploadedFile(null);
+                  setSelectedTransaction(null);
                 }}
                 className="flex-1"
               >
                 Cancel
               </Button>
-              <Button onClick={handleVerifyPayment} disabled={!uploadedFile || isUploading} className="flex-1">
+              <Button
+                onClick={handleVerifyPayment}
+                disabled={!uploadedFile || isUploading}
+                className="flex-1"
+              >
                 {isUploading ? (
                   <>
                     <Clock className="w-4 h-4 mr-2 animate-spin" />
@@ -933,14 +1109,19 @@ export default function DepositPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Bulk PDF Upload</DialogTitle>
-            <DialogDescription>Upload multiple bank statement PDFs. No transaction selection required.</DialogDescription>
+            <DialogDescription>
+              Upload multiple bank statement PDFs. No transaction selection
+              required.
+            </DialogDescription>
           </DialogHeader>
           <div className="mb-4">
-            <Label className="text-sm font-medium">Upload Bank Statements (PDF, multiple allowed)</Label>
+            <Label className="text-sm font-medium">
+              Upload Bank Statements (PDF, multiple allowed)
+            </Label>
             <input
               type="file"
               accept=".pdf"
-            //   multiple
+              //   multiple
               onChange={handleBulkFileUpload}
               className="mt-2"
             />
@@ -954,8 +1135,8 @@ export default function DepositPage() {
             <Button
               variant="outline"
               onClick={() => {
-                setShowBulkUploadModal(false)
-                setBulkFiles([])
+                setShowBulkUploadModal(false);
+                setBulkFiles([]);
               }}
               className="flex-1"
             >
@@ -982,5 +1163,5 @@ export default function DepositPage() {
         </DialogContent>
       </Dialog>
     </>
-  )
+  );
 }

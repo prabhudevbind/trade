@@ -26,6 +26,7 @@ import StockverseLogin from "../component/welcome/login/Login";
 import Leaderboard from "@/component/admin/option/components/leaderboard/Leaderboard";
 import Withdrawals from "@/component/admin/withdrawals/Withdrawals";
 import Deposit from "@/component/admin/deposit/Deposit";
+import WithDraw from "@/component/admin/withdrawals/WithDraw";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -112,6 +113,11 @@ export const createAppRouter = (isAuthenticated) =>
         path:"admin/deposits",
         element: <ProtectedRoute requiredPermissions={["manage-deposits"]}>
           <Deposit />
+        </ProtectedRoute>
+      },
+      {path:"admin/withdrawals",
+        element: <ProtectedRoute requiredPermissions={["manage-withdrawals"]}>
+          <WithDraw />
         </ProtectedRoute>
       },
         {

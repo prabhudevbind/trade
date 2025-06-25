@@ -2053,6 +2053,8 @@ console.log(upi_ref_no);
                 firstName: true,
                 lastName: true,
                 email: true,
+                upiId: true,
+                id: true,
               },
             },
           },
@@ -2080,6 +2082,8 @@ console.log(upi_ref_no);
           base.user = {
             name: `${transaction.user.firstName} ${transaction.user.lastName}`,
             email: transaction.user.email,
+            upiId: transaction.user.upiId || null,
+            id: transaction.user.id,
           };
         }
         return base;

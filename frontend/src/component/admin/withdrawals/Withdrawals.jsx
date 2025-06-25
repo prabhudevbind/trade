@@ -20,6 +20,7 @@ export default function Withdrawals() {
       data: txData,
       isLoading: txLoading,
       error: txError,
+      refetch: refetchTransactions,
     } = useGetWalletTransactionsQuery();
   const withdrawals = (txData?.transactions || []).filter(
     tx => tx.type === 'DEBIT' && tx.payment_method === 'WITHDRAWAL'

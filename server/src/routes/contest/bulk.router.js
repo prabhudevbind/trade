@@ -20,13 +20,10 @@ router.post("/upload-pdf", upload.single("pdf"), async (req, res) => {
     const text = data.text;
 
     // Extract UTR number, amount, and type from PDF text
-    // Updated regex patterns to match the transaction statement format
-  const utrMatches = text.match(/UTR No\.?\s*\d+/g) || [];
+    const utrMatches = text.match(/UTR No\.?\s*\d+/g) || [];
     const amountMatches = text.match(/₹(\d+(?:\.\d{2})?)/g);
     const typeMatches = text.match(/(CREDIT|DEBIT)/g);
-    console.log("UTR Matches:", utrMatches);
-    console.log("Amount Matches:", amountMatches);
-    console.log("Type Matches:", typeMatches);
+  
     if (!utrMatches || !amountMatches || !typeMatches) {
       return res.status(400).json({
         error: "Could not extract required data (UTR, Amount, Type) from PDF",
@@ -48,11 +45,18 @@ router.post("/upload-pdf", upload.single("pdf"), async (req, res) => {
       amountMatches.length,
       typeMatches.length
     );
-    
-const utrNumbers = utrMatches.map(s => s.split('UTR No.')[1].trim());
      
+    // N × M APPROACH: Check every PDF record against every DB record
+    const allUnverifiedTransactions = await prisma.walletTransaction.findMany({
+      where: { payment_verify: false }
+    });
+
+    console.log(`Total unverified transactions: ${allUnverifiedTransactions.length}`);
+    console.log(`Total PDF records to process: ${minLength}`);
+    console.log(`Total comparisons to perform: ${minLength} × ${allUnverifiedTransactions.length} = ${minLength * allUnverifiedTransactions.length}`);
+
+    // Process all PDF records (n × m approach)
     for (let i = 0; i < minLength; i++) {
-      // Extract only the number part from the UTR string
       const utrString = utrMatches[i];
       const utrNumberMatch = utrString.match(/UTR No\.?\s*(\d+)/);
       const utrNumber = utrNumberMatch ? utrNumberMatch[1] : null;
@@ -69,47 +73,93 @@ const utrNumbers = utrMatches.map(s => s.split('UTR No.')[1].trim());
         continue;
       }
 
-      try {
-        // Find wallet transaction matching UTR, amount, and type exactly
-        const transaction = await prisma.walletTransaction.findFirst({
-          where: {
-            utr_number: utrNumber,
-            amount: amount,
-            type: transactionType,
-            payment_verify: false
+    //   console.log(`\n=== Processing PDF Record ${i + 1}/${minLength} ===`);
+    //   console.log(`PDF Data: UTR="${utrNumber}", Amount=${amount}, Type="${transactionType}"`);
+      
+      let matchFound = false;
+      
+      // Check against ALL database records (n × m)
+      for (let j = 0; j < allUnverifiedTransactions.length; j++) {
+        const t = allUnverifiedTransactions[j];
+        
+        // console.log(`  Checking against DB Record ${j + 1}/${allUnverifiedTransactions.length} (ID: ${t.id})`);
+        
+        // Handle Prisma Decimal objects properly
+        let dbUtrString = '';
+        if (t.upi_ref_no) {
+          if (typeof t.upi_ref_no === 'object' && t.upi_ref_no.toString) {
+            // Prisma Decimal object
+            dbUtrString = t.upi_ref_no.toString();
+          } else {
+            // Regular string or number
+            dbUtrString = t.upi_ref_no.toString();
           }
-        });
-
-        if (transaction) {
-          // Mark as verified
-          await prisma.walletTransaction.update({
-            where: { id: transaction.id },
-            data: { 
-              payment_verify: true,
-              verified_at: new Date()
-            }
-          });
-
-          verifiedTransactions.push({
-            transactionId: transaction.id,
-            utrNumber,
-            amount,
-            type: transactionType
-          });
-        } else {
-          failedMatches.push({
-            utrNumber,
-            amount,
-            type: transactionType,
-            reason: 'No matching unverified transaction found'
-          });
         }
-      } catch (error) {
+        
+        let dbAmount = 0;
+        if (t.amount) {
+          if (typeof t.amount === 'object' && t.amount.toString) {
+            // Prisma Decimal object
+            dbAmount = parseFloat(t.amount.toString());
+          } else {
+            // Regular string or number
+            dbAmount = parseFloat(t.amount.toString());
+          }
+        }
+        
+        // Perform matching
+        const pdfUtrString = utrNumber.toString();
+        const pdfAmount = parseFloat(amount);
+        
+        const utrMatch = dbUtrString === pdfUtrString;
+        const amountMatch = Math.abs(dbAmount - pdfAmount) < 0.01;
+        const typeMatch = t.type && t.type.toUpperCase() === transactionType.toUpperCase();
+        
+        // console.log(`    DB UTR: "${dbUtrString}" vs PDF UTR: "${pdfUtrString}" -> ${utrMatch ? '✅' : '❌'}`);
+        // console.log(`    DB Amount: ${dbAmount} vs PDF Amount: ${pdfAmount} -> ${amountMatch ? '✅' : '❌'}`);
+        // console.log(`    DB Type: "${t.type}" vs PDF Type: "${transactionType}" -> ${typeMatch ? '✅' : '❌'}`);
+        
+        if (utrMatch && amountMatch && typeMatch) {
+        //   console.log(`    🎯 PERFECT MATCH FOUND! Transaction ID: ${t.id}`);
+          
+          try {
+            await prisma.walletTransaction.update({
+              where: { id: t.id },
+              data: {
+                payment_verify: true,
+                verified_at: new Date()
+              }
+            });
+            
+            verifiedTransactions.push({
+              transactionId: t.id,
+              utrNumber,
+              amount,
+              type: transactionType
+            });
+            
+            // console.log(`    ✅ Transaction ${t.id} marked as verified`);
+            matchFound = true;
+            break; // Stop checking other DB records for this PDF record
+          } catch (error) {
+            // console.log(`    ❌ Database update failed: ${error.message}`);
+            failedMatches.push({
+              utrNumber,
+              amount,
+              type: transactionType,
+              reason: 'Database error: ' + error.message
+            });
+          }
+        }
+      }
+      
+      if (!matchFound) {
+        // console.log(`    ❌ NO MATCH FOUND for PDF record ${i + 1}`);
         failedMatches.push({
           utrNumber,
           amount,
           type: transactionType,
-          reason: 'Database error: ' + error.message
+          reason: 'No matching unverified transaction found after checking all DB records'
         });
       }
     }
@@ -132,7 +182,7 @@ const utrNumbers = utrMatches.map(s => s.split('UTR No.')[1].trim());
 
     res.json(response);
   } catch (err) {
-    console.error("PDF processing error:", err);
+    // console.error("PDF processing error:", err);
     res.status(500).json({
       error: "Internal server error",
       details: err.message,
@@ -140,7 +190,7 @@ const utrNumbers = utrMatches.map(s => s.split('UTR No.')[1].trim());
   }
 });
 
-// Alternative endpoint for single transaction verification
+// FIXED: Alternative endpoint for single transaction verification
 router.post("/verify-single", async (req, res) => {
   try {
     const { utr_number, amount, type } = req.body;
@@ -151,11 +201,15 @@ router.post("/verify-single", async (req, res) => {
       });
     }
 
-    // Find exact match
+    // NOTE: Quick verification does NOT match any official bank statement.
+    // If you verify using this method, it is your responsibility to ensure the transaction is legitimate.
+    // Use the PDF upload verification for official statement matching.
+
+    // FIXED: Use proper Decimal conversion for Prisma query
     const transaction = await prisma.walletTransaction.findFirst({
       where: {
-        utr_number: utr_number.toString(),
-        amount: parseFloat(amount),
+        upi_ref_no: parseFloat(utr_number), // Convert to number for Decimal field
+        amount: parseFloat(amount), // Convert to number for Decimal field
         type: type.toUpperCase(),
         payment_verify: false,
       },
