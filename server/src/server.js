@@ -58,6 +58,7 @@ app.use('/api/v1/user-sessions', require('./routes/user/userSessionRoutes'));
 app.use('/api/v1/smtp-details',authenticateToken, require('./routes/user/smtp.routes'));
 app.use('/api/v1', require('./utils/profileupload'));
 app.use('/api/v1', require('./routes/contest/bulk.router'));
+app.use('/api/v1', require('./routes/user/price.router'));
 
 // Error handling middleware
 app.use(errorHandler);

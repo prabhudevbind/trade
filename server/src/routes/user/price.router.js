@@ -55,4 +55,28 @@ router.delete('/prize-distribution/:id', async (req, res) => {
   }
 });
 
+// BULK CREATE/REPLACE PrizeDistributions for a contest
+router.post('/prize-distribution/bulk', async (req, res) => {
+  try {
+    const { contestId, prizes } = req.body;
+    if (!contestId || !Array.isArray(prizes)) {
+      return res.status(400).json({ error: 'contestId and prizes array required' });
+    }
+    // Delete existing prize distributions for this contest
+    await prisma.prizeDistribution.deleteMany({ where: { contestId: Number(contestId) } });
+    // Create new prize distributions
+    const created = await prisma.prizeDistribution.createMany({
+      data: prizes.map(prize => ({
+        contestId: Number(contestId),
+        fromRank: prize.fromRank,
+        toRank: prize.toRank,
+        amount: prize.prizePerWinner // Save per-winner amount
+      }))
+    });
+    res.status(201).json({ success: true, count: created.count });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 module.exports = router;

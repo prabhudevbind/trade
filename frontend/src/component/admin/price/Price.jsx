@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,6 +35,7 @@ export default function ContestPrizeDistribution() {
   const [platformFeePercentage, setPlatformFeePercentage] = useState(20)
   const [isLoading, setIsLoading] = useState(false)
   const [notifications, setNotifications] = useState([])
+  const [fetchedPrizes, setFetchedPrizes] = useState([])
 
 const { data: contestsData } = useGetContestsQuery()
   const { data: participantsData } = useGetContestParticipantsQuery()
@@ -77,12 +78,17 @@ const { data: contestsData } = useGetContestsQuery()
     setNewPrize({ ...newPrize, [e.target.name]: e.target.value })
   }
 
+  // Add: allow manual amount entry and rounding for each prize
+  const [manualAmountMode, setManualAmountMode] = useState(false)
+  const [roundOff, setRoundOff] = useState(false)
+
   const handleAddPrize = () => {
     const from = parseInt(newPrize.from)
     const to = parseInt(newPrize.to)
     const percentage = parseFloat(newPrize.percentage)
+    const manualAmount = parseFloat(newPrize.amount)
 
-    if (isNaN(from) || isNaN(to) || isNaN(percentage)) {
+    if (isNaN(from) || isNaN(to) || (manualAmountMode ? isNaN(manualAmount) : isNaN(percentage))) {
       showToast("Invalid Input", "Please enter valid values for all fields", "destructive")
       return
     }
@@ -94,39 +100,43 @@ const { data: contestsData } = useGetContestsQuery()
     //   showToast("Invalid Range", `"To" rank cannot exceed total participants (${totalParticipants})`, "destructive")
     //   return
     // }
-    if (percentage <= 0 || percentage > remainingPercentage) {
+    if (!manualAmountMode && (percentage <= 0 || percentage > remainingPercentage)) {
       showToast("Invalid Percentage", `Percentage should be between 0 and ${remainingPercentage}%`, "destructive")
       return
     }
-
     // Check for overlapping ranges
-    const hasOverlap = prizes.some(prize => 
+    const hasOverlap = prizes.some(prize =>
       (from >= prize.from && from <= prize.to) ||
       (to >= prize.from && to <= prize.to) ||
       (from <= prize.from && to >= prize.to)
     )
-
     if (hasOverlap) {
       showToast("Overlapping Range", "This rank range overlaps with an existing prize range", "destructive")
       return
     }
-
-    const prizeAmount = (prizePool * percentage) / 100
-    const rangeCount = to - from + 1
-    const prizePerWinner = prizeAmount / rangeCount
-
+    let prizeAmount, prizePerWinner
+    if (manualAmountMode) {
+      prizeAmount = manualAmount
+      const rangeCount = to - from + 1
+      prizePerWinner = roundOff ? Math.round(prizeAmount / rangeCount) : prizeAmount / rangeCount
+    } else {
+      prizeAmount = (prizePool * percentage) / 100
+      const rangeCount = to - from + 1
+      prizePerWinner = roundOff ? Math.round(prizeAmount / rangeCount) : prizeAmount / rangeCount
+    }
     setPrizes([
       ...prizes,
       {
         ...newPrize,
         from,
         to,
-        percentage,
+        percentage: manualAmountMode ? '' : percentage,
+        amount: manualAmountMode ? manualAmount : '',
         totalAmount: prizeAmount,
         prizePerWinner,
       },
     ])
-    setNewPrize({ from: "", to: "", percentage: "" })
+    setNewPrize({ from: "", to: "", percentage: "", amount: "" })
 
     showToast("Prize Added", "Prize range has been successfully added")
   }
@@ -203,7 +213,7 @@ const savePrizeDistribution = async () => {
     }
 
     // Make API call to save prize distribution
-    const response = await fetch('/api/prize-distribution', {
+    const response = await fetch('/api/v1/prize-distribution/bulk', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -334,6 +344,36 @@ const savePrizeDistributionAlternative = async () => {
       showToast("Error", "Network error while saving", "destructive")
     }
   }
+
+  // Fetch prize distribution for selected contest
+  useEffect(() => {
+    if (!selectedContestId) {
+      setFetchedPrizes([])
+      return
+    }
+    fetch(`/api/v1/prize-distribution/${selectedContestId}`)
+      .then(res => res.json())
+      .then(data => {
+        setFetchedPrizes(data)
+      })
+      .catch(() => setFetchedPrizes([]))
+  }, [selectedContestId])
+
+  // When fetchedPrizes changes, show in UI and allow admin to load them into the editable table
+  useEffect(() => {
+    if (fetchedPrizes && fetchedPrizes.length > 0) {
+      // Convert fetchedPrizes to the format used in the editable table
+      setPrizes(
+        fetchedPrizes.map(prize => ({
+          from: prize.fromRank,
+          to: prize.toRank,
+          percentage: '', // Not available from backend, leave blank
+          totalAmount: '', // Not available from backend, leave blank
+          prizePerWinner: parseFloat(prize.amount),
+        }))
+      )
+    }
+  }, [fetchedPrizes])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-2 md:p-6">
@@ -503,6 +543,16 @@ const savePrizeDistributionAlternative = async () => {
                     <CardDescription>Configure prize distribution for specific rank ranges</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    <div className="flex items-center gap-4 mb-2">
+                      <Label className="flex items-center gap-2">
+                        <input type="checkbox" checked={manualAmountMode} onChange={e => setManualAmountMode(e.target.checked)} />
+                        Manual Amount Mode
+                      </Label>
+                      <Label className="flex items-center gap-2">
+                        <input type="checkbox" checked={roundOff} onChange={e => setRoundOff(e.target.checked)} />
+                        Round Off Per Winner
+                      </Label>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="from">From Rank</Label>
@@ -530,36 +580,54 @@ const savePrizeDistributionAlternative = async () => {
                           max={totalParticipants}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="percentage">Percentage (%)</Label>
-                        <Input
-                          id="percentage"
-                          name="percentage"
-                          type="number"
-                          value={newPrize.percentage}
-                          onChange={handleChange}
-                          placeholder="10"
-                          min="0.1"
-                          max={remainingPercentage}
-                          step="0.1"
-                        />
-                      </div>
+                      {!manualAmountMode ? (
+                        <div className="space-y-2">
+                          <Label htmlFor="percentage">Percentage (%)</Label>
+                          <Input
+                            id="percentage"
+                            name="percentage"
+                            type="number"
+                            value={newPrize.percentage}
+                            onChange={handleChange}
+                            placeholder="10"
+                            min="0.1"
+                            max={remainingPercentage}
+                            step="0.1"
+                          />
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label htmlFor="amount">Total Amount</Label>
+                          <Input
+                            id="amount"
+                            name="amount"
+                            type="number"
+                            value={newPrize.amount || ''}
+                            onChange={handleChange}
+                            placeholder="1000"
+                            min="1"
+                          />
+                        </div>
+                      )}
                       <div className="space-y-2">
                         <Label>&nbsp;</Label>
-                        <Button onClick={handleAddPrize} disabled={remainingPercentage <= 0} className="w-full">
+                        <Button onClick={handleAddPrize} className="w-full">
                           <Plus className="h-4 w-4 mr-2" />
                           Add Prize
                         </Button>
                       </div>
                     </div>
-
-                    <Alert className={remainingPercentage <= 0 ? "border-red-500 bg-red-50" : ""}>
+                    <Alert className={remainingPercentage <= 0 && !manualAmountMode ? "border-red-500 bg-red-50" : ""}>
                       <AlertCircle className="h-4 w-4" />
                       <AlertDescription>
-                        Remaining percentage to distribute: <strong>{remainingPercentage.toFixed(1)}%</strong>
-                        {totalPercentageUsed === 100 && (
-                          <span className="text-green-600 ml-2">✓ Ready to save!</span>
-                        )}
+                        {manualAmountMode
+                          ? "Manual mode: You can set any amount, not limited by prize pool."
+                          : (<>
+                              Remaining percentage to distribute: <strong>{remainingPercentage.toFixed(1)}%</strong>
+                              {totalPercentageUsed === 100 && (
+                                <span className="text-green-600 ml-2">✓ Ready to save!</span>
+                              )}
+                            </>)}
                       </AlertDescription>
                     </Alert>
                   </CardContent>
