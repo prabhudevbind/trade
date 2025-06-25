@@ -29,12 +29,14 @@ import {
 import { CompactContestInfo } from "./CompactContestInfo";
 import { MobileOptionChain } from "./option-chain/MobileOptionChain";
 import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
+import { useGetUserByIdQuery } from "@/store/api/userSliceApi";
 
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
   const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12");
   const { data: activeContest, isLoading: activeContestLoading } =
     useGetActiveContestForUserQuery();
+  const { data: user } = useGetUserByIdQuery();
   const [optionChainData, setOptionChainData] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState("disconnected");
   const [error, setError] = useState(null);

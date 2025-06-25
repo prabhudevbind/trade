@@ -46,6 +46,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format, differenceInSeconds, formatDistanceToNow } from "date-fns";
 import "./leaderboard.css";
+import { Link } from "react-router-dom";
 
 export default function Leaderboard() {
   const {
@@ -187,6 +188,12 @@ export default function Leaderboard() {
           <Button variant="outline" className="mt-2" onClick={handleRefresh}>
             Try again
           </Button>
+
+          <Link to="/contests" className="text-sm text-blue-600 mt-2">
+          <Button variant="link" className="text-blue-600"> 
+            View Contests
+            </Button>
+          </Link>
         </div>
       </div>
     );
