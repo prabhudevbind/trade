@@ -59,6 +59,7 @@ app.use('/api/v1/smtp-details',authenticateToken, require('./routes/user/smtp.ro
 app.use('/api/v1', require('./utils/profileupload'));
 app.use('/api/v1', require('./routes/contest/bulk.router'));
 app.use('/api/v1', require('./routes/user/price.router'));
+app.use('/api/v1', require('./routes/dashboard/dashboard.router'));
 
 // Error handling middleware
 app.use(errorHandler);
