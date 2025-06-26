@@ -11,7 +11,7 @@ export default function Enci() {
   // Fetch current ACCESS_TOKEN on mount
   useEffect(() => {
     setLoading(true);
-    axios.get('http://localhost:5001/api/v1/env?key=ACCESS_TOKEN')
+    axios.get('/api/v1/env?key=ACCESS_TOKEN')
       .then(res => {
         setAccessToken(res.data.value || '');
         setInputValue(res.data.value || '');
@@ -30,7 +30,7 @@ export default function Enci() {
     setMessage('');
     setError('');
     try {
-      const res = await axios.post('http://localhost:5001/api/v1/env', {
+      const res = await axios.post('/api/v1/env', {
         key: 'ACCESS_TOKEN',
         value: inputValue
       }, {

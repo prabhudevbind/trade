@@ -67,7 +67,7 @@ export function OptionDetailsDrawer({
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
     // Use Socket.IO for real-time updates
-    const socket = io('http://localhost:5001', {
+    const socket = io('', {
       transports: ['websocket'],
       reconnection: true,
     });
