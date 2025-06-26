@@ -112,7 +112,7 @@ const OptionChain = () => {
     setError(null);
     let socket;
     if (selectedIndex && selectedExpiry) {
-      socket = io("http://localhost:5001", {
+      socket = io("/", {
         transports: ["websocket"],
         reconnection: true,
       });

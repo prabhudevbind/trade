@@ -495,7 +495,7 @@ export function TradingChart({ instrumentKey }) {
         const encodedKey = encodeURIComponent(instrumentKey);
         console.log("Setting up new EventSource connection");
         eventSourceRef.current = new EventSource(
-          `http://localhost:5001/stream/${encodedKey}`
+          `/stream/${encodedKey}`
         );
 
         eventSourceRef.current.onmessage = (event) => {

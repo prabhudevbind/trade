@@ -22,7 +22,7 @@ export function RealTimeMarketData({ instrumentKey }) {
         eventSource.close();
       }
 
-      eventSource = new EventSource(`http://localhost:5001/stream/${encodeURIComponent(instrumentKey)}`);
+      eventSource = new EventSource(`/stream/${encodeURIComponent(instrumentKey)}`);
 
       eventSource.onmessage = (event) => {
         try {
