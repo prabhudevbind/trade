@@ -3,57 +3,48 @@ const { marketDataService } = require('../../services/marketData.service.js');
 
 const router = express.Router();
 
-// Streaming endpoint for market data
-router.get('/stream/:instrumentKey', (req, res) => {
-  const instrumentKey = decodeURIComponent(req.params.instrumentKey);
-  console.log(`New stream request for instrument: ${instrumentKey}`);
+// --- Socket.IO Market Data Streaming Handler ---
+function registerMarketStreamSocket(io, marketDataService) {
+  // Map: socket.id -> Set of instrumentKeys
+  const socketSubscriptions = new Map();
 
-  // Validate instrument key
-  if (!instrumentKey || instrumentKey.trim() === '') {
-    return res.status(400).json({ error: 'Invalid instrument key' });
-  }
-
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
-  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for nginx
-  res.flushHeaders();
-
-  // Send initial connection message
-  res.write('data: {"message": "Stream connected", "instrumentKey": "' + instrumentKey + '"}\n\n');
-
-  // Check WebSocket connection status
-  const connectionStatus = marketDataService.getConnectionStatus();
-  if (!connectionStatus.connected) {
-    res.write('data: {"error": "Market data service not connected, attempting reconnection..."}\n\n');
-    // Try to reinitialize connection
-    marketDataService.initConnection().catch(error => {
-      console.error('Failed to reconnect:', error);
+  io.on('connection', (socket) => {
+    // Subscribe to market data
+    socket.on('market:subscribe', (instrumentKey) => {
+      if (!instrumentKey) return;
+      socket.join(instrumentKey);
+      if (!socketSubscriptions.has(socket.id)) {
+        socketSubscriptions.set(socket.id, new Set());
+      }
+      socketSubscriptions.get(socket.id).add(instrumentKey);
+      // Add this socket as a streaming client for this instrument
+      marketDataService.addSocketStreamingClient(instrumentKey, socket);
+      console.log(`Socket ${socket.id} subscribed to market ${instrumentKey}`);
     });
-  }
-
-  // Add client to streaming service
-  marketDataService.addStreamingClient(instrumentKey, res);
-
-  // Handle client disconnection
-  req.on('close', () => {
-    console.log(`Client disconnected from stream: ${instrumentKey}`);
-    marketDataService.removeStreamingClient(instrumentKey, res);
-    
-    if (!res.writableEnded) {
-      res.end();
-    }
+    // Unsubscribe
+    socket.on('market:unsubscribe', (instrumentKey) => {
+      if (!instrumentKey) return;
+      socket.leave(instrumentKey);
+      if (socketSubscriptions.has(socket.id)) {
+        socketSubscriptions.get(socket.id).delete(instrumentKey);
+        if (socketSubscriptions.get(socket.id).size === 0) {
+          socketSubscriptions.delete(socket.id);
+        }
+      }
+      marketDataService.removeSocketStreamingClient(instrumentKey, socket);
+      console.log(`Socket ${socket.id} unsubscribed from market ${instrumentKey}`);
+    });
+    // Clean up on disconnect
+    socket.on('disconnect', () => {
+      if (socketSubscriptions.has(socket.id)) {
+        for (const instrumentKey of socketSubscriptions.get(socket.id)) {
+          marketDataService.removeSocketStreamingClient(instrumentKey, socket);
+        }
+        socketSubscriptions.delete(socket.id);
+      }
+    });
   });
-
-  // Handle client abort
-  req.on('aborted', () => {
-    console.log(`Client aborted stream: ${instrumentKey}`);
-    marketDataService.removeStreamingClient(instrumentKey, res);
-  });
-});
+}
 
 // Get connection status
 router.get('/status', (req, res) => {
@@ -137,3 +128,4 @@ router.get('/streams', (req, res) => {
 });
 
 module.exports = router;
+module.exports.registerMarketStreamSocket = registerMarketStreamSocket;

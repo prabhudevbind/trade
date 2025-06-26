@@ -109,7 +109,7 @@ const AdminDashboard = () => {
 
   const updateUserStatus = async (userId, isActive) => {
     try {
-      const response = await fetch(`/api/v1/users/${userId}/status`, {
+      const response = await fepsetch(`/api/v1/users/${userId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive })

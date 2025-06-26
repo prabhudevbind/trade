@@ -11,222 +11,187 @@ const INSTRUMENTS = [
   "NSE_INDEX|Nifty Fin Service",
 ];
 
-// API endpoint for streaming option chain data (1-second updates)
-router.get("/option-chain-stream", async (req, res) => {
-  try {
-    const { expiry_date, instrument_key = "NSE_INDEX|Nifty 50" } = req.query;
+// --- Socket.IO Option Chain Streaming Handler ---
+// Export a function to register with Socket.IO in server.js
+function registerOptionChainSocket(io) {
+  // Map: socket.id -> { interval, params }
+  const optionChainIntervals = new Map();
 
-    if (!expiry_date) {
-      res.status(400).json({
-        success: false,
-        message: "expiry_date is required (format: YYYY-MM-DD)",
-      });
-      return;
-    }
-
-    // Set SSE headers
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.setHeader("Access-Control-Allow-Headers", "Cache-Control");
-    res.flushHeaders();
-
-    console.log(`🚀 Starting option chain stream for ${instrument_key} expiry: ${expiry_date}`);
-
-    // Send initial connection message
-    res.write(`data: ${JSON.stringify({
-      success: true,
-      message: "Connected to option chain stream",
-      timestamp: new Date().toISOString()
-    })}\n\n`);
-
-    // Fetch and stream data every 1 second
-    const interval = setInterval(async () => {
-      try {
-        // Use the correct endpoint from documentation
-        const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(
-          instrument_key
-        )}&expiry_date=${expiry_date}`;
-        
-        const headers = {
-          Accept: "application/json",
-          Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
-        };
-
-        // console.log(`📡 Fetching data from: ${url}`);
-        const response = await axios.get(url, { headers });
-        const optionChainData = response.data.data || [];
-
-        if (optionChainData.length === 0) {
-          res.write(
-            `data: ${JSON.stringify({
+  io.on('connection', (socket) => {
+    // Subscribe to option chain
+    socket.on('optionChain:subscribe', async ({ expiry_date, instrument_key = "NSE_INDEX|Nifty 50" }) => {
+      if (!expiry_date) {
+        socket.emit('optionChain:error', { success: false, message: 'expiry_date is required (format: YYYY-MM-DD)' });
+        return;
+      }
+      // If already streaming for this socket, clear previous
+      if (optionChainIntervals.has(socket.id)) {
+        clearInterval(optionChainIntervals.get(socket.id).interval);
+        optionChainIntervals.delete(socket.id);
+      }
+      // Start interval to fetch and emit data every 1s
+      const interval = setInterval(async () => {
+        try {
+          const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(instrument_key)}&expiry_date=${expiry_date}`;
+          const headers = {
+            Accept: "application/json",
+            Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
+          };
+          const response = await axios.get(url, { headers });
+          const optionChainData = response.data.data || [];
+          if (optionChainData.length === 0) {
+            socket.emit('optionChain:data', {
               success: false,
-              message: "No option chain data found for the given parameters",
+              message: 'No option chain data found for the given parameters',
               timestamp: new Date().toISOString()
-            })}\n\n`
-          );
-          return;
-        }
+            });
+            return;
+          }
+          // Process and combine option chain data
+          const processedData = optionChainData.map(strike => {
+            const strikeData = {
+              expiry: strike.expiry,
+              strike_price: strike.strike_price,
+              underlying_key: strike.underlying_key,
+              underlying_spot_price: strike.underlying_spot_price,
+              pcr: strike.pcr, // Put Call Ratio
+              call_option: null,
+              put_option: null
+            };
 
-        // Process and combine option chain data
-        const processedData = optionChainData.map(strike => {
-          const strikeData = {
-            expiry: strike.expiry,
-            strike_price: strike.strike_price,
-            underlying_key: strike.underlying_key,
-            underlying_spot_price: strike.underlying_spot_price,
-            pcr: strike.pcr, // Put Call Ratio
-            call_option: null,
-            put_option: null
+            // Process Call Option Data
+            if (strike.call_options) {
+              const callMarketData = strike.call_options.market_data || {};
+              const callGreeks = strike.call_options.option_greeks || {};
+              
+              // Convert OI to lots (assuming lot size of 50 for Nifty, adjust as needed)
+              const lotSize = getLotSize(instrument_key);
+              const callOILots = callMarketData.oi ? Math.round(callMarketData.oi / lotSize) : 0;
+              const callPrevOILots = callMarketData.prev_oi ? Math.round(callMarketData.prev_oi / lotSize) : 0;
+              const callOIChange = callOILots - callPrevOILots;
+
+              strikeData.call_option = {
+                instrument_key: strike.call_options.instrument_key,
+                ltp: callMarketData.ltp || 0,
+                volume: callMarketData.volume || 0,
+                oi_quantity: callMarketData.oi || 0,
+                oi_lots: callOILots,
+                oi_change_lots: callOIChange,
+                close_price: callMarketData.close_price || 0,
+                bid_price: callMarketData.bid_price || 0,
+                bid_qty: callMarketData.bid_qty || 0,
+                ask_price: callMarketData.ask_price || 0,
+                ask_qty: callMarketData.ask_qty || 0,
+                greeks: {
+                  delta: callGreeks.delta || 0,
+                  gamma: callGreeks.gamma || 0,
+                  theta: callGreeks.theta || 0,
+                  vega: callGreeks.vega || 0,
+                  iv: callGreeks.iv || 0,
+                  pop: callGreeks.pop || 0
+                }
+              };
+            }
+
+            // Process Put Option Data
+            if (strike.put_options) {
+              const putMarketData = strike.put_options.market_data || {};
+              const putGreeks = strike.put_options.option_greeks || {};
+              
+              // Convert OI to lots
+              const lotSize = getLotSize(instrument_key);
+              const putOILots = putMarketData.oi ? Math.round(putMarketData.oi / lotSize) : 0;
+              const putPrevOILots = putMarketData.prev_oi ? Math.round(putMarketData.prev_oi / lotSize) : 0;
+              const putOIChange = putOILots - putPrevOILots;
+
+              strikeData.put_option = {
+                instrument_key: strike.put_options.instrument_key,
+                ltp: putMarketData.ltp || 0,
+                volume: putMarketData.volume || 0,
+                oi_quantity: putMarketData.oi || 0,
+                oi_lots: putOILots,
+                oi_change_lots: putOIChange,
+                close_price: putMarketData.close_price || 0,
+                bid_price: putMarketData.bid_price || 0,
+                bid_qty: putMarketData.bid_qty || 0,
+                ask_price: putMarketData.ask_price || 0,
+                ask_qty: putMarketData.ask_qty || 0,
+                greeks: {
+                  delta: putGreeks.delta || 0,
+                  gamma: putGreeks.gamma || 0,
+                  theta: putGreeks.theta || 0,
+                  vega: putGreeks.vega || 0,
+                  iv: putGreeks.iv || 0,
+                  pop: putGreeks.pop || 0
+                }
+              };
+            }
+
+            return strikeData;
+          });
+
+          // Sort by strike price
+          processedData.sort((a, b) => a.strike_price - b.strike_price);
+
+          // Calculate total OI and PCR
+          const totalCallOI = processedData.reduce((sum, strike) => 
+            sum + (strike.call_option?.oi_lots || 0), 0
+          );
+          const totalPutOI = processedData.reduce((sum, strike) => 
+            sum + (strike.put_option?.oi_lots || 0), 0
+          );
+          const overallPCR = totalCallOI > 0 ? (totalPutOI / totalCallOI).toFixed(2) : 0;
+
+          const streamData = {
+            success: true,
+            timestamp: new Date().toISOString(),
+            underlying_info: {
+              instrument_key: instrument_key,
+              spot_price: processedData[0]?.underlying_spot_price || 0,
+              expiry_date: expiry_date
+            },
+            summary: {
+              total_strikes: processedData.length,
+              total_call_oi_lots: totalCallOI,
+              total_put_oi_lots: totalPutOI,
+              overall_pcr: overallPCR
+            },
+            option_chain: processedData
           };
 
-          // Process Call Option Data
-          if (strike.call_options) {
-            const callMarketData = strike.call_options.market_data || {};
-            const callGreeks = strike.call_options.option_greeks || {};
-            
-            // Convert OI to lots (assuming lot size of 50 for Nifty, adjust as needed)
-            const lotSize = getLotSize(instrument_key);
-            const callOILots = callMarketData.oi ? Math.round(callMarketData.oi / lotSize) : 0;
-            const callPrevOILots = callMarketData.prev_oi ? Math.round(callMarketData.prev_oi / lotSize) : 0;
-            const callOIChange = callOILots - callPrevOILots;
-
-            strikeData.call_option = {
-              instrument_key: strike.call_options.instrument_key,
-              ltp: callMarketData.ltp || 0,
-              volume: callMarketData.volume || 0,
-              oi_quantity: callMarketData.oi || 0,
-              oi_lots: callOILots,
-              oi_change_lots: callOIChange,
-              close_price: callMarketData.close_price || 0,
-              bid_price: callMarketData.bid_price || 0,
-              bid_qty: callMarketData.bid_qty || 0,
-              ask_price: callMarketData.ask_price || 0,
-              ask_qty: callMarketData.ask_qty || 0,
-              greeks: {
-                delta: callGreeks.delta || 0,
-                gamma: callGreeks.gamma || 0,
-                theta: callGreeks.theta || 0,
-                vega: callGreeks.vega || 0,
-                iv: callGreeks.iv || 0,
-                pop: callGreeks.pop || 0
-              }
-            };
+          socket.emit('optionChain:data', streamData);
+        } catch (error) {
+          let errorMessage = 'Failed to fetch option chain';
+          if (error.response) {
+            errorMessage = `API Error: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
           }
-
-          // Process Put Option Data
-          if (strike.put_options) {
-            const putMarketData = strike.put_options.market_data || {};
-            const putGreeks = strike.put_options.option_greeks || {};
-            
-            // Convert OI to lots
-            const lotSize = getLotSize(instrument_key);
-            const putOILots = putMarketData.oi ? Math.round(putMarketData.oi / lotSize) : 0;
-            const putPrevOILots = putMarketData.prev_oi ? Math.round(putMarketData.prev_oi / lotSize) : 0;
-            const putOIChange = putOILots - putPrevOILots;
-
-            strikeData.put_option = {
-              instrument_key: strike.put_options.instrument_key,
-              ltp: putMarketData.ltp || 0,
-              volume: putMarketData.volume || 0,
-              oi_quantity: putMarketData.oi || 0,
-              oi_lots: putOILots,
-              oi_change_lots: putOIChange,
-              close_price: putMarketData.close_price || 0,
-              bid_price: putMarketData.bid_price || 0,
-              bid_qty: putMarketData.bid_qty || 0,
-              ask_price: putMarketData.ask_price || 0,
-              ask_qty: putMarketData.ask_qty || 0,
-              greeks: {
-                delta: putGreeks.delta || 0,
-                gamma: putGreeks.gamma || 0,
-                theta: putGreeks.theta || 0,
-                vega: putGreeks.vega || 0,
-                iv: putGreeks.iv || 0,
-                pop: putGreeks.pop || 0
-              }
-            };
-          }
-
-          return strikeData;
-        });
-
-        // Sort by strike price
-        processedData.sort((a, b) => a.strike_price - b.strike_price);
-
-        // Calculate total OI and PCR
-        const totalCallOI = processedData.reduce((sum, strike) => 
-          sum + (strike.call_option?.oi_lots || 0), 0
-        );
-        const totalPutOI = processedData.reduce((sum, strike) => 
-          sum + (strike.put_option?.oi_lots || 0), 0
-        );
-        const overallPCR = totalCallOI > 0 ? (totalPutOI / totalCallOI).toFixed(2) : 0;
-
-        const streamData = {
-          success: true,
-          timestamp: new Date().toISOString(),
-          underlying_info: {
-            instrument_key: instrument_key,
-            spot_price: processedData[0]?.underlying_spot_price || 0,
-            expiry_date: expiry_date
-          },
-          summary: {
-            total_strikes: processedData.length,
-            total_call_oi_lots: totalCallOI,
-            total_put_oi_lots: totalPutOI,
-            overall_pcr: overallPCR
-          },
-          option_chain: processedData
-        };
-
-        // Send processed data to client
-        res.write(`data: ${JSON.stringify(streamData)}\n\n`);
-
-        console.log(`✅ Sent option chain data: ${processedData.length} strikes, PCR: ${overallPCR}`);
-
-      } catch (error) {
-        console.error("❌ Streaming API Error:", error.message);
-        
-        let errorMessage = "Failed to fetch option chain";
-        if (error.response) {
-          errorMessage = `API Error: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
-        }
-
-        res.write(
-          `data: ${JSON.stringify({
+          socket.emit('optionChain:error', {
             success: false,
             message: errorMessage,
             error: error.message,
             timestamp: new Date().toISOString()
-          })}\n\n`
-        );
+          });
+        }
+      }, 1000);
+      optionChainIntervals.set(socket.id, { interval, params: { expiry_date, instrument_key } });
+      socket.emit('optionChain:connected', { success: true, message: 'Connected to option chain stream', timestamp: new Date().toISOString() });
+    });
+    // Unsubscribe/cleanup
+    socket.on('optionChain:unsubscribe', () => {
+      if (optionChainIntervals.has(socket.id)) {
+        clearInterval(optionChainIntervals.get(socket.id).interval);
+        optionChainIntervals.delete(socket.id);
       }
-    }, 1000); // 1-second interval
-
-    // Handle client disconnection
-    req.on("close", () => {
-      clearInterval(interval);
-      res.end();
-      console.log("✅ Client disconnected from option chain stream");
+      socket.emit('optionChain:disconnected', { success: true, message: 'Disconnected from option chain stream' });
     });
-
-    req.on("error", (err) => {
-      console.error("❌ Request error:", err);
-      clearInterval(interval);
-      res.end();
+    socket.on('disconnect', () => {
+      if (optionChainIntervals.has(socket.id)) {
+        clearInterval(optionChainIntervals.get(socket.id).interval);
+        optionChainIntervals.delete(socket.id);
+      }
     });
-
-  } catch (error) {
-    console.error("❌ SSE Setup Error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to set up streaming",
-      error: error.message,
-    });
-  }
-});
+  });
+}
 
 // Helper function to get lot size based on instrument
 function getLotSize(instrumentKey) {
@@ -479,3 +444,4 @@ router.get("/available-expiry-dates", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.registerOptionChainSocket = registerOptionChainSocket;

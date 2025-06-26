@@ -10,6 +10,7 @@ const { initializeMarketDataService } = require('./services/marketData.service')
 const os = require('os');
 const cron = require('node-cron');
 const axios = require('axios');
+const fs = require('fs');
 
 // Create Express app
 const app = express();
@@ -261,14 +262,8 @@ const connectUpstoxWebSocket = async (wsUrl) => {
           const decodedData = decodeProtobuf(data);
           if (decodedData.feeds) {
             for (const [instrumentKey, feed] of Object.entries(decodedData.feeds)) {
-              if (streamingResponses.has(instrumentKey)) {
-                const dataToSend = JSON.stringify({ instrumentKey, data: feed });
-                streamingResponses.get(instrumentKey).forEach(res => {
-                  if (!res.writableEnded) {
-                    res.write(`data: ${dataToSend}\n\n`);
-                  }
-                });
-              }
+              // Broadcast to all Socket.IO clients in the room
+              io.to(instrumentKey).emit('marketData', { instrumentKey, data: feed });
             }
           } else {
             console.log("No feeds in decoded data:", decodedData);
@@ -297,48 +292,67 @@ const sendKeepAlive = () => {
 // Start keep-alive interval
 setInterval(sendKeepAlive, 15000); // Send keep-alive every 15 seconds
 
-// Streaming endpoint
-app.get('/stream/:instrumentKey', (req, res) => {
-  const instrumentKey = decodeURIComponent(req.params.instrumentKey);
-  console.log(`New stream request for: ${instrumentKey}`);
+// Socket.IO setup
+const httpServer = server; // Already created
+const { Server: SocketIOServer } = require('socket.io');
+const io = new SocketIOServer(httpServer, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
 
-  // Set SSE headers
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for nginx
-  res.flushHeaders();
+// --- Socket.IO streaming integrations ---
+// Option Chain streaming
+const { registerOptionChainSocket } = require('./routes/chart/niftychart.router');
+registerOptionChainSocket(io);
+// Market Data streaming
+const { registerMarketStreamSocket } = require('./routes/market/marketStream.router');
+const { marketDataService } = require('./services/marketData.service');
+registerMarketStreamSocket(io, marketDataService);
 
-  // Send initial message
-  res.write('data: {"message": "Streaming started"}\n\n');
+// Socket.IO instrument subscriptions: { instrumentKey: Set<socket.id> }
+const instrumentSubscriptions = new Map();
 
-  // Check WebSocket connection
-  if (!upstoxWs || upstoxWs.readyState !== WebSocket.OPEN) {
-    res.write('data: {"error": "WebSocket not connected, retrying..."}\n\n');
-    initUpstoxConnection();
-  } else {
-    // Add response to streamingResponses
-    if (!streamingResponses.has(instrumentKey)) {
-      streamingResponses.set(instrumentKey, []);
+// Socket.IO connection handler
+io.on('connection', (socket) => {
+  console.log('Socket.IO client connected:', socket.id);
+
+  // Subscribe to instrument
+  socket.on('subscribe', (instrumentKey) => {
+    if (!instrumentKey) return;
+    socket.join(instrumentKey);
+    if (!instrumentSubscriptions.has(instrumentKey)) {
+      instrumentSubscriptions.set(instrumentKey, new Set());
       subscribeToOption(instrumentKey);
     }
-    streamingResponses.get(instrumentKey).push(res);
-  }
+    instrumentSubscriptions.get(instrumentKey).add(socket.id);
+    console.log(`Socket ${socket.id} subscribed to ${instrumentKey}`);
+  });
 
-  // Handle client disconnection
-  req.on('close', () => {
-    console.log(`Client disconnected for: ${instrumentKey}`);
-    const responses = streamingResponses.get(instrumentKey);
-    if (responses) {
-      const index = responses.indexOf(res);
-      if (index > -1) responses.splice(index, 1);
-      if (responses.length === 0) {
-        streamingResponses.delete(instrumentKey);
+  // Unsubscribe from instrument
+  socket.on('unsubscribe', (instrumentKey) => {
+    if (!instrumentKey) return;
+    socket.leave(instrumentKey);
+    if (instrumentSubscriptions.has(instrumentKey)) {
+      instrumentSubscriptions.get(instrumentKey).delete(socket.id);
+      if (instrumentSubscriptions.get(instrumentKey).size === 0) {
+        instrumentSubscriptions.delete(instrumentKey);
         unsubscribeFromOption(instrumentKey);
       }
     }
-    if (!res.writableEnded) {
-      res.end();
+    console.log(`Socket ${socket.id} unsubscribed from ${instrumentKey}`);
+  });
+
+  // Clean up on disconnect
+  socket.on('disconnect', () => {
+    console.log('Socket.IO client disconnected:', socket.id);
+    for (const [instrumentKey, subscribers] of instrumentSubscriptions.entries()) {
+      subscribers.delete(socket.id);
+      if (subscribers.size === 0) {
+        instrumentSubscriptions.delete(instrumentKey);
+        unsubscribeFromOption(instrumentKey);
+      }
     }
   });
 });
@@ -406,4 +420,41 @@ app.use(express.static(path.join(__dirname, '../dist')));
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../dist/index.html'));
 });
+
+// --- API to update/insert .env key-value (admin only) ---
+app.post('/api/v1/env', async (req, res) => {
+  try {
+    // Only allow admin users (adjust as needed)
+    // if (!req.user || !req.user.isAdmin) {
+    //   return res.status(403).json({ success: false, error: 'Admin access required' });
+    // }
+    const { key, value } = req.body;
+    if (!key || typeof value === 'undefined') {
+      return res.status(400).json({ success: false, error: 'Missing key or value' });
+    }
+    const envPath = path.join(__dirname, '../.env');
+    let envContent = '';
+    if (fs.existsSync(envPath)) {
+      envContent = fs.readFileSync(envPath, 'utf-8');
+    }
+    const lines = envContent.split('\n');
+    let found = false;
+    const newLines = lines.map(line => {
+      if (line.startsWith(key + '=')) {
+        found = true;
+        return `${key}=${value}`;
+      }
+      return line;
+    });
+    if (!found) {
+      newLines.push(`${key}=${value}`);
+    }
+    fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
+    res.json({ success: true, message: found ? 'Updated' : 'Inserted', key, value });
+  } catch (err) {
+    console.error('Error updating .env:', err);
+    res.status(500).json({ success: false, error: 'Failed to update .env', details: err.message });
+  }
+});
+
 module.exports = app;
