@@ -497,7 +497,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
   const entry_fee = contest.entry_fee
   const canAfford = userBalance >= entry_fee
   const shortfall = canAfford ? 0 : entry_fee - userBalance
-  
+
   const startDate = new Date(contest.start_time)
   const endDate = new Date(contest.end_time)
   const now = new Date()
@@ -569,11 +569,10 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
                 <span className="text-sm font-medium">{contest.trading_instrument}</span>
               </div>
             </div>
-            
             <div className="flex gap-4 sm:text-right">
               <div>
                 <p className="text-sm text-muted-foreground">Entry Fee</p>
-                <p className="font-bold text-xl text-primary">{formatCurrency(contest.entry_fee)}</p>
+                <p className="font-bold text-xl text-primary">{contest.entry_fee}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Participants</p>
@@ -588,7 +587,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground font-medium">Contest Period</p>
-              {/* <p className="font-semibold text-sm">{formatDate(contest.start_time)} - {formatDate(contest.end_time)}</p> */}
+              <p className="font-semibold text-sm">{contest.start_time} - {contest.end_time}</p>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Daily: 9:15 AM - 3:15 PM
@@ -615,13 +614,13 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
             <Alert className="mb-4 bg-red-50 border-red-200">
               <AlertCircle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-800">
-                Need {formatCurrency(shortfall)} more to join this contest
+                Need {shortfall} more to join this contest
               </AlertDescription>
             </Alert>
           )}
         </div>
 
-        <div className="flex items-center justify-center p-6 bg-gradient-to-br from-muted/30 to-muted/50 lg:w-56">
+        <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-br from-muted/30 to-muted/50 lg:w-56 gap-2">
           <Button
             onClick={handleButtonClick}
             disabled={isLoading || disableJoinButton}
@@ -629,6 +628,13 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
             variant={canAfford ? "default" : "secondary"}
           >
             {getButtonText()}
+          </Button>
+          <Button
+            onClick={() => navigate(`/option-chain/${contest.id}`)}
+            className="w-full h-10 text-base font-semibold"
+            variant="outline"
+          >
+            Trade Now
           </Button>
         </div>
       </div>

@@ -81,15 +81,8 @@ const contestSchema = z.object({
   tradingInstrument: z.enum(["NIFTY50", "BANKNIFTY", "BOTH"]),
 })
 
-// Helper function to check if contest is expired
-const checkContestStatus = (contest) => {
-  const now = new Date()
-  const endTime = new Date(contest.end_time)
-  return {
-    ...contest,
-    status: endTime < now ? "ended" : contest.status,
-  }
-}
+// Remove checkContestStatus and use API status as-is
+// const checkContestStatus = (contest) => contest
 
 export default function ContestManager() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
@@ -136,14 +129,14 @@ export default function ContestManager() {
 
   // Filter and search contests
   const filteredContests = contests
-    ? contests.contests.map(checkContestStatus).filter((contest) => {
+    ? contests.contests.filter((contest) => {
         const matchesSearch = contest.name.toLowerCase().includes(searchTerm.toLowerCase())
         const matchesStatus = statusFilter === "all" || contest.status === statusFilter
         return matchesSearch && matchesStatus
       })
     : []
 
-  // Group contests by status
+  // Group contests by status (use API status directly)
   const upcomingContests = filteredContests.filter((contest) => contest.status === "upcoming")
   const ongoingContests = filteredContests.filter((contest) => contest.status === "ongoing")
   const endedContests = filteredContests.filter((contest) => contest.status === "ended")
@@ -388,8 +381,8 @@ export default function ContestManager() {
                 <TableRow key={contest.id} className="hover:bg-muted/50">
                   <TableCell className="font-medium">{contest.id}</TableCell>
                   <TableCell>{contest.name}</TableCell>
-                  <TableCell>{formatDate(contest.start_time)}</TableCell>
-                  <TableCell>{formatDate(contest.end_time)}</TableCell>
+                  <TableCell>{contest.start_time}</TableCell>
+                  <TableCell>{contest.end_time}</TableCell>
                   <TableCell>{formatCurrency(contest.entry_fee)}</TableCell>
                   <TableCell>
                     <Badge
@@ -464,11 +457,11 @@ export default function ContestManager() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
                   <p className="text-muted-foreground">Start Time</p>
-                  <p className="font-medium truncate">{formatDate(contest.start_time)}</p>
+                  <p className="font-medium truncate">{contest.start_time}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">End Time</p>
-                  <p className="font-medium truncate">{formatDate(contest.end_time)}</p>
+                  <p className="font-medium truncate">{contest.end_time}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Entry Fee</p>
