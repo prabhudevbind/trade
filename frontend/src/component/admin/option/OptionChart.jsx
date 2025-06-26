@@ -30,6 +30,7 @@ import { CompactContestInfo } from "./CompactContestInfo";
 import { MobileOptionChain } from "./option-chain/MobileOptionChain";
 import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi";
+import io from "socket.io-client";
 
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
@@ -108,22 +109,21 @@ const OptionChain = () => {
   useEffect(() => {
     setIsLoading(true);
     setConnectionStatus("connecting");
-
-    const eventSource = new EventSource(
-      `/api/v1/option-chain-stream?instrument_key=${encodeURIComponent(
-        selectedIndex
-      )}&expiry_date=${selectedExpiry}`
-    );
-
-    eventSource.onopen = () => {
-      setConnectionStatus("connected");
-      console.log("✅ Connected to option chain stream");
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const apiResponse = JSON.parse(event.data);
-
+    setError(null);
+    let socket;
+    if (selectedIndex && selectedExpiry) {
+      socket = io("http://localhost:5001", {
+        transports: ["websocket"],
+        reconnection: true,
+      });
+      socket.on("connect", () => {
+        setConnectionStatus("connected");
+        socket.emit("optionChain:subscribe", {
+          instrument_key: selectedIndex,
+          expiry_date: selectedExpiry,
+        });
+      });
+      socket.on("optionChain:data", (apiResponse) => {
         if (apiResponse.success && apiResponse.option_chain) {
           processOptionData(apiResponse);
           setConnectionStatus("connected");
@@ -131,20 +131,24 @@ const OptionChain = () => {
           setError(apiResponse.message);
           setConnectionStatus("error");
         }
-      } catch (err) {
-        console.error("Error parsing SSE data:", err);
-        setError("Error processing real-time data");
-      }
-    };
-
-    eventSource.onerror = (e) => {
-      console.error("SSE Error:", e);
-      setError("Connection to data stream lost. Trying to reconnect...");
-      setConnectionStatus("reconnecting");
-    };
-
+      });
+      socket.on("optionChain:error", (err) => {
+        setError(err.message || "Error in option chain stream");
+        setConnectionStatus("error");
+      });
+      socket.on("disconnect", () => {
+        setConnectionStatus("disconnected");
+      });
+      socket.on("connect_error", (err) => {
+        setError("Socket.IO connection error");
+        setConnectionStatus("error");
+      });
+    }
     return () => {
-      eventSource.close();
+      if (socket) {
+        socket.emit("optionChain:unsubscribe");
+        socket.disconnect();
+      }
       setConnectionStatus("disconnected");
     };
   }, [selectedIndex, selectedExpiry]);

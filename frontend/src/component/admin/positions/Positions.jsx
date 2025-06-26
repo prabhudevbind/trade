@@ -2,6 +2,7 @@
 
 import { useGetTradesActiveQuery } from "@/store/api/contest"
 import { useEffect, useState } from "react"
+import { io } from "socket.io-client"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,47 +28,56 @@ export default function Positions() {
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
-  // Set up real-time price updates for each position
+  // Set up real-time price updates for each position using Socket.IO
   useEffect(() => {
     if (!activeTradesData?.positions) return
 
     setPositions(activeTradesData.positions)
 
-    const eventSources = activeTradesData.positions.map((position) => {
-      // Format the instrument key as NSE_FO|symbol
-      const instrumentKey = `NSE_FO|${position.option.symbol}`
-      const es = new EventSource(`http://localhost:5001/stream/${instrumentKey}`)
-
-      es.onmessage = (event) => {
-        const data = JSON.parse(event.data)
-        if (data.instrumentKey === instrumentKey) {
-          setPositions((prev) =>
-            prev.map((p) => {
-              if (p.option.symbol === position.option.symbol) {
-                const newLtp = data.data.ff.marketFF.ltpc.ltp
-                const pnl = (newLtp - Number.parseFloat(p.average_entry_price)) * p.net_quantity
-                return {
-                  ...p,
-                  option: {
-                    ...p.option,
-                    ltp: newLtp,
-                  },
-                  unrealizedPnL: pnl,
-                  currentValue: newLtp * p.net_quantity,
-                }
-              }
-              return p
-            }),
-          )
-        }
-      }
-
-      return es
+    // Connect to Socket.IO server (singleton per component instance)
+    const socket = io("http://localhost:5001", {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      autoConnect: true,
     })
 
-    // Cleanup function
+    // Subscribe to all instrumentKeys
+    const instrumentKeys = activeTradesData.positions.map((position) => `NSE_FO|${position.option.symbol}`)
+    instrumentKeys.forEach((instrumentKey) => {
+      socket.emit("market:subscribe", instrumentKey)
+    })
+
+    // Listen for market data updates
+    socket.on("marketData", (data) => {
+      if (!data || !data.instrumentKey) return
+      setPositions((prev) =>
+        prev.map((p) => {
+          if (`NSE_FO|${p.option.symbol}` === data.instrumentKey) {
+            // Defensive: handle both .data.ff.marketFF.ltpc.ltp and .data.ltp
+            const newLtp = data.data?.ff?.marketFF?.ltpc?.ltp ?? data.data?.ltp ?? p.option.ltp
+            const pnl = (newLtp - Number.parseFloat(p.average_entry_price)) * p.net_quantity
+            return {
+              ...p,
+              option: {
+                ...p.option,
+                ltp: newLtp,
+              },
+              unrealizedPnL: pnl,
+              currentValue: newLtp * p.net_quantity,
+            }
+          }
+          return p
+        }),
+      )
+    })
+
+    // Cleanup: Unsubscribe and disconnect
     return () => {
-      eventSources.forEach((es) => es.close())
+      instrumentKeys.forEach((instrumentKey) => {
+        socket.emit("market:unsubscribe", instrumentKey)
+      })
+      socket.disconnect()
     }
   }, [activeTradesData?.positions])
 

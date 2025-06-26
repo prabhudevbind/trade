@@ -1,9 +1,11 @@
 import { useRef, useEffect } from 'react';
 import { debounce } from 'lodash';
+import { io } from 'socket.io-client';
 
 export function usePriceStreams(realTimeData, setRealTimeData) {
-  const activeStreamsRef = useRef(new Map());
+  const socketRef = useRef(null);
   const dataUpdateQueue = useRef(new Map());
+  const subscribedInstruments = useRef(new Set());
 
   useEffect(() => {
     if (!realTimeData?.leaderboard) return;
@@ -16,28 +18,42 @@ export function usePriceStreams(realTimeData, setRealTimeData) {
       });
     });
 
-    // Clean up unused streams
-    activeStreamsRef.current.forEach((es, key) => {
-      if (!requiredInstruments.has(key)) {
-        es.close();
-        activeStreamsRef.current.delete(key);
-        dataUpdateQueue.current.delete(key);
+    // Connect to Socket.IO server if not already
+    if (!socketRef.current) {
+      socketRef.current = io('http://localhost:5001', {
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        autoConnect: true,
+      });
+    }
+    const socket = socketRef.current;
+
+    // Subscribe to new instruments
+    requiredInstruments.forEach(instrumentKey => {
+      if (!subscribedInstruments.current.has(instrumentKey)) {
+        socket.emit('market:subscribe', instrumentKey);
+        subscribedInstruments.current.add(instrumentKey);
+      }
+    });
+    // Unsubscribe from instruments no longer needed
+    Array.from(subscribedInstruments.current).forEach(instrumentKey => {
+      if (!requiredInstruments.has(instrumentKey)) {
+        socket.emit('market:unsubscribe', instrumentKey);
+        subscribedInstruments.current.delete(instrumentKey);
       }
     });
 
     // Debounced update function to batch updates
     const debouncedUpdate = debounce(() => {
       if (dataUpdateQueue.current.size === 0) return;
-
       setRealTimeData(prevData => {
         if (!prevData?.leaderboard) return prevData;
-
         const updatedLeaderboard = prevData.leaderboard.map(participant => {
           let updatedUnrealizedPnL = 0;
-          
-          const updatedPositions = participant.activePositions?.map(position => {
+          let updatedPositions = participant.activePositions?.map(position => {
             const newPrice = dataUpdateQueue.current.get(`NSE_FO|${position.symbol}`);
-            if (newPrice) {
+            if (newPrice !== undefined) {
               const positionPnL = (newPrice - position.averagePrice) * position.quantity;
               updatedUnrealizedPnL += positionPnL;
               return {
@@ -49,16 +65,18 @@ export function usePriceStreams(realTimeData, setRealTimeData) {
             updatedUnrealizedPnL += position.pnl || 0;
             return position;
           }) || [];
-
+          // Calculate percentage P&L (ROI) for this participant
+          const initialValue = (participant.virtualCash || 0) + (participant.activePositions?.reduce((sum, pos) => sum + (pos.averagePrice * pos.quantity), 0) || 0);
+          const roi = initialValue > 0 ? (updatedUnrealizedPnL / initialValue) * 100 : 0;
           return {
             ...participant,
             activePositions: updatedPositions,
             unrealizedPnL: updatedUnrealizedPnL,
             totalPnL: updatedUnrealizedPnL + (participant.realizedPnL || 0),
-            portfolioValue: (participant.virtualCash || 0) + updatedUnrealizedPnL + (participant.realizedPnL || 0)
+            portfolioValue: (participant.virtualCash || 0) + updatedUnrealizedPnL + (participant.realizedPnL || 0),
+            roi: roi
           };
         });
-
         // Sort and update ranks
         const sortedLeaderboard = updatedLeaderboard
           .sort((a, b) => b.portfolioValue - a.portfolioValue)
@@ -66,82 +84,43 @@ export function usePriceStreams(realTimeData, setRealTimeData) {
             ...participant,
             rank: index + 1
           }));
-
         // Clear the update queue after processing
         dataUpdateQueue.current.clear();
-
         return {
           ...prevData,
           leaderboard: sortedLeaderboard,
           contestStats: {
             averageROI: sortedLeaderboard.reduce((sum, p) => sum + (p.roi || 0), 0) / sortedLeaderboard.length,
             highestPnL: Math.max(...sortedLeaderboard.map(p => p.totalPnL || 0)),
-            totalTradingVolume: sortedLeaderboard.reduce((sum, p) => 
-              sum + (p.tradingStats?.totalTrades || 0), 0
-            ),
+            totalTradingVolume: sortedLeaderboard.reduce((sum, p) => sum + (p.tradingStats?.totalTrades || 0), 0),
           }
         };
       });
-    }, 1000); // Debounce updates to once per second
+    }, 1000);
 
-    // Setup stream handlers
-    const setupStreamHandlers = (es, instrumentKey) => {
-      let reconnectAttempts = 0;
-      const MAX_RECONNECT_ATTEMPTS = 3;
-
-      es.onopen = () => {
-        console.log(`Stream connected for ${instrumentKey}`);
-        reconnectAttempts = 0;
-      };
-
-      es.onerror = (error) => {
-        console.error(`Stream error for ${instrumentKey}:`, error);
-        es.close();
-        activeStreamsRef.current.delete(instrumentKey);
-
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-          reconnectAttempts++;
-          setTimeout(() => {
-            if (!activeStreamsRef.current.has(instrumentKey)) {
-              const newEs = new EventSource(`http://localhost:5001/stream/${instrumentKey}`);
-              activeStreamsRef.current.set(instrumentKey, newEs);
-              setupStreamHandlers(newEs, instrumentKey);
-            }
-          }, 5000);
-        }
-      };
-
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (!data.data?.ff?.marketFF?.ltpc?.ltp) return;
-
-          const newLtp = data.data.ff.marketFF.ltpc.ltp;
-          dataUpdateQueue.current.set(instrumentKey, newLtp);
-          debouncedUpdate();
-        } catch (error) {
-          console.error(`Error processing message for ${instrumentKey}:`, error);
-        }
-      };
-    };
-
-    // Create new streams for required instruments
-    requiredInstruments.forEach(instrumentKey => {
-      if (!activeStreamsRef.current.has(instrumentKey)) {
-        const es = new EventSource(`http://localhost:5001/stream/${instrumentKey}`);
-        activeStreamsRef.current.set(instrumentKey, es);
-        setupStreamHandlers(es, instrumentKey);
+    // Listen for market data updates
+    const onMarketData = (data) => {
+      if (!data || !data.instrumentKey) return;
+      // Defensive: handle both .data.ff.marketFF.ltpc.ltp and .data.ltp
+      const newLtp = data.data?.ff?.marketFF?.ltpc?.ltp ?? data.data?.ltp;
+      if (newLtp !== undefined) {
+        dataUpdateQueue.current.set(data.instrumentKey, newLtp);
+        debouncedUpdate();
       }
-    });
+    };
+    socket.on('marketData', onMarketData);
 
     // Cleanup function
     return () => {
-      activeStreamsRef.current.forEach(es => {
-        es.close();
+      socket.off('marketData', onMarketData);
+      // Unsubscribe from all instruments
+      Array.from(subscribedInstruments.current).forEach(instrumentKey => {
+        socket.emit('market:unsubscribe', instrumentKey);
       });
-      activeStreamsRef.current.clear();
-      dataUpdateQueue.current.clear();
+      subscribedInstruments.current.clear();
       debouncedUpdate.cancel();
+      // Optionally disconnect socket if you want to fully cleanup
+      // socket.disconnect();
     };
-  }, [realTimeData?.leaderboard]); // Only re-run when leaderboard data changes
+  }, [realTimeData?.leaderboard]);
 }

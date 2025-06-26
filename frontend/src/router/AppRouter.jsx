@@ -29,6 +29,7 @@ import Deposit from "@/component/admin/deposit/Deposit";
 import WithDraw from "@/component/admin/withdrawals/WithDraw";
 import Price from "@/component/admin/price/Price";
 import ContestPrizeDistribution from "@/component/admin/price/Price";
+import Enci from "@/component/admin/Enci/Enci";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -165,6 +166,10 @@ export const createAppRouter = (isAuthenticated) =>
         {
           path: "positions",
           element: <Positions />,
+        },
+        {
+          path:"admin/settings",
+          element: <Enci/>
         },
         {
           path: "admin",

@@ -219,7 +219,8 @@ export default function Leaderboard() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Card className="cursor-help transition-shadow hover:shadow-md">
-                  <CardContent className="p-3 sm:p-4">
+                  {/* --- Top stats cards: AVG ROI and TOP Unrealized P&L --- */}
+                  <CardContent>
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-muted-foreground">
                         AVG ROI
@@ -234,11 +235,14 @@ export default function Leaderboard() {
                           : "text-red-600"
                       )}
                     >
-                      {realTimeData.contestStats.averageROI.toFixed(1)}%
+                      {Number.isFinite(realTimeData.contestStats.averageROI)
+                        ? realTimeData.contestStats.averageROI.toFixed(2)
+                        : "0.00"}
+                      %
                     </div>
                     <Progress
                       value={Math.min(
-                        Math.abs(realTimeData.contestStats.averageROI),
+                        Math.abs(realTimeData.contestStats.averageROI || 0),
                         100
                       )}
                       className={cn(
@@ -248,6 +252,34 @@ export default function Leaderboard() {
                           : "bg-red-100"
                       )}
                     />
+                  </CardContent>
+                  <CardContent>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        TOP Unrealized P&L
+                      </span>
+                      <TrendingUp className="h-3 w-3 text-muted-foreground" />
+                    </div>
+                    <div
+                      className={cn(
+                        "text-lg sm:text-xl font-bold transition-colors",
+                        realTimeData.leaderboard &&
+                          realTimeData.leaderboard.length > 0 &&
+                          realTimeData.leaderboard[0].unrealizedPnL >= 0
+                          ? "text-green-600"
+                          : "text-red-600"
+                      )}
+                    >
+                      ₹
+                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
+                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
+                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
+                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
+                        : "0.00"}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">
+                      Contest leader
+                    </p>
                   </CardContent>
                 </Card>
               </TooltipTrigger>
@@ -264,24 +296,26 @@ export default function Leaderboard() {
                   <CardContent className="p-3 sm:p-4">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-xs font-medium text-muted-foreground">
-                        TOP P&L
+                        TOP Unrealized P&L
                       </span>
                       <TrendingUp className="h-3 w-3 text-muted-foreground" />
                     </div>
                     <div
                       className={cn(
                         "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.contestStats.highestPnL >= 0
+                        realTimeData.leaderboard &&
+                          realTimeData.leaderboard.length > 0 &&
+                          realTimeData.leaderboard[0].unrealizedPnL >= 0
                           ? "text-green-600"
                           : "text-red-600"
                       )}
                     >
                       ₹
-                      {Math.abs(realTimeData.contestStats.highestPnL) >= 1000
-                        ? (realTimeData.contestStats.highestPnL / 1000).toFixed(
-                            1
-                          ) + "K"
-                        : realTimeData.contestStats.highestPnL.toFixed(0)}
+                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
+                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
+                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
+                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
+                        : "0.00"}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 truncate">
                       Contest leader
@@ -290,7 +324,7 @@ export default function Leaderboard() {
                 </Card>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Highest profit/loss achieved in the contest</p>
+                <p>Highest unrealized profit/loss in the contest</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -418,53 +452,40 @@ export default function Leaderboard() {
                           </div>
 
                           {/* Right: Performance & Expand */}
-                          <div className="flex items-center gap-2">
-                            <div className="text-right">
-                              <div
-                                className={cn(
-                                  "flex items-center gap-1 text-sm font-bold",
-                                  participant.totalPnL >= 0
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                )}
-                              >
-                                {participant.totalPnL >= 0 ? (
-                                  <TrendingUp className="h-3 w-3" />
-                                ) : (
-                                  <TrendingDown className="h-3 w-3" />
-                                )}
-                                <span>
-                                  ₹
-                                  {Math.abs(participant.totalPnL) >= 1000
-                                    ? (
-                                        Math.abs(participant.totalPnL) / 1000
-                                      ).toFixed(1) + "K"
-                                    : Math.abs(participant.totalPnL).toFixed(0)}
-                                </span>
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                {participant.roi.toFixed(1)}% ROI
-                              </div>
+                          <div className="text-right min-w-[80px]">
+                            <div className={cn(
+                              "flex items-center gap-1 text-base font-bold",
+                              participant.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"
+                            )}>
+                              {participant.unrealizedPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                              <span>
+                                ₹{Math.abs(participant.unrealizedPnL) >= 1000
+                                  ? (Math.abs(participant.unrealizedPnL) / 1000).toFixed(1) + "K"
+                                  : Math.abs(participant.unrealizedPnL).toFixed(2)}
+                              </span>
                             </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() =>
-                                setExpandedUser(
-                                  expandedUser === participant.userId
-                                    ? null
-                                    : participant.userId
-                                )
-                              }
-                              className="h-8 w-8 p-0 flex-shrink-0"
-                            >
-                              {expandedUser === participant.userId ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </Button>
+                            <div className="text-xs text-muted-foreground">
+                              {Number.isFinite(participant.roi) ? participant.roi.toFixed(2) : "0.00"}% ROI
+                            </div>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                              setExpandedUser(
+                                expandedUser === participant.userId
+                                  ? null
+                                  : participant.userId
+                              )
+                            }
+                            className="h-8 w-8 p-0 flex-shrink-0"
+                          >
+                            {expandedUser === participant.userId ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -812,52 +833,26 @@ export default function Leaderboard() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div
-                            className={cn(
-                              "flex items-center justify-end gap-1 transition-colors",
-                              participant.totalPnL >= 0
-                                ? "text-green-600"
-                                : "text-red-600"
-                            )}
-                          >
-                            {participant.totalPnL >= 0 ? (
-                              <TrendingUp className="h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="h-3 w-3" />
-                            )}
-                            {/* // ...existing code... */}
-
-
-{/* <span className={`font-medium text-sm ${participant.realizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-  {participant.realizedPnL >= 0 ? "Profit: " : "Loss: "}
-  ₹
-  {Math.abs(participant.realizedPnL) >= 1000
-    ? (Math.abs(participant.realizedPnL) / 1000).toFixed(1) + "K"
-    : Math.abs(participant.realizedPnL).toFixed(0)}
-</span> */}
-
-
-<span className={`font-medium text-xs ${participant.unrealizedPnL >= 0 ? "text-green-500" : "text-red-500"}`}>
-  (Unrealized: ₹
-  {Math.abs(participant.unrealizedPnL) >= 1000
-    ? (Math.abs(participant.unrealizedPnL) / 1000).toFixed(1) + "K"
-    : Math.abs(participant.unrealizedPnL).toFixed(0)})
-</span>
-
-
-
+                          <div className={cn(
+                            "flex items-center justify-end gap-1 transition-colors",
+                            participant.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"
+                          )}>
+                            {participant.unrealizedPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                            <span className="font-medium text-sm">
+                              ₹{Math.abs(participant.unrealizedPnL) >= 1000
+                                ? (Math.abs(participant.unrealizedPnL) / 1000).toFixed(1) + "K"
+                                : Math.abs(participant.unrealizedPnL).toFixed(2)}
+                            </span>
                           </div>
                         </TableCell>
                         <TableCell
                           className={cn(
                             "text-right hidden lg:table-cell",
-                            participant.roi >= 0
-                              ? "text-green-600"
-                              : "text-red-600"
+                            participant.roi >= 0 ? "text-green-600" : "text-red-600"
                           )}
                         >
                           <span className="font-medium text-sm">
-                            {participant.roi.toFixed(1)}%
+                            {Number.isFinite(participant.roi) ? participant.roi.toFixed(2) : "0.00"}%
                           </span>
                         </TableCell>
                         <TableCell className="text-right">

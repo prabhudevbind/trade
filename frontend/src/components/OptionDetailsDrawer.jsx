@@ -12,6 +12,7 @@ import {
   useCreatePositionMutation,
   useCreateTradeMutation,
 } from "@/store/api/contest"
+import io from 'socket.io-client'
 
 // Remove custom hook, use Tailwind CSS classes for responsive drawer
 
@@ -65,11 +66,17 @@ export function OptionDetailsDrawer({
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    // Create SSE connection for real-time updates
-    const eventSource = new EventSource(`http://localhost:5001/stream/${initialOptionData.instrument_key}`);
+    // Use Socket.IO for real-time updates
+    const socket = io('http://localhost:5001', {
+      transports: ['websocket'],
+      reconnection: true,
+    });
 
-    eventSource.onmessage = (event) => {
-      const { instrumentKey, data } = JSON.parse(event.data);
+    socket.on('connect', () => {
+      socket.emit('market:subscribe', initialOptionData.instrument_key);
+    });
+
+    socket.on('marketData', ({ instrumentKey, data }) => {
       if (instrumentKey === initialOptionData.instrument_key) {
         const ff = data.ff;
         const ltpc = ff.marketFF.ltpc;
@@ -98,15 +105,19 @@ export function OptionDetailsDrawer({
           }
         }));
       }
-    };
+    });
 
-    eventSource.onerror = (error) => {
-      console.error('SSE Error:', error);
-      eventSource.close();
-    };
+    socket.on('disconnect', () => {
+      // Optionally handle disconnect
+    });
+
+    socket.on('connect_error', (err) => {
+      console.error('Socket.IO connection error:', err);
+    });
 
     return () => {
-      eventSource.close();
+      socket.emit('market:unsubscribe', initialOptionData.instrument_key);
+      socket.disconnect();
     };
   }, [isOpen, initialOptionData?.instrument_key]);
 
@@ -423,7 +434,7 @@ export function OptionDetailsDrawer({
                     <span className="text-sm font-medium text-blue-700">Bid</span>
                   </div>
                   <div className="text-xl font-bold text-blue-900">₹{optionData.bid_price?.toFixed(2)}</div>
-                  <div className="text-xs text-blue-600 mt-1">Qty: {optionData.bid_qty.toLocaleString()}</div>
+                  <div className="text-xs text-blue-600 mt-1">Qty: {optionData.bid_qty}</div>
                 </div>
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                   <div className="flex items-center gap-2 mb-2">
@@ -431,7 +442,7 @@ export function OptionDetailsDrawer({
                     <span className="text-sm font-medium text-orange-700">Ask</span>
                   </div>
                   <div className="text-xl font-bold text-orange-900">₹{optionData.ask_price?.toFixed(2)}</div>
-                  <div className="text-xs text-orange-600 mt-1">Qty: {optionData.ask_qty.toLocaleString()}</div>
+                  <div className="text-xs text-orange-600 mt-1">Qty: {optionData.ask_qty}</div>
                 </div>
               </div>
 
@@ -442,7 +453,7 @@ export function OptionDetailsDrawer({
                     <BarChart3 className="w-4 h-4 text-slate-600" />
                     <span className="text-sm font-medium text-slate-700">Open Interest</span>
                   </div>
-                  <div className="text-lg font-bold">{optionData.oi_lots.toLocaleString()}</div>
+                  <div className="text-lg font-bold">{optionData.oi_lots?.toLocaleString()}</div>
                   <div className={`text-xs mt-1 ${optionData.oi_change_lots >= 0 ? "text-green-600" : "text-red-600"}`}>
                     {optionData.oi_change_lots >= 0 ? "+" : ""}
                     {optionData.oi_change_lots} lots
@@ -453,7 +464,7 @@ export function OptionDetailsDrawer({
                     <Activity className="w-4 h-4 text-slate-600" />
                     <span className="text-sm font-medium text-slate-700">Volume</span>
                   </div>
-                  <div className="text-lg font-bold">{optionData.volume.toLocaleString()}</div>
+                  <div className="text-lg font-bold">{optionData.volume?.toLocaleString()}</div>
                   <div className="text-xs text-slate-500 mt-1">Today's Volume</div>
                 </div>
               </div>

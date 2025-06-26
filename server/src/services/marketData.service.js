@@ -20,6 +20,7 @@ class MarketDataService {
     this.subscriptionQueue = new Set(); // Track pending subscriptions
     this.lastHeartbeat = Date.now();
     this.heartbeatInterval = null;
+    this.socketStreamingClients = new Map(); // instrumentKey -> Set of sockets
   }
 
   // Initialize protobuf schema
@@ -446,7 +447,54 @@ class MarketDataService {
     }
   }
 
-  // Broadcast data to clients
+  // --- Socket.IO Streaming Methods ---
+  addSocketStreamingClient(instrumentKey, socket) {
+    if (!this.socketStreamingClients.has(instrumentKey)) {
+      this.socketStreamingClients.set(instrumentKey, new Set());
+      this.subscribeToInstrument(instrumentKey);
+    }
+    this.socketStreamingClients.get(instrumentKey).add(socket);
+    console.log(`Socket.IO client added for ${instrumentKey} (total: ${this.socketStreamingClients.get(instrumentKey).size})`);
+    // Optionally send initial status/data
+    socket.emit('marketData', {
+      type: 'status',
+      connected: this.getConnectionStatus().connected,
+      instrumentKey,
+      message: this.getConnectionStatus().connected ? 'Connected and subscribed' : 'Connecting...',
+      timestamp: Date.now()
+    });
+  }
+
+  removeSocketStreamingClient(instrumentKey, socket) {
+    const set = this.socketStreamingClients.get(instrumentKey);
+    if (set) {
+      set.delete(socket);
+      console.log(`Socket.IO client removed for ${instrumentKey} (remaining: ${set.size})`);
+      if (set.size === 0) {
+        this.socketStreamingClients.delete(instrumentKey);
+        this.unsubscribeFromInstrument(instrumentKey);
+        console.log(`No more Socket.IO clients for ${instrumentKey}, unsubscribed`);
+      }
+    }
+  }
+
+  // --- Broadcast to Socket.IO clients ---
+  broadcastMarketData(instrumentKey, feedData) {
+    if (this.socketStreamingClients.has(instrumentKey)) {
+      const payload = {
+        type: 'market_data',
+        instrumentKey,
+        data: feedData,
+        timestamp: Date.now()
+      };
+      for (const socket of this.socketStreamingClients.get(instrumentKey)) {
+        socket.emit('marketData', payload);
+      }
+      console.log(`Broadcasted Socket.IO data to ${this.socketStreamingClients.get(instrumentKey).size} sockets for ${instrumentKey}`);
+    }
+  }
+
+  // --- Modify broadcastToClients to also call broadcastMarketData ---
   broadcastToClients(instrumentKey, feedData) {
     if (this.streamingResponses.has(instrumentKey)) {
       const dataToSend = JSON.stringify({ 
@@ -494,6 +542,9 @@ class MarketDataService {
     } else {
       console.log(`No clients to broadcast to for ${instrumentKey}`);
     }
+    
+    // Call Socket.IO broadcast
+    this.broadcastMarketData(instrumentKey, feedData);
   }
 
   // Notify clients about disconnection
@@ -727,5 +778,8 @@ const marketDataService = new MarketDataService();
 // Export service and initialization function
 module.exports = {
   marketDataService,
-  initializeMarketDataService: () => marketDataService.initialize()
+  initializeMarketDataService: () => marketDataService.initialize(),
+  // Export new methods for Socket.IO
+  addSocketStreamingClient: (...args) => marketDataService.addSocketStreamingClient(...args),
+  removeSocketStreamingClient: (...args) => marketDataService.removeSocketStreamingClient(...args)
 };
