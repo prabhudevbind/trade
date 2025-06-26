@@ -20,7 +20,7 @@ export function usePriceStreams(realTimeData, setRealTimeData) {
 
     // Connect to Socket.IO server if not already
     if (!socketRef.current) {
-      socketRef.current = io('http://localhost:5001', {
+      socketRef.current = io('', {
         transports: ['websocket'],
         reconnection: true,
         reconnectionAttempts: 5,
