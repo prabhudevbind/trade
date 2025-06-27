@@ -35,7 +35,7 @@ export default function Positions() {
     setPositions(activeTradesData.positions)
 
     // Connect to Socket.IO server (singleton per component instance)
-    const socket = io("http://localhost:5001", {
+    const socket = io("", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
