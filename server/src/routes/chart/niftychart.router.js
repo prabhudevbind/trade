@@ -16,6 +16,9 @@ const INSTRUMENTS = [
 function registerOptionChainSocket(io) {
   // Map: socket.id -> { interval, params }
   const optionChainIntervals = new Map();
+  // Cooldown map: { '<instrument_key>|<expiry_date>': timestamp }
+  const optionChainCooldowns = new Map();
+  const COOLDOWN_MS = 60 * 1000; // 1 minute cooldown
 
   io.on('connection', (socket) => {
     // Subscribe to option chain
@@ -29,8 +32,20 @@ function registerOptionChainSocket(io) {
         clearInterval(optionChainIntervals.get(socket.id).interval);
         optionChainIntervals.delete(socket.id);
       }
+      const cooldownKey = `${instrument_key}|${expiry_date}`;
       // Start interval to fetch and emit data every 1s
       const interval = setInterval(async () => {
+        const now = Date.now();
+        const last429 = optionChainCooldowns.get(cooldownKey) || 0;
+        if (now - last429 < COOLDOWN_MS) {
+          // Still in cooldown, skip API call
+          socket.emit('optionChain:error', {
+            success: false,
+            message: `Rate limited. Please wait before retrying. (${Math.ceil((COOLDOWN_MS - (now - last429))/1000)}s)`
+          });
+          console.warn(`[COOLDOWN] Skipping API call for ${cooldownKey} due to recent 429.`);
+          return;
+        }
         try {
           const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(instrument_key)}&expiry_date=${expiry_date}`;
           const headers = {
@@ -164,6 +179,11 @@ function registerOptionChainSocket(io) {
           let errorMessage = 'Failed to fetch option chain';
           if (error.response) {
             errorMessage = `API Error: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
+            if (error.response.status === 429) {
+              // Set cooldown
+              optionChainCooldowns.set(cooldownKey, Date.now());
+              console.error(`[429] Rate limit hit for ${cooldownKey}. Cooldown started.`);
+            }
           }
           socket.emit('optionChain:error', {
             success: false,
@@ -350,89 +370,34 @@ router.get("/option-chain", async (req, res) => {
   }
 });
 
-// Add this function to find available expiry dates
-async function findAvailableExpiryDates(instrumentKey) {
-  const expiryDates = [];
-  const today = new Date();
-  
-  // Try next 6 months of weekly expiries
-  for (let i = 0; i < 250; i++) {
-    // Add 7 days for each iteration
-    const testDate = new Date(today);
-    testDate.setDate(today.getDate() + (i * 1));
-    
-    // Format date as YYYY-MM-DD
-    const formattedDate = testDate.toISOString().split('T')[0];
-    
-    try {
-      const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(
-        instrumentKey
-      )}&expiry_date=${formattedDate}`;
-      
-      const headers = {
-        Accept: "application/json",
-        Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
-      };
-
-      const response = await axios.get(url, { headers });
-      
-      // If we get data, this is a valid expiry date
-      if (response.data.data && response.data.data.length > 0) {
-        expiryDates.push(formattedDate);
-      }
-    } catch (error) {
-      // Skip failed requests
-      continue;
-    }
-  }
-  
-  return expiryDates;
-}
-
 // Add this new endpoint to get expiry dates
 router.get("/available-expiry-dates", async (req, res) => {
   try {
     const { instrument_key = "NSE_INDEX|Nifty 50" } = req.query;
-    
-    // Create the storage directory if it doesn't exist
-    const storageDir = path.join(__dirname, './datas');
-    if (!fs.existsSync(storageDir)) {
-      fs.mkdirSync(storageDir, { recursive: true });
-    }
-    
-    const cacheFile = path.join(storageDir, `expiry_dates_${instrument_key.split('|')[1].toLowerCase().replace(/\s/g, '_')}.json`);
-    
-    // Check if we have cached data from today
-    if (fs.existsSync(cacheFile)) {
-      const cachedData = JSON.parse(fs.readFileSync(cacheFile));
-      const cacheDate = new Date(cachedData.timestamp);
-      const today = new Date();
-      
-      // Use cache if it's from today
-      if (cacheDate.toDateString() === today.toDateString()) {
-        return res.json({
-          success: true,
-          instrument_key: instrument_key,
-          expiry_dates: cachedData.expiry_dates
-        });
-      }
-    }
-    
-    // Find available expiry dates
-    const expiryDates = await findAvailableExpiryDates(instrument_key);
-    
-    // Cache the results
-    fs.writeFileSync(cacheFile, JSON.stringify({
-      timestamp: new Date().toISOString(),
-      expiry_dates: expiryDates
-    }));
-    
-    res.json({
-      success: true,
-      instrument_key: instrument_key,
-      expiry_dates: expiryDates
-    });
+    let expiry_dates = [];
+    let timestamp = new Date().toISOString();
 
+    // Return static expiry dates for each instrument
+    if (instrument_key === "NSE_INDEX|Nifty 50") {
+      expiry_dates = [
+        "2025-06-26","2025-07-03","2025-07-10","2025-07-17","2025-07-24","2025-07-31","2025-08-28","2025-09-25","2025-12-24"
+      ];
+    } else if (instrument_key === "NSE_INDEX|Nifty Bank") {
+      expiry_dates = [
+        "2025-07-31","2025-08-28","2025-09-24","2025-09-25","2025-12-24","2025-12-31"
+      ];
+    } else if (instrument_key === "NSE_INDEX|Nifty Fin Service") {
+      expiry_dates = [
+        "2025-07-31","2025-08-28"
+      ];
+    }
+
+    return res.json({
+      success: true,
+      instrument_key,
+      expiry_dates,
+      timestamp
+    });
   } catch (error) {
     console.error("❌ Error fetching expiry dates:", error.message);
     res.status(500).json({

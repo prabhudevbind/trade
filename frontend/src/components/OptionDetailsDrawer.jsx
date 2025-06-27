@@ -58,7 +58,7 @@ export function OptionDetailsDrawer({
   const navigate = useNavigate()
   const { id } = useParams()
   
-  console.log("Contest Data:", contestData)
+  // console.log("Contest Data:", contestData)
   const [createOption] = useCreateOptionMutation()
   const [createPosition] = useCreatePositionMutation()
   const [createTrade] = useCreateTradeMutation()
@@ -67,48 +67,64 @@ export function OptionDetailsDrawer({
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
     // Use Socket.IO for real-time updates
-    const socket = io('', {
+    const socket = io('http://localhost:5001', {
       transports: ['websocket'],
       reconnection: true,
     });
+    let subscribed = false;
 
     socket.on('connect', () => {
-      socket.emit('market:subscribe', initialOptionData.instrument_key);
+      socket.emit('subscribe', initialOptionData.instrument_key);
+      subscribed = true;
+      console.log('[Socket.IO] Subscribed to', initialOptionData.instrument_key);
     });
 
     socket.on('marketData', ({ instrumentKey, data }) => {
       if (instrumentKey === initialOptionData.instrument_key) {
-        const ff = data.ff;
-        const ltpc = ff.marketFF.ltpc;
-        const marketLevel = ff.marketFF.marketLevel;
-        const greeks = ff.marketFF.optionGreeks;
-        const eFeedDetails = ff.marketFF.eFeedDetails;
+        console.log('Socket.IO marketData for', instrumentKey, data);
 
-        setOptionData(prevData => ({
-          ...prevData,
-          ltp: ltpc.ltp,
-          close_price: eFeedDetails.cp,
-          bid_price: marketLevel.bidAskQuote[0].bp,
-          ask_price: marketLevel.bidAskQuote[0].ap,
-          bid_qty: parseInt(marketLevel.bidAskQuote[0].bidQ),
-          ask_qty: parseInt(marketLevel.bidAskQuote[0].askQ),
-          volume: parseInt(eFeedDetails.vtt),
-          oi_lots: parseInt(eFeedDetails.oi),
-          oi_change_lots: parseInt(eFeedDetails.poi) - parseInt(eFeedDetails.oi),
-          greeks: {
-            delta: greeks.delta,
-            gamma: greeks.gamma,
-            theta: greeks.theta,
-            vega: greeks.vega,
-            iv: greeks.iv * 100, // Convert to percentage
-            pop: greeks.delta * 100 // Probability of profit approximation
-          }
-        }));
+        // Defensive: handle both full and fallback data
+        if (data && data.ff && data.ff.marketFF) {
+          const ff = data.ff;
+          const ltpc = ff.marketFF.ltpc;
+          const marketLevel = ff.marketFF.marketLevel;
+          const greeks = ff.marketFF.optionGreeks;
+          const eFeedDetails = ff.marketFF.eFeedDetails;
+
+          setOptionData(prevData => ({
+            ...prevData,
+            ltp: Number(ltpc.ltp),
+            close_price: Number(eFeedDetails.cp),
+            bid_price: Number(marketLevel.bidAskQuote[0]?.bp),
+            ask_price: Number(marketLevel.bidAskQuote[0]?.ap),
+            bid_qty: Number(marketLevel.bidAskQuote[0]?.bidQ),
+            ask_qty: Number(marketLevel.bidAskQuote[0]?.askQ),
+            volume: Number(eFeedDetails.vtt),
+            oi_lots: Number(eFeedDetails.oi), // or Math.round(eFeedDetails.oi / lotSize) if you want lots
+            oi_change_lots: Number(eFeedDetails.poi) - Number(eFeedDetails.oi),
+            greeks: {
+              delta: greeks.delta,
+              gamma: greeks.gamma,
+              theta: greeks.theta,
+              vega: greeks.vega,
+              iv: greeks.iv * 100,
+              pop: greeks.delta * 100
+            }
+          }));
+        } else if (data && typeof data.ltp !== 'undefined') {
+          // Fallback: minimal/test data
+          setOptionData(prevData => ({
+            ...prevData,
+            ltp: data.ltp,
+            volume: data.volume,
+            // Optionally set other fields to null or previous values
+          }));
+        }
       }
     });
 
     socket.on('disconnect', () => {
-      // Optionally handle disconnect
+      console.log('[Socket.IO] Disconnected');
     });
 
     socket.on('connect_error', (err) => {
@@ -116,7 +132,10 @@ export function OptionDetailsDrawer({
     });
 
     return () => {
-      socket.emit('market:unsubscribe', initialOptionData.instrument_key);
+      if (subscribed) {
+        socket.emit('unsubscribe', initialOptionData.instrument_key);
+        console.log('[Socket.IO] Unsubscribed from', initialOptionData.instrument_key);
+      }
       socket.disconnect();
     };
   }, [isOpen, initialOptionData?.instrument_key]);
