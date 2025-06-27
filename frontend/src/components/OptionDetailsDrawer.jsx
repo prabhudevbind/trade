@@ -93,15 +93,15 @@ export function OptionDetailsDrawer({
 
           setOptionData(prevData => ({
             ...prevData,
-            ltp: Number(ltpc.ltp),
-            close_price: Number(eFeedDetails.cp),
-            bid_price: Number(marketLevel.bidAskQuote[0]?.bp),
-            ask_price: Number(marketLevel.bidAskQuote[0]?.ap),
-            bid_qty: Number(marketLevel.bidAskQuote[0]?.bidQ),
-            ask_qty: Number(marketLevel.bidAskQuote[0]?.askQ),
-            volume: Number(eFeedDetails.vtt),
-            oi_lots: Number(eFeedDetails.oi), // or Math.round(eFeedDetails.oi / lotSize) if you want lots
-            oi_change_lots: Number(eFeedDetails.poi) - Number(eFeedDetails.oi),
+            ltp: ltpc.ltp,
+            close_price: eFeedDetails.cp,
+            bid_price: marketLevel.bidAskQuote[0].bp,
+            ask_price: marketLevel.bidAskQuote[0].ap,
+            bid_qty: parseInt(marketLevel.bidAskQuote[0].bidQ),
+            ask_qty: parseInt(marketLevel.bidAskQuote[0].askQ),
+            volume: parseInt(eFeedDetails.vtt),
+            oi_lots: parseInt(eFeedDetails.oi),
+            oi_change_lots: parseInt(eFeedDetails.poi) - parseInt(eFeedDetails.oi),
             greeks: {
               delta: greeks.delta,
               gamma: greeks.gamma,

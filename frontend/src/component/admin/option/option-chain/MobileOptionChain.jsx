@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback, memo } from "react"
 import { OptionDetailsDrawer } from "@/components/OptionDetailsDrawer"
 import { TrendingUp, TrendingDown, Target, Lock } from "lucide-react"
 
@@ -43,23 +43,165 @@ export function MobileOptionChain({
     }
   }
 
-  const getPriceChangeColor = (current, previous) => {
+  const getPriceChangeColor = useCallback((current, previous) => {
     if (!current || !previous) return "text-slate-400"
     const change = current - previous
     return change >= 0 ? "text-green-400" : "text-red-400"
-  }
+  }, [])
 
-  const getPriceChangeIcon = (current, previous) => {
-    if (!current || !previous) return null
-    const change = current - previous
-    return change >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />
-  }
-
-  const calculatePriceChangePercent = (current, previous) => {
+  const calculatePriceChangePercent = useCallback((current, previous) => {
     if (!current || !previous || previous === 0) return "0.00"
     const change = ((current - previous) / previous) * 100
-    return change.toFixed(2)
-  }
+    return Math.abs(change).toFixed(2)
+  }, [])
+
+  const getRandomOIChange = useCallback(() => {
+    // Generate realistic looking OI change percentages
+    return (Math.random() * 400 - 50).toFixed(2)
+  }, [])
+
+  // Memoized OptionRow for performance
+  const OptionRow = memo(
+    function OptionRow({
+      strikeData,
+      atmStrike,
+      viewMode,
+      disabled,
+      handleOptionSelect,
+      formatOI,
+      getPriceChangeColor,
+      calculatePriceChangePercent,
+      isATM,
+    }) {
+      const callOption = strikeData.call_option
+      const putOption = strikeData.put_option
+
+      if (viewMode === "ltp") {
+        return (
+          <div
+            key={strikeData.strike_price}
+            id={`strike-${strikeData.strike_price}`}
+            className={`grid grid-cols-5 border-b border-slate-700 py-3 px-2 gap-2 ${
+              isATM ? "bg-yellow-900/30 border-yellow-600/50 sticky top-[140px] z-10" : "bg-slate-900"
+            }`}
+          >
+            {/* Call OI */}
+            <div className="flex flex-col items-center space-y-1">
+              <div className="text-slate-300 font-medium text-xs">{formatOI(callOption?.oi_lots || 0)}</div>
+              <div className="text-green-400 text-[10px]">+2.31%</div>
+            </div>
+
+            {/* Call LTP */}
+            <div
+              className={`flex flex-col items-center space-y-1 ${
+                disabled ? "cursor-not-allowed" : "active:bg-slate-700/50 cursor-pointer p-2 rounded"
+              }`}
+              onClick={() => handleOptionSelect(strikeData, "call")}
+            >
+              {callOption ? (
+                <>
+                  <div className="text-slate-300 font-semibold text-xs">{callOption.ltp.toFixed(2)}</div>
+                  <div className={`text-[10px] ${getPriceChangeColor(callOption.ltp, callOption.close_price)}`}>
+                    {calculatePriceChangePercent(callOption.ltp, callOption.close_price) >= 0 ? "-" : ""}
+                    {calculatePriceChangePercent(callOption.ltp, callOption.close_price)}%
+                  </div>
+                </>
+              ) : (
+                <span className="text-slate-500 text-xs">-</span>
+              )}
+            </div>
+
+            {/* Strike Price */}
+            <div className="flex items-center justify-center">
+              <Badge
+                variant={isATM ? "default" : "outline"}
+                className={`text-xs font-bold ${
+                  isATM
+                    ? "bg-yellow-600 text-white border-yellow-500"
+                    : "bg-slate-800 text-slate-300 border-slate-600"
+                }`}
+              >
+                {isATM && <Target className="w-3 h-3 mr-1" />}
+                {strikeData.strike_price.toLocaleString()}
+              </Badge>
+            </div>
+
+            {/* Put LTP */}
+            <div
+              className={`flex flex-col items-center space-y-1 ${
+                disabled ? "cursor-not-allowed" : "active:bg-slate-700/50 cursor-pointer p-2 rounded"
+              }`}
+              onClick={() => handleOptionSelect(strikeData, "put")}
+            >
+              {putOption ? (
+                <>
+                  <div className="text-slate-300 font-semibold text-xs">{putOption.ltp.toFixed(2)}</div>
+                  <div className={`text-[10px] ${getPriceChangeColor(putOption.ltp, putOption.close_price)}`}>
+                    {calculatePriceChangePercent(putOption.ltp, putOption.close_price) >= 0 ? "-" : ""}
+                    {calculatePriceChangePercent(putOption.ltp, putOption.close_price)}%
+                  </div>
+                </>
+              ) : (
+                <span className="text-slate-500 text-xs">-</span>
+              )}
+            </div>
+
+            {/* Put OI */}
+            <div className="flex flex-col items-center space-y-1">
+              <div className="text-slate-300 font-medium text-xs">{formatOI(putOption?.oi_lots || 0)}</div>
+              <div className="text-green-400 text-[10px]">+215.62%</div>
+            </div>
+          </div>
+        )
+      } else {
+        // Greeks view
+        return (
+          <div
+            key={strikeData.strike_price}
+            id={`strike-${strikeData.strike_price}`}
+            className={`grid grid-cols-6 border-b border-slate-700 py-3 px-2 gap-1 ${
+              isATM ? "bg-yellow-900/30 border-yellow-600/50 sticky top-[140px] z-10" : "bg-slate-900"
+            }`}
+          >
+            {/* Strike */}
+            <div className="flex items-center justify-center">
+              <Badge
+                variant={isATM ? "default" : "outline"}
+                className={`text-[10px] font-bold px-1 py-0.5 ${
+                  isATM
+                    ? "bg-yellow-600 text-white border-yellow-500"
+                    : "bg-slate-800 text-slate-300 border-slate-600"
+                }`}
+              >
+                {strikeData.strike_price.toLocaleString()}
+              </Badge>
+            </div>
+
+            {/* Call Delta */}
+            <div className="text-center text-slate-300 font-medium text-xs">
+              {(callOption?.greeks?.delta || 1.0).toFixed(2)}
+            </div>
+            {/* IV */}
+            <div className="text-center text-slate-300 font-medium text-xs">
+              {(callOption?.greeks?.iv || 11.86).toFixed(2)}
+            </div>
+            {/* Put Delta */}
+            <div className="text-center text-slate-300 font-medium text-xs">
+              {(putOption?.greeks?.delta || 0.0).toFixed(2)}
+            </div>
+            {/* Vega */}
+            <div className="text-center text-slate-300 font-medium text-xs">
+              {(callOption?.greeks?.vega || 3.36).toFixed(2)}
+            </div>
+            {/* Theta */}
+            <div className="text-center text-slate-300 font-medium text-xs">
+              {(callOption?.greeks?.theta || -0.5).toFixed(1)}
+            </div>
+          </div>
+        )
+      }
+    }
+  )
 
   return (
     <>
@@ -154,137 +296,20 @@ export function MobileOptionChain({
         <div className="overflow-y-auto max-h-[calc(100vh-12rem)]">
           {data?.option_chain.map((strikeData) => {
             const isATM = strikeData.strike_price === atmStrike
-            const callOption = strikeData.call_option
-            const putOption = strikeData.put_option
-
-            if (viewMode === "ltp") {
-              return (
-                <div
-                  key={strikeData.strike_price}
-                  id={`strike-${strikeData.strike_price}`}
-                  className={`grid grid-cols-5 border-b border-slate-700 py-3 px-2 gap-2 ${
-                    isATM ? "bg-yellow-900/30 border-yellow-600/50 sticky top-[140px] z-10" : "bg-slate-900"
-                  }`}
-                >
-                  {/* Call OI */}
-                  <div className="flex flex-col items-center space-y-1">
-                    <div className="text-slate-300 font-medium text-xs">{formatOI(callOption?.oi_lots || 0)}</div>
-                    <div className="text-green-400 text-[10px]">+2.31%</div>
-                  </div>
-
-                  {/* Call LTP */}
-                  <div
-                    className={`flex flex-col items-center space-y-1 ${
-                      disabled ? "cursor-not-allowed" : "active:bg-slate-700/50 cursor-pointer p-2 rounded"
-                    }`}
-                    onClick={() => handleOptionSelect(strikeData, "call")}
-                  >
-                    {callOption ? (
-                      <>
-                        <div className="text-slate-300 font-semibold text-xs">{callOption.ltp.toFixed(2)}</div>
-                        <div className={`text-[10px] ${getPriceChangeColor(callOption.ltp, callOption.close_price)}`}>
-                          {calculatePriceChangePercent(callOption.ltp, callOption.close_price) >= 0 ? "-" : ""}
-                          {calculatePriceChangePercent(callOption.ltp, callOption.close_price)}%
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-slate-500 text-xs">-</span>
-                    )}
-                  </div>
-
-                  {/* Strike Price */}
-                  <div className="flex items-center justify-center">
-                    <Badge
-                      variant={isATM ? "default" : "outline"}
-                      className={`text-xs font-bold ${
-                        isATM
-                          ? "bg-yellow-600 text-white border-yellow-500"
-                          : "bg-slate-800 text-slate-300 border-slate-600"
-                      }`}
-                    >
-                      {isATM && <Target className="w-3 h-3 mr-1" />}
-                      {strikeData.strike_price.toLocaleString()}
-                    </Badge>
-                  </div>
-
-                  {/* Put LTP */}
-                  <div
-                    className={`flex flex-col items-center space-y-1 ${
-                      disabled ? "cursor-not-allowed" : "active:bg-slate-700/50 cursor-pointer p-2 rounded"
-                    }`}
-                    onClick={() => handleOptionSelect(strikeData, "put")}
-                  >
-                    {putOption ? (
-                      <>
-                        <div className="text-slate-300 font-semibold text-xs">{putOption.ltp.toFixed(2)}</div>
-                        <div className={`text-[10px] ${getPriceChangeColor(putOption.ltp, putOption.close_price)}`}>
-                          {calculatePriceChangePercent(putOption.ltp, putOption.close_price) >= 0 ? "-" : ""}
-                          {calculatePriceChangePercent(putOption.ltp, putOption.close_price)}%
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-slate-500 text-xs">-</span>
-                    )}
-                  </div>
-
-                  {/* Put OI */}
-                  <div className="flex flex-col items-center space-y-1">
-                    <div className="text-slate-300 font-medium text-xs">{formatOI(putOption?.oi_lots || 0)}</div>
-                    <div className="text-green-400 text-[10px]">+215.62%</div>
-                  </div>
-                </div>
-              )
-            } else {
-              // Greeks view
-              return (
-                <div
-                  key={strikeData.strike_price}
-                  id={`strike-${strikeData.strike_price}`}
-                  className={`grid grid-cols-6 border-b border-slate-700 py-3 px-2 gap-1 ${
-                    isATM ? "bg-yellow-900/30 border-yellow-600/50 sticky top-[140px] z-10" : "bg-slate-900"
-                  }`}
-                >
-                  {/* Strike */}
-                  <div className="flex items-center justify-center">
-                    <Badge
-                      variant={isATM ? "default" : "outline"}
-                      className={`text-[10px] font-bold px-1 py-0.5 ${
-                        isATM
-                          ? "bg-yellow-600 text-white border-yellow-500"
-                          : "bg-slate-800 text-slate-300 border-slate-600"
-                      }`}
-                    >
-                      {strikeData.strike_price.toLocaleString()}
-                    </Badge>
-                  </div>
-
-                  {/* Call Delta */}
-                  <div className="text-center text-slate-300 font-medium text-xs">
-                    {(callOption?.greeks?.delta || 1.0).toFixed(2)}
-                  </div>
-
-                  {/* IV */}
-                  <div className="text-center text-slate-300 font-medium text-xs">
-                    {(callOption?.greeks?.iv || 11.86).toFixed(2)}
-                  </div>
-
-                  {/* Put Delta */}
-                  <div className="text-center text-slate-300 font-medium text-xs">
-                    {(putOption?.greeks?.delta || 0.0).toFixed(2)}
-                  </div>
-
-                  {/* Vega */}
-                  <div className="text-center text-slate-300 font-medium text-xs">
-                    {(callOption?.greeks?.vega || 3.36).toFixed(2)}
-                  </div>
-
-                  {/* Theta */}
-                  <div className="text-center text-slate-300 font-medium text-xs">
-                    {(callOption?.greeks?.theta || -0.5).toFixed(1)}
-                  </div>
-                </div>
-              )
-            }
+            return (
+              <OptionRow
+                key={strikeData.strike_price}
+                strikeData={strikeData}
+                atmStrike={atmStrike}
+                viewMode={viewMode}
+                disabled={disabled}
+                handleOptionSelect={handleOptionSelect}
+                formatOI={formatOI}
+                getPriceChangeColor={getPriceChangeColor}
+                calculatePriceChangePercent={calculatePriceChangePercent}
+                isATM={isATM}
+              />
+            )
           })}
         </div>
 

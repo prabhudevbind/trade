@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Activity,
   AlertCircle,
@@ -48,6 +48,11 @@ const OptionChain = () => {
   const atmRowRef = useRef(null);
   const { id } = useParams();
 
+  // Refs for optimization
+  const socketRef = useRef(null);
+  const lastDataHashRef = useRef(null);
+  const updateCountRef = useRef(0);
+
   const {
     data: contestData,
     error: contestError,
@@ -68,18 +73,56 @@ const OptionChain = () => {
     instrument_key: selectedIndex,
   });
 
-  const processOptionData = (apiResponse) => {
+  // Fast hash function for data comparison
+  const fastHash = useCallback((obj) => {
+    if (!obj) return '';
+    const str = JSON.stringify({
+      underlying: obj.underlying_info,
+      timestamp: obj.timestamp,
+      // Only hash critical fields for performance
+      chain: obj.option_chain?.map(item => ({
+        strike: item.strike_price,
+        call_ltp: item.call_option?.ltp,
+        put_ltp: item.put_option?.ltp,
+        call_oi: item.call_option?.oi_lots,
+        put_oi: item.put_option?.oi_lots
+      }))
+    });
+    
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  }, []);
+
+  // Optimized data processing with minimal throttling
+  const processOptionData = useCallback((apiResponse) => {
     if (!apiResponse?.success || !apiResponse?.option_chain?.length) {
       setError(apiResponse?.message || "No option chain data available");
       setIsLoading(false);
       return;
     }
 
-    setOptionChainData(apiResponse);
-    setIsLoading(false);
-    setError(null);
-    setLastUpdated(new Date(apiResponse.timestamp));
-  };
+    // Fast data comparison using hash
+    const currentHash = fastHash(apiResponse);
+    if (currentHash === lastDataHashRef.current) {
+      return; // Skip if data hasn't changed
+    }
+    
+    lastDataHashRef.current = currentHash;
+    updateCountRef.current += 1;
+
+    // Use requestAnimationFrame for smooth updates
+    requestAnimationFrame(() => {
+      setOptionChainData(apiResponse);
+      setIsLoading(false);
+      setError(null);
+      setLastUpdated(new Date(apiResponse.timestamp));
+    });
+  }, [fastHash]);
 
   useEffect(() => {
     if (queryLoading) {
@@ -104,54 +147,80 @@ const OptionChain = () => {
         }
       }, 100);
     }
-  }, [initialData, queryError, queryLoading]);
+  }, [initialData, queryError, queryLoading, processOptionData]);
 
+  // Optimized socket connection with faster updates
   useEffect(() => {
+    if (!selectedIndex || !selectedExpiry) return;
+
     setIsLoading(true);
     setConnectionStatus("connecting");
     setError(null);
-    let socket;
-    if (selectedIndex && selectedExpiry) {
-      socket = io("", {
-        transports: ["websocket"],
-        reconnection: true,
-      });
-      socket.on("connect", () => {
-        setConnectionStatus("connected");
-        socket.emit("optionChain:subscribe", {
-          instrument_key: selectedIndex,
-          expiry_date: selectedExpiry,
-        });
-      });
-      socket.on("optionChain:data", (apiResponse) => {
-        if (apiResponse.success && apiResponse.option_chain) {
-          processOptionData(apiResponse);
-          setConnectionStatus("connected");
-        } else if (apiResponse.message && !apiResponse.success) {
-          setError(apiResponse.message);
-          setConnectionStatus("error");
-        }
-      });
-      socket.on("optionChain:error", (err) => {
-        setError(err.message || "Error in option chain stream");
-        setConnectionStatus("error");
-      });
-      socket.on("disconnect", () => {
-        setConnectionStatus("disconnected");
-      });
-      socket.on("connect_error", (err) => {
-        setError("Socket.IO connection error");
-        setConnectionStatus("error");
-      });
+    
+    // Clean up previous socket
+    if (socketRef.current) {
+      socketRef.current.emit("optionChain:unsubscribe");
+      socketRef.current.disconnect();
     }
+
+    // Create new socket with optimized settings
+    const socket = io("http://localhost:5001", {
+      transports: ["websocket"],
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionAttempts: 10,
+      timeout: 5000,
+      forceNew: true
+    });
+
+    socketRef.current = socket;
+
+    socket.on("connect", () => {
+      console.log("🟢 Socket connected");
+      setConnectionStatus("connected");
+      socket.emit("optionChain:subscribe", {
+        instrument_key: selectedIndex,
+        expiry_date: selectedExpiry,
+      });
+    });
+
+    // Optimized data handler - no throttling for maximum speed
+    socket.on("optionChain:data", (apiResponse) => {
+      if (apiResponse.success && apiResponse.option_chain) {
+        processOptionData(apiResponse);
+        setConnectionStatus("connected");
+      } else if (apiResponse.message && !apiResponse.success) {
+        setError(apiResponse.message);
+        setConnectionStatus("error");
+      }
+    });
+
+    socket.on("optionChain:error", (err) => {
+      console.error("❌ Option chain error:", err);
+      setError(err.message || "Error in option chain stream");
+      setConnectionStatus("error");
+    });
+
+    socket.on("disconnect", (reason) => {
+      console.log("🔴 Socket disconnected:", reason);
+      setConnectionStatus("disconnected");
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Socket connection error:", err);
+      setError("Socket.IO connection error");
+      setConnectionStatus("error");
+    });
+
     return () => {
       if (socket) {
         socket.emit("optionChain:unsubscribe");
         socket.disconnect();
       }
+      socketRef.current = null;
       setConnectionStatus("disconnected");
     };
-  }, [selectedIndex, selectedExpiry]);
+  }, [selectedIndex, selectedExpiry, processOptionData]);
 
   useEffect(() => {
     const fetchExpiryDates = async () => {
@@ -189,14 +258,13 @@ const OptionChain = () => {
     };
 
     fetchExpiryDates();
-  }, [selectedIndex]);
+  }, [selectedIndex, selectedExpiry]);
 
-  const handleOptionClick = (strikeData, type) => {
+  const handleOptionClick = useCallback((strikeData, type) => {
     if (!strikeData) return;
 
     // Check if user has active contest participation
     if (!activeContest) {
-      // Show participation prompt instead of navigating
       return;
     }
 
@@ -207,14 +275,14 @@ const OptionChain = () => {
     navigate(
       `/option-details/${id}/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
     );
-  };
+  }, [activeContest, navigate, id]);
 
-  const handleParticipateInContest = () => {
-    // Navigate to contest participation page
+  const handleParticipateInContest = useCallback(() => {
     navigate("/contests");
-  };
+  }, [navigate]);
 
-  const formatPrice = (price) => {
+  // Memoized utility functions
+  const formatPrice = useCallback((price) => {
     if (!price || price === 0) return "₹0.00";
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -224,18 +292,16 @@ const OptionChain = () => {
     })
       .format(price)
       .replace("₹", "₹");
-  };
+  }, []);
 
-  const formatOI = (oi) => {
+  const formatOI = useCallback((oi) => {
     if (!oi) return "0";
     if (oi >= 10000000) return `${(oi / 10000000).toFixed(2)}Cr`;
     if (oi >= 100000) return `${(oi / 100000).toFixed(2)}L`;
-    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(
-      oi
-    );
-  };
+    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(oi);
+  }, []);
 
-  const calculatePriceChange = (ltp, closePrice) => {
+  const calculatePriceChange = useCallback((ltp, closePrice) => {
     if (!ltp || !closePrice || closePrice === 0)
       return { change: 0, changePercent: 0 };
     const change = ltp - closePrice;
@@ -244,9 +310,9 @@ const OptionChain = () => {
       change: change.toFixed(2),
       changePercent: changePercent.toFixed(2),
     };
-  };
+  }, []);
 
-  const getConnectionStatusColor = () => {
+  const getConnectionStatusColor = useCallback(() => {
     switch (connectionStatus) {
       case "connected":
         return "bg-green-500";
@@ -258,9 +324,10 @@ const OptionChain = () => {
       default:
         return "bg-gray-500";
     }
-  };
+  }, [connectionStatus]);
 
-  const getATMStrike = () => {
+  // Memoized ATM calculation
+  const atmStrike = useMemo(() => {
     if (!optionChainData?.underlying_info?.spot_price) return null;
     const spotPrice = optionChainData.underlying_info.spot_price;
 
@@ -270,9 +337,7 @@ const OptionChain = () => {
     return strikes.reduce((prev, curr) =>
       Math.abs(curr - spotPrice) < Math.abs(prev - spotPrice) ? curr : prev
     );
-  };
-
-  const atmStrike = getATMStrike();
+  }, [optionChainData]);
 
   // Show participation prompt if no active contest
   const showParticipationPrompt = !activeContestLoading && !activeContest;
@@ -327,12 +392,19 @@ const OptionChain = () => {
               </div>
             </div>
 
-            {/* Connection Status */}
+            {/* Connection Status with Update Counter */}
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}
               ></div>
-              {/* <span className="text-sm text-slate-400 capitalize">{connectionStatus}</span> */}
+              <span className="text-xs text-slate-400">
+                Updates: {updateCountRef.current}
+              </span>
+              {lastUpdated && (
+                <span className="text-xs text-slate-500">
+                  {lastUpdated.toLocaleTimeString()}
+                </span>
+              )}
             </div>
           </div>
 
@@ -341,7 +413,6 @@ const OptionChain = () => {
             <button className="text-blue-400 border-b-2 border-blue-400 pb-2 font-medium">
               Option Chain
             </button>
-            {/* <button className="text-slate-400 hover:text-slate-300 pb-2">Futures Contract</button> */}
           </div>
         </div>
       </div>
@@ -352,7 +423,7 @@ const OptionChain = () => {
             {/* Controls */}
             <div className="bg-slate-900 rounded-lg p-4 mb-6 border border-slate-800">
               <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex  sm:flex-row gap-3">
+                <div className="flex sm:flex-row gap-3">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-400">Exp:</span>
                     <Select
@@ -410,7 +481,6 @@ const OptionChain = () => {
                     </Select>
                   </div>
                 </div>
-
               </div>
             </div>
 
@@ -475,15 +545,6 @@ const OptionChain = () => {
                   atmStrike={atmStrike}
                   disabled={showParticipationPrompt}
                 />
-                {/* <DesktopOptionChain
-                  data={optionChainData}
-                  onOptionClick={handleOptionClick}
-                  formatPrice={formatPrice}
-                  formatOI={formatOI}
-                  atmStrike={atmStrike}
-                  calculatePriceChange={calculatePriceChange}
-                  disabled={showParticipationPrompt}
-                /> */}
               </>
             )}
           </div>

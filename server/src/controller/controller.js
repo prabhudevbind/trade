@@ -1854,7 +1854,7 @@ const tradeController = {
           error: "You are not participating in this contest",
         });
       }
-
+      console.log(contestParticipant.contest);
       // Check if contest is active
       if (contestParticipant.contest.status !== "ongoing") {
         return res.status(400).json({

@@ -11,8 +11,6 @@ class MarketDataService {
     this.OAUTH2 = this.defaultClient.authentications["OAUTH2"];
     this.OAUTH2.accessToken = process.env.ACCESS_TOKEN || "eyJ0eXAiOiJKV1QiLCJrZXlfaWQiOiJza192MS4wIiwiYWxnIjoiSFMyNTYifQ.eyJzdWIiOiI2UEI2TVkiLCJqdGkiOiI2ODMzZTlmMjRlOWRkNzVmNjYwODNhMWUiLCJpc011bHRpQ2xpZW50IjpmYWxzZSwiaXNQbHVzUGxhbiI6ZmFsc2UsImlhdCI6MTc0ODIzMjY5MCwiaXNzIjoidWRhcGktZ2F0ZXdheS1zZXJ2aWNlIiwiZXhwIjoxNzQ4Mjk2ODAwfQ.8LD1EfOv2c6DkfDOfvB9yOtvHUHvBgIxks5nCLg7eq0";
     this.upstoxWs = null;
-    this.streamingResponses = new Map();
-    this.keepAliveInterval = null;
     this.reconnectTimeout = null;
     this.connectionRetries = 0;
     this.maxRetries = 5;
@@ -100,14 +98,13 @@ class MarketDataService {
         this.connectionRetries = 0;
         this.lastHeartbeat = Date.now();
         
-        this.startKeepAlive();
         this.startHeartbeatMonitor();
         
         // Process subscription queue
         this.processSubscriptionQueue();
         
         // Resubscribe to all active instruments
-        this.streamingResponses.forEach((_, instrumentKey) => {
+        this.socketStreamingClients.forEach((_, instrumentKey) => {
           this.subscribeToInstrument(instrumentKey);
         });
         
@@ -127,7 +124,6 @@ class MarketDataService {
         clearTimeout(connectionTimeout);
         console.log(`Upstox WebSocket disconnected with code ${code}: ${reason.toString()}`);
         this.upstoxWs = null;
-        this.stopKeepAlive();
         this.stopHeartbeatMonitor();
         
         // Notify all streaming clients about disconnection
@@ -293,7 +289,7 @@ class MarketDataService {
       };
       
       // Broadcast to all active instruments (fallback behavior)
-      this.streamingResponses.forEach((_, instrumentKey) => {
+      this.socketStreamingClients.forEach((_, instrumentKey) => {
         console.log(`Broadcasting fallback data for ${instrumentKey}:`, mockFeedData);
         this.broadcastToClients(instrumentKey, mockFeedData);
       });
@@ -388,65 +384,6 @@ class MarketDataService {
     this.subscriptionQueue.delete(instrumentKey);
   }
 
-  // Add client to streaming
-  addStreamingClient(instrumentKey, response) {
-    if (!this.streamingResponses.has(instrumentKey)) {
-      this.streamingResponses.set(instrumentKey, []);
-      this.subscribeToInstrument(instrumentKey);
-    }
-    
-    this.streamingResponses.get(instrumentKey).push(response);
-    console.log(`Client added for streaming: ${instrumentKey} (total clients: ${this.streamingResponses.get(instrumentKey).length})`);
-    
-    // Send current connection status to new client
-    const status = this.getConnectionStatus();
-    const statusMessage = {
-      type: 'status',
-      connected: status.connected,
-      instrumentKey: instrumentKey,
-      message: status.connected ? 'Connected and subscribed' : 'Connecting...',
-      timestamp: Date.now()
-    };
-    
-    try {
-      response.write(`data: ${JSON.stringify(statusMessage)}\n\n`);
-      // console.log(`Sent status to new client for ${instrumentKey}:`, statusMessage);
-    } catch (error) {
-      console.error('Error sending status to new client:', error);
-    }
-    
-    // Send initial test data
-    setTimeout(() => {
-      const testData = {
-        ltp: Math.random() * 1000 + 100,
-        change: (Math.random() - 0.5) * 20,
-        volume: Math.floor(Math.random() * 10000),
-        timestamp: Date.now(),
-        source: 'initial_test_data'
-      };
-      console.log(`Sending initial test data for ${instrumentKey}:`, testData);
-      this.broadcastToClients(instrumentKey, testData);
-    }, 1000);
-  }
-
-  // Remove client from streaming
-  removeStreamingClient(instrumentKey, response) {
-    const responses = this.streamingResponses.get(instrumentKey);
-    if (responses) {
-      const index = responses.indexOf(response);
-      if (index > -1) {
-        responses.splice(index, 1);
-        console.log(`Client removed for ${instrumentKey} (remaining: ${responses.length})`);
-      }
-      
-      if (responses.length === 0) {
-        this.streamingResponses.delete(instrumentKey);
-        this.unsubscribeFromInstrument(instrumentKey);
-        console.log(`No more clients for ${instrumentKey}, unsubscribed`);
-      }
-    }
-  }
-
   // --- Socket.IO Streaming Methods ---
   addSocketStreamingClient(instrumentKey, socket) {
     if (!this.socketStreamingClients.has(instrumentKey)) {
@@ -494,166 +431,53 @@ class MarketDataService {
     }
   }
 
-  // --- Modify broadcastToClients to also call broadcastMarketData ---
+  // --- Only broadcast to Socket.IO clients ---
   broadcastToClients(instrumentKey, feedData) {
-    if (this.streamingResponses.has(instrumentKey)) {
-      const dataToSend = JSON.stringify({ 
-        type: 'market_data',
-        instrumentKey, 
-        data: feedData,
-        timestamp: Date.now()
-      });
-      
-      const responses = this.streamingResponses.get(instrumentKey);
-      let successfulBroadcasts = 0;
-      
-      // Create a copy of responses array to avoid modification during iteration
-      const responseCopy = [...responses];
-      
-      responseCopy.forEach((res, index) => {
-        try {
-          if (!res.writableEnded && !res.destroyed && res.writable) {
-            res.write(`data: ${dataToSend}\n\n`);
-            successfulBroadcasts++;
-          } else {
-            // Remove dead connections
-            const actualIndex = responses.indexOf(res);
-            if (actualIndex > -1) {
-              responses.splice(actualIndex, 1);
-              console.log(`Removed dead connection for ${instrumentKey}`);
-            }
-          }
-        } catch (error) {
-          console.error('Error writing to client:', error);
-          const actualIndex = responses.indexOf(res);
-          if (actualIndex > -1) {
-            responses.splice(actualIndex, 1);
-          }
-        }
-      });
-      
-      console.log(`Broadcasted data to ${successfulBroadcasts}/${responseCopy.length} clients for ${instrumentKey}`);
-      
-      // If no clients left, clean up
-      if (responses.length === 0) {
-        this.streamingResponses.delete(instrumentKey);
-        this.unsubscribeFromInstrument(instrumentKey);
-      }
-    } else {
-      console.log(`No clients to broadcast to for ${instrumentKey}`);
-    }
-    
-    // Call Socket.IO broadcast
     this.broadcastMarketData(instrumentKey, feedData);
   }
 
-  // Notify clients about disconnection
+  // Notify clients about disconnection (Socket.IO only)
   notifyClientsDisconnection() {
-    const message = JSON.stringify({
+    const payload = {
       type: 'status',
       connected: false,
       message: 'WebSocket disconnected, attempting reconnection...',
       timestamp: Date.now()
-    });
-    
-    this.streamingResponses.forEach((responses, instrumentKey) => {
-      responses.forEach(res => {
-        try {
-          if (!res.writableEnded && !res.destroyed && res.writable) {
-            res.write(`data: ${message}\n\n`);
-          }
-        } catch (error) {
-          console.error('Error notifying client of disconnection:', error);
-        }
-      });
-    });
+    };
+    for (const [instrumentKey, sockets] of this.socketStreamingClients.entries()) {
+      for (const socket of sockets) {
+        socket.emit('marketData', payload);
+      }
+    }
   }
 
-  // Notify clients about reconnection
+  // Notify clients about reconnection (Socket.IO only)
   notifyClientsReconnection() {
-    const message = JSON.stringify({
+    const payload = {
       type: 'status',
       connected: true,
       message: 'WebSocket reconnected successfully',
       timestamp: Date.now()
-    });
-    
-    this.streamingResponses.forEach((responses, instrumentKey) => {
-      responses.forEach(res => {
-        try {
-          if (!res.writableEnded && !res.destroyed && res.writable) {
-            res.write(`data: ${message}\n\n`);
-          }
-        } catch (error) {
-          console.error('Error notifying client of reconnection:', error);
-        }
-      });
-    });
+    };
+    for (const [instrumentKey, sockets] of this.socketStreamingClients.entries()) {
+      for (const socket of sockets) {
+        socket.emit('marketData', payload);
+      }
+    }
   }
 
-  // Notify clients about max retries reached
+  // Notify clients about max retries reached (Socket.IO only)
   notifyClientsMaxRetriesReached() {
-    const message = JSON.stringify({
+    const payload = {
       type: 'error',
       connected: false,
       message: 'Max reconnection attempts reached. Please refresh or try again later.',
       timestamp: Date.now()
-    });
-    
-    this.streamingResponses.forEach((responses, instrumentKey) => {
-      responses.forEach(res => {
-        try {
-          if (!res.writableEnded && !res.destroyed && res.writable) {
-            res.write(`data: ${message}\n\n`);
-          }
-        } catch (error) {
-          console.error('Error notifying client of max retries:', error);
-        }
-      });
-    });
-  }
-
-  // Start keep-alive for SSE connections
-  startKeepAlive() {
-    this.keepAliveInterval = setInterval(() => {
-      console.log(`Sending keep-alive to ${this.streamingResponses.size} instruments`);
-      
-      this.streamingResponses.forEach((responses, instrumentKey) => {
-        const responseCopy = [...responses];
-        responseCopy.forEach((res, index) => {
-          try {
-            if (!res.writableEnded && !res.destroyed && res.writable) {
-              res.write(': keep-alive\n\n');
-            } else {
-              const actualIndex = responses.indexOf(res);
-              if (actualIndex > -1) {
-                responses.splice(actualIndex, 1);
-                console.log(`Removed dead connection during keep-alive for ${instrumentKey}`);
-              }
-            }
-          } catch (error) {
-            console.error('Error sending keep-alive:', error);
-            const actualIndex = responses.indexOf(res);
-            if (actualIndex > -1) {
-              responses.splice(actualIndex, 1);
-            }
-          }
-        });
-        
-        // Clean up if no clients left
-        if (responses.length === 0) {
-          this.streamingResponses.delete(instrumentKey);
-          this.unsubscribeFromInstrument(instrumentKey);
-        }
-      });
-    }, 15000); // Send keep-alive every 15 seconds
-  }
-
-  // Stop keep-alive
-  stopKeepAlive() {
-    if (this.keepAliveInterval) {
-      clearInterval(this.keepAliveInterval);
-      this.keepAliveInterval = null;
+    };
+    for (const [instrumentKey, sockets] of this.socketStreamingClients.entries()) {
+      for (const socket of sockets) {
+        socket.emit('marketData', payload);
+      }
     }
   }
 
@@ -711,8 +535,6 @@ class MarketDataService {
   getConnectionStatus() {
     return {
       connected: this.upstoxWs && this.upstoxWs.readyState === WebSocket.OPEN,
-      activeStreams: this.streamingResponses.size,
-      totalClients: Array.from(this.streamingResponses.values()).reduce((total, clients) => total + clients.length, 0),
       connectionRetries: this.connectionRetries,
       maxRetries: this.maxRetries,
       isInitialized: this.isInitialized,
@@ -740,33 +562,14 @@ class MarketDataService {
   // Cleanup on shutdown
   cleanup() {
     console.log("Cleaning up market data service...");
-    
-    this.stopKeepAlive();
     this.stopHeartbeatMonitor();
-    
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
     }
-    
-    // Close all streaming responses
-    this.streamingResponses.forEach((responses, instrumentKey) => {
-      responses.forEach(res => {
-        try {
-          if (!res.writableEnded && !res.destroyed && res.writable) {
-            res.write('data: {"type": "status", "message": "Service shutting down"}\n\n');
-            res.end();
-          }
-        } catch (error) {
-          console.error('Error closing client connection:', error);
-        }
-      });
-    });
-    
     // Close WebSocket connection
     if (this.upstoxWs) {
       this.upstoxWs.close();
     }
-    
     this.isInitialized = false;
     console.log("Market data service cleaned up");
   }
