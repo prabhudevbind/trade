@@ -196,6 +196,14 @@ const subscribeToOption = (instrumentKey) => {
     subscribeToOption._timers[instrumentKey] = setTimeout(() => {
       console.warn(`[subscribeToOption] No data received for ${instrumentKey} after 10s. Check if this key is valid and available in Upstox feed.`);
     }, 10000);
+    // Add retry logic: if no data in 30s, unsubscribe and resubscribe
+    if (!subscribeToOption._retryTimers) subscribeToOption._retryTimers = {};
+    if (subscribeToOption._retryTimers[instrumentKey]) clearTimeout(subscribeToOption._retryTimers[instrumentKey]);
+    subscribeToOption._retryTimers[instrumentKey] = setTimeout(() => {
+      console.warn(`[subscribeToOption] Retrying subscription for ${instrumentKey} after 30s of no data.`);
+      unsubscribeFromOption(instrumentKey);
+      setTimeout(() => subscribeToOption(instrumentKey), 1000); // resubscribe after 1s
+    }, 30000);
   } else {
     console.log(`Cannot subscribe to ${instrumentKey}: WebSocket not open`);
   }
@@ -260,6 +268,10 @@ const connectUpstoxWebSocket = async (wsUrl) => {
               if (subscribeToOption._timers && subscribeToOption._timers[instrumentKey]) {
                 clearTimeout(subscribeToOption._timers[instrumentKey]);
                 delete subscribeToOption._timers[instrumentKey];
+              }
+              if (subscribeToOption._retryTimers && subscribeToOption._retryTimers[instrumentKey]) {
+                clearTimeout(subscribeToOption._retryTimers[instrumentKey]);
+                delete subscribeToOption._retryTimers[instrumentKey];
               }
               const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
               console.log(`[Upstox] Received data for instrumentKey: ${instrumentKey}. Emitting to room size: ${roomSize}`);
