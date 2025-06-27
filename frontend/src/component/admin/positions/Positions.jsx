@@ -5,17 +5,17 @@ import { useEffect, useState } from "react"
 import { io } from "socket.io-client"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { TrendingUp, TrendingDown, DollarSign, Trophy, Plus, Smartphone, IndianRupee } from "lucide-react"
+import { TrendingDown, Trophy, Plus, Eye, ArrowUpRight, ArrowDownRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Link, useNavigate } from "react-router-dom"
+// import { useRouter } from "next/navigation"
+import { useNavigate } from "react-router-dom"
 
 export default function Positions() {
   const { data: activeTradesData, isLoading, isError, error } = useGetTradesActiveQuery()
   const [positions, setPositions] = useState([])
   const [totalPnL, setTotalPnL] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
-  const navigate = useNavigate()
+  const router = useNavigate()
 
   // Check if mobile
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function Positions() {
     // Subscribe to all instrumentKeys
     const instrumentKeys = activeTradesData.positions.map((position) => `NSE_FO|${position.option.symbol}`)
     instrumentKeys.forEach((instrumentKey) => {
-      socket.emit("market:subscribe", instrumentKey)
+      socket.emit("subscribe", instrumentKey)
     })
 
     // Listen for market data updates
@@ -75,7 +75,7 @@ export default function Positions() {
     // Cleanup: Unsubscribe and disconnect
     return () => {
       instrumentKeys.forEach((instrumentKey) => {
-        socket.emit("market:unsubscribe", instrumentKey)
+        socket.emit("unsubscribe", instrumentKey)
       })
       socket.disconnect()
     }
@@ -89,10 +89,10 @@ export default function Positions() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] p-4">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="text-gray-500">Loading positions data...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto"></div>
+          <p className="text-gray-600 text-sm">Loading positions...</p>
         </div>
       </div>
     )
@@ -102,45 +102,34 @@ export default function Positions() {
     const isNoActiveContest = error?.data?.error === "No active contest found for this user"
 
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] ">
-        <div className="text-center  max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="text-center max-w-sm">
           {isNoActiveContest ? (
             <>
-              <Trophy className="h-16 w-16 text-gray-400 mx-auto" />
-              <h2 className="text-xl md:text-2xl font-semibold text-gray-800">No Active Contest</h2>
-              <p className="text-gray-600 text-sm md:text-base">
-                You don't have any active contests at the moment. Join a contest to start trading!
-              </p>
-              <Link to="/contests">
-                <Button className="w-full mt-4" size="lg">
-                  Browse Available Contests
-                </Button>
-              </Link>
+              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trophy className="h-8 w-8 text-blue-600" />
+              </div>
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">No Active Contest</h2>
+              <p className="text-gray-600 text-sm mb-6">Join a contest to start trading and see your positions here.</p>
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700"
+                size="lg"
+                onClick={() => router.push("/contests")}
+              >
+                Browse Contests
+              </Button>
             </>
           ) : (
             <>
-              <div className="text-red-500 mb-4">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="h-16 w-16 mx-auto"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                  />
-                </svg>
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrendingDown className="h-8 w-8 text-red-600" />
               </div>
-              <h2 className="text-xl md:text-2xl font-semibold text-gray-800">Error Loading Positions</h2>
-              <p className="text-gray-600 text-sm md:text-base">
-                {error?.data?.error || "Something went wrong while loading your positions. Please try again."}
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
+              <p className="text-gray-600 text-sm mb-6">
+                {error?.data?.error || "Unable to load your positions. Please try again."}
               </p>
-              <Button onClick={() => window.location.reload()} className="w-full mt-4" variant="outline" size="lg">
-                Retry
+              <Button onClick={() => window.location.reload()} variant="outline" size="lg" className="w-full">
+                Try Again
               </Button>
             </>
           )}
@@ -149,222 +138,220 @@ export default function Positions() {
     )
   }
 
-  const MobilePositionCard = ({ position }) => (
-    <Card className="mb-4">
-      <CardContent className="p-4">
-        <div className="flex justify-between items-start mb-3">
-          <div>
-            <div className="font-semibold text-lg">{position.option.symbol}</div>
-            <div className="text-sm text-gray-600">
-              Strike: {position.option.strike_price} | Qty: {position.net_quantity}
+  const MobilePositionCard = ({ position }) => {
+    const ltp = Number(position.option.ltp) || 0
+    const avgPrice = Number(position.average_entry_price) || 0
+    const pnl = position.unrealizedPnL || 0
+    const pnlPercentage = avgPrice > 0 ? ((ltp - avgPrice) / avgPrice) * 100 : 0
+    const isProfit = pnl >= 0
+
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 p-4 mb-3 shadow-sm">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center space-x-2">
+            <div className="flex-1">
+              <div className="font-semibold text-gray-900 text-base">{position.option.symbol}</div>
+              <div className="text-xs text-gray-500">
+                {position.option.strike_price} {position.option.option_type} • Qty: {Math.abs(position.net_quantity)}
+              </div>
             </div>
           </div>
-          <Badge variant={position.option.option_type === "CE" ? "default" : "destructive"}>
-            {position.option.option_type}
-          </Badge>
+          <div className="text-right">
+            <Badge variant={position.option.option_type === "CE" ? "default" : "destructive"} className="text-xs">
+              {position.option.option_type}
+            </Badge>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        {/* Price and P&L */}
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-gray-500">Avg Price</div>
-            <div className="font-medium">₹{Number.parseFloat(position.average_entry_price).toFixed(2)}</div>
+            <div className="text-lg font-bold text-gray-900">₹{ltp.toFixed(2)}</div>
+            <div className="text-xs text-gray-500">LTP</div>
           </div>
-          <div>
-            <div className="text-gray-500">LTP</div>
-            <div className="font-medium">₹{Number.parseFloat(position.option.ltp).toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-gray-500">Current Value</div>
-            <div className="font-medium">₹{position.currentValue.toFixed(2)}</div>
-          </div>
-          <div>
-            <div className="text-gray-500">P&L</div>
-            <div
-              className={`font-medium flex items-center gap-1 ${position.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-            >
-              {position.unrealizedPnL >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}₹
-              {position.unrealizedPnL.toFixed(2)}
+          <div className="text-right">
+            <div className={`text-lg font-bold flex items-center ${isProfit ? "text-green-600" : "text-red-600"}`}>
+              {isProfit ? <ArrowUpRight className="h-4 w-4 mr-1" /> : <ArrowDownRight className="h-4 w-4 mr-1" />}₹
+              {Math.abs(pnl).toFixed(2)}
+            </div>
+            <div className={`text-xs ${isProfit ? "text-green-600" : "text-red-600"}`}>
+              {isProfit ? "+" : "-"}
+              {Math.abs(pnlPercentage).toFixed(2)}%
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
-  )
+
+        {/* Additional Info */}
+        <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+          <div>
+            <span>Avg: ₹{avgPrice.toFixed(2)}</span>
+          </div>
+          <div>
+            <span>Value: ₹{(ltp * Math.abs(position.net_quantity)).toFixed(2)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="space-y-4 md:space-y-6 p-4 md:p-6 max-w-7xl mx-auto">
-      {/* Trade Now Button - Fixed at top on mobile */}
-      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm border-b pb-4 mb-4 md:relative md:bg-transparent md:border-0 md:pb-0 md:mb-0">
-        <Button
-          className="w-full md:w-auto md:ml-auto md:flex bg-green-600 hover:bg-green-700 text-white font-semibold py-3 md:py-2"
-          size={isMobile ? "lg" : "default"}
-        onClick={() => navigate(`/option-chain/${activeTradesData.contest.id}`)}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Trade Now
-        </Button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="px-4 py-4">
+          <h1 className="text-xl font-semibold text-gray-900">Positions</h1>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Virtual Cash</CardTitle>
-            <IndianRupee className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">
-              ₹
-              {Number.parseFloat(activeTradesData?.virtualCash || 0).toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+      <div className="p-4 space-y-4">
+        {/* Summary Section */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <div className="text-xs text-gray-500 mb-1">Invested</div>
+              <div className="font-semibold text-gray-900">
+                ₹
+                {positions
+                  .reduce((sum, pos) => sum + Number(pos.average_entry_price) * Math.abs(pos.net_quantity), 0)
+                  .toFixed(0)}
+              </div>
             </div>
-          </CardContent>
-        </Card>
+            <div className="text-center">
+              <div className="text-xs text-gray-500 mb-1">Current</div>
+              <div className="font-semibold text-gray-900">
+                ₹
+                {positions
+                  .reduce((sum, pos) => sum + Number(pos.option.ltp) * Math.abs(pos.net_quantity), 0)
+                  .toFixed(0)}
+              </div>
+            </div>
+            <div className="text-center">
+              <div className="text-xs text-gray-500 mb-1">P&L</div>
+              <div className={`font-semibold ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
+                {totalPnL >= 0 ? "+" : ""}₹{totalPnL.toFixed(0)}
+              </div>
+            </div>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total P&L</CardTitle>
-            {totalPnL >= 0 ? (
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            ) : (
-              <TrendingDown className="h-4 w-4 text-red-500" />
+        {/* Contest Info */}
+        <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-medium text-gray-900">{activeTradesData?.contest?.name}</h3>
+            <div className="flex items-center space-x-1">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <span className="text-xs text-green-600 font-medium">Live</span>
+            </div>
+          </div>
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <span>Virtual Cash: ₹{Number(activeTradesData?.virtualCash || 0).toLocaleString()}</span>
+            <span>{positions.length} positions</span>
+          </div>
+        </div>
+
+        {/* Positions List */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-medium text-gray-900">Holdings ({positions.length})</h3>
+            {!isMobile && (
+              <Button
+                size="sm"
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => router.push(`/option-chain/${activeTradesData.contest.id}`)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Position
+              </Button>
             )}
-          </CardHeader>
-          <CardContent>
-            <div className={`text-xl md:text-2xl font-bold ${totalPnL >= 0 ? "text-green-600" : "text-red-600"}`}>
-              ₹
-              {totalPnL.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
-            </div>
-            <div className="text-xs text-muted-foreground mt-1">{totalPnL >= 0 ? "Profit" : "Loss"} • Real-time</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Open Positions</CardTitle>
-            <Trophy className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-xl md:text-2xl font-bold">{positions.length}</div>
-            <div className="text-xs text-muted-foreground mt-1">Active trades</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Contest Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg md:text-xl">{activeTradesData?.contest?.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-4 text-sm text-muted-foreground">
-            <div>
-              Max Trades: <span className="font-medium">{activeTradesData?.contest?.maxTrade}</span>
-            </div>
-            <div className="hidden md:block">•</div>
-            <div>
-              Entry Fee: <span className="font-medium">₹{activeTradesData?.contest?.entry_fee}</span>
-            </div>
-            <div className="hidden md:block">•</div>
-            <div className="flex items-center gap-1">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-green-600 font-medium">Live</span>
-            </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Positions - Mobile Cards or Desktop Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg md:text-xl">Open Positions</CardTitle>
-            {isMobile && <Smartphone className="h-4 w-4 text-muted-foreground" />}
-          </div>
-        </CardHeader>
-        <CardContent>
           {positions.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Trophy className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>No open positions</p>
-              <p className="text-sm mt-2">Start trading to see your positions here</p>
+            <div className="bg-white rounded-lg p-8 text-center shadow-sm border border-gray-200">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Eye className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="font-medium text-gray-900 mb-2">No positions yet</h3>
+              <p className="text-sm text-gray-600 mb-4">Start trading to see your positions here</p>
+              <Button
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => router.push(`/option-chain/${activeTradesData.contest.id}`)}
+              >
+                Start Trading
+              </Button>
             </div>
           ) : (
             <>
-              {/* Mobile View - Cards */}
+              {/* Mobile View */}
               {isMobile ? (
-                <div className="space-y-4">
+                <div>
                   {positions.map((position) => (
                     <MobilePositionCard key={position.id} position={position} />
                   ))}
                 </div>
               ) : (
-                /* Desktop View - Table */
-                <div className="overflow-x-auto">
+                /* Desktop Table */
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Symbol</TableHead>
-                        <TableHead>Strike</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Quantity</TableHead>
-                        <TableHead>Avg Price</TableHead>
-                        <TableHead>LTP</TableHead>
-                        <TableHead className="text-right">Current Value</TableHead>
-                        <TableHead className="text-right">P&L</TableHead>
+                      <TableRow className="bg-gray-50">
+                        <TableHead className="font-medium">Instrument</TableHead>
+                        <TableHead className="font-medium">Qty</TableHead>
+                        <TableHead className="font-medium">Avg Price</TableHead>
+                        <TableHead className="font-medium">LTP</TableHead>
+                        <TableHead className="font-medium text-right">P&L</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {positions.map((position) => (
-                        <TableRow key={position.id}>
-                          <TableCell className="font-medium">{position.option.symbol}</TableCell>
-                          <TableCell>{position.option.strike_price}</TableCell>
-                          <TableCell>
-                            <Badge variant={position.option.option_type === "CE" ? "default" : "destructive"}>
-                              {position.option.option_type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{position.net_quantity}</TableCell>
-                          <TableCell>₹{Number.parseFloat(position.average_entry_price).toFixed(2)}</TableCell>
-                          <TableCell>₹{Number.parseFloat(position.option.ltp).toFixed(2)}</TableCell>
-                          <TableCell className="text-right font-medium">₹{position.currentValue.toFixed(2)}</TableCell>
-                          <TableCell
-                            className={`text-right font-medium ${position.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"}`}
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              {position.unrealizedPnL >= 0 ? (
-                                <TrendingUp className="h-4 w-4" />
-                              ) : (
-                                <TrendingDown className="h-4 w-4" />
-                              )}
-                              ₹{position.unrealizedPnL.toFixed(2)}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {positions.map((position) => {
+                        const pnl = position.unrealizedPnL || 0
+                        const isProfit = pnl >= 0
+                        return (
+                          <TableRow key={position.id} className="hover:bg-gray-50">
+                            <TableCell>
+                              <div>
+                                <div className="font-medium text-gray-900">{position.option.symbol}</div>
+                                <div className="text-xs text-gray-500">
+                                  {position.option.strike_price} {position.option.option_type}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">{position.net_quantity}</TableCell>
+                            <TableCell>₹{Number(position.average_entry_price).toFixed(2)}</TableCell>
+                            <TableCell className="font-medium">₹{Number(position.option.ltp).toFixed(2)}</TableCell>
+                            <TableCell className="text-right">
+                              <div className={`font-medium ${isProfit ? "text-green-600" : "text-red-600"}`}>
+                                {isProfit ? "+" : ""}₹{pnl.toFixed(2)}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>
               )}
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Bottom Trade Button for Mobile */}
-      {isMobile && positions.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-50">
-          <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 shadow-lg" size="lg"   onClick={() => navigate(`/option-chain/${activeTradesData.contest.id}`)}>
+      {/* Mobile Bottom Action Button */}
+      {isMobile && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+          <Button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3"
+            size="lg"
+            onClick={() => router.push(`/option-chain/${activeTradesData.contest.id}`)}
+          >
             <Plus className="h-5 w-5 mr-2" />
-            New Trade
+            New Position
           </Button>
         </div>
       )}
+
+      {/* Bottom padding for mobile button */}
+      {isMobile && <div className="h-20"></div>}
     </div>
   )
 }

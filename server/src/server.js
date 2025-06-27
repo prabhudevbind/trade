@@ -35,7 +35,6 @@ if (!config.upstox.accessToken) {
 
 OAUTH2.accessToken = config.upstox.accessToken;
 let upstoxWs = null;
-const streamingResponses = new Map();
 
 // Middleware
 app.use(cors());
@@ -96,16 +95,14 @@ function logMemoryUsage() {
 // Start server
 server.listen(PORT, async () => {
     console.log(`Server running on port ${PORT}`);
-    
     try {
         await initializeMarketDataService();
         await initProtobuf();
         await initUpstoxConnection();
         console.log('All services initialized successfully');
-
         // Start memory monitoring
         setInterval(logMemoryUsage, 5 * 60 * 1000); // Log every 5 minutes
-        logMemoryUsage(); // Initial log
+        // logMemoryUsage(); // Initial log
     } catch (error) {
         console.error('Failed to initialize services:', error);
     }
@@ -116,15 +113,12 @@ process.on('SIGINT', () => {
     console.log('Shutting down...');
     console.log('Final Memory Usage:');
     logMemoryUsage();
-    
-    streamingResponses.forEach((responses, instrumentKey) => {
-        responses.forEach(res => {
-            if (!res.writableEnded) {
-                res.end('data: {"message": "Server shutting down"}\n\n');
-            }
+    // Clean up Socket.IO subscriptions
+    if (io) {
+        io.close(() => {
+            console.log('Socket.IO server closed');
         });
-    });
-    
+    }
     server.close(() => {
         console.log('Server stopped');
         if (upstoxWs) upstoxWs.close();
@@ -195,7 +189,13 @@ const subscribeToOption = (instrumentKey) => {
       },
     };
     upstoxWs.send(Buffer.from(JSON.stringify(data)));
-    console.log(`Subscribed to: ${instrumentKey}`);
+    console.log(`[subscribeToOption] Sent subscription for: ${instrumentKey}`);
+    // Add a timer to log if no data is received for this key in 10 seconds
+    if (!subscribeToOption._timers) subscribeToOption._timers = {};
+    if (subscribeToOption._timers[instrumentKey]) clearTimeout(subscribeToOption._timers[instrumentKey]);
+    subscribeToOption._timers[instrumentKey] = setTimeout(() => {
+      console.warn(`[subscribeToOption] No data received for ${instrumentKey} after 10s. Check if this key is valid and available in Upstox feed.`);
+    }, 10000);
   } else {
     console.log(`Cannot subscribe to ${instrumentKey}: WebSocket not open`);
   }
@@ -231,10 +231,10 @@ const connectUpstoxWebSocket = async (wsUrl) => {
     ws.on("open", () => {
       console.log("Upstox WebSocket connected");
       upstoxWs = ws;
-      // Resubscribe to all active instruments
-      streamingResponses.forEach((_, instrumentKey) => {
+      // Resubscribe to all active instruments (Socket.IO rooms)
+      for (const instrumentKey of instrumentSubscriptions.keys()) {
         subscribeToOption(instrumentKey);
-      });
+      }
       resolve(ws);
     });
 
@@ -246,13 +246,6 @@ const connectUpstoxWebSocket = async (wsUrl) => {
     ws.on("close", () => {
       console.log("Upstox WebSocket disconnected. Reconnecting in 5 seconds...");
       upstoxWs = null;
-      streamingResponses.forEach((responses, instrumentKey) => {
-        responses.forEach(res => {
-          if (!res.writableEnded) {
-            res.write('data: {"error": "WebSocket disconnected, reconnecting..."}\n\n');
-          }
-        });
-      });
       setTimeout(initUpstoxConnection, 5000);
     });
 
@@ -261,7 +254,15 @@ const connectUpstoxWebSocket = async (wsUrl) => {
         if (data instanceof Buffer) {
           const decodedData = decodeProtobuf(data);
           if (decodedData.feeds) {
+            // Log all instrumentKeys received from Upstox
+            console.log("[Upstox] All received instrumentKeys:", Object.keys(decodedData.feeds));
             for (const [instrumentKey, feed] of Object.entries(decodedData.feeds)) {
+              if (subscribeToOption._timers && subscribeToOption._timers[instrumentKey]) {
+                clearTimeout(subscribeToOption._timers[instrumentKey]);
+                delete subscribeToOption._timers[instrumentKey];
+              }
+              const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
+              console.log(`[Upstox] Received data for instrumentKey: ${instrumentKey}. Emitting to room size: ${roomSize}`);
               // Broadcast to all Socket.IO clients in the room
               io.to(instrumentKey).emit('marketData', { instrumentKey, data: feed });
             }
@@ -278,21 +279,7 @@ const connectUpstoxWebSocket = async (wsUrl) => {
   });
 };
 
-// Keep-alive for SSE connections
-const sendKeepAlive = () => {
-  streamingResponses.forEach((responses, instrumentKey) => {
-    responses.forEach(res => {
-      if (!res.writableEnded) {
-        res.write(': keep-alive\n\n');
-      }
-    });
-  });
-};
-
-// Start keep-alive interval
-setInterval(sendKeepAlive, 15000); // Send keep-alive every 15 seconds
-
-// Socket.IO setup
+// --- Socket.IO streaming integrations ---
 const httpServer = server; // Already created
 const { Server: SocketIOServer } = require('socket.io');
 const io = new SocketIOServer(httpServer, {
@@ -302,7 +289,6 @@ const io = new SocketIOServer(httpServer, {
   }
 });
 
-// --- Socket.IO streaming integrations ---
 // Option Chain streaming
 const { registerOptionChainSocket } = require('./routes/chart/niftychart.router');
 registerOptionChainSocket(io);
@@ -327,7 +313,8 @@ io.on('connection', (socket) => {
       subscribeToOption(instrumentKey);
     }
     instrumentSubscriptions.get(instrumentKey).add(socket.id);
-    console.log(`Socket ${socket.id} subscribed to ${instrumentKey}`);
+    const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
+    console.log(`Socket ${socket.id} subscribed to ${instrumentKey}. Room size: ${roomSize}`);
   });
 
   // Unsubscribe from instrument
@@ -341,7 +328,8 @@ io.on('connection', (socket) => {
         unsubscribeFromOption(instrumentKey);
       }
     }
-    console.log(`Socket ${socket.id} unsubscribed from ${instrumentKey}`);
+    const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
+    console.log(`Socket ${socket.id} unsubscribed from ${instrumentKey}. Room size: ${roomSize}`);
   });
 
   // Clean up on disconnect
@@ -353,6 +341,8 @@ io.on('connection', (socket) => {
         instrumentSubscriptions.delete(instrumentKey);
         unsubscribeFromOption(instrumentKey);
       }
+      const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
+      console.log(`After disconnect, room ${instrumentKey} size: ${roomSize}`);
     }
   });
 });
@@ -397,13 +387,6 @@ process.on('SIGINT', () => {
   console.log('Final Memory Usage:');
   logMemoryUsage();
   
-  streamingResponses.forEach((responses, instrumentKey) => {
-    responses.forEach(res => {
-      if (!res.writableEnded) {
-        res.end('data: {"message": "Server shutting down"}\n\n');
-      }
-    });
-  });
   server.close(() => {
   console.log('Server stopped');
     if (upstoxWs) upstoxWs.close();
