@@ -2,7 +2,13 @@ const express = require("express");
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const redis = require('redis');
 const router = express.Router();
+
+// Redis client setup
+const redisClient = redis.createClient();
+redisClient.on('error', (err) => console.error('Redis Client Error', err));
+(async () => { await redisClient.connect(); })();
 
 // Constants for instrument keys
 const INSTRUMENTS = [
@@ -228,37 +234,39 @@ function getLotSize(instrumentKey) {
   return lotSizes[instrumentKey] || 50; // Default to 50 if not found
 }
 
+
 // Static endpoint to get single option chain snapshot
 router.get("/option-chain", async (req, res) => {
   try {
     const { expiry_date, instrument_key = "NSE_INDEX|Nifty 50" } = req.query;
-
     if (!expiry_date) {
       return res.status(400).json({
         success: false,
         message: "expiry_date is required (format: YYYY-MM-DD)",
       });
     }
+    const cacheKey = `option_chain:${instrument_key}:${expiry_date}`;
+    // Try to get from Redis cache first
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return res.json(JSON.parse(cached));
+    }
 
     const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(
       instrument_key
     )}&expiry_date=${expiry_date}`;
-    
     const headers = {
       Accept: "application/json",
       Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
     };
-
     const response = await axios.get(url, { headers });
     const optionChainData = response.data.data || [];
-
     if (optionChainData.length === 0) {
       return res.json({
         success: false,
         message: "No option chain data found for the given parameters",
       });
     }
-
     // Process data same as streaming version
     const processedData = optionChainData.map(strike => {
       const lotSize = getLotSize(instrument_key);
@@ -337,7 +345,7 @@ router.get("/option-chain", async (req, res) => {
       sum + (strike.put_option?.oi_lots || 0), 0
     );
 
-    res.json({
+    const result = {
       success: true,
       timestamp: new Date().toISOString(),
       underlying_info: {
@@ -352,8 +360,10 @@ router.get("/option-chain", async (req, res) => {
         overall_pcr: totalCallOI > 0 ? (totalPutOI / totalCallOI).toFixed(2) : 0
       },
       option_chain: processedData
-    });
-
+    };
+    // Store in Redis for 2 seconds
+    await redisClient.setEx(cacheKey, 2, JSON.stringify(result));
+    res.json(result);
   } catch (error) {
     console.error("❌ Option Chain API Error:", error.message);
     
@@ -361,7 +371,6 @@ router.get("/option-chain", async (req, res) => {
     if (error.response) {
       errorMessage = `API Error: ${error.response.status} - ${error.response.data?.message || error.response.statusText}`;
     }
-
     res.status(500).json({
       success: false,
       message: errorMessage,
@@ -380,7 +389,7 @@ router.get("/available-expiry-dates", async (req, res) => {
     // Return static expiry dates for each instrument
     if (instrument_key === "NSE_INDEX|Nifty 50") {
       expiry_dates = [
-        "2025-06-26","2025-07-03","2025-07-10","2025-07-17","2025-07-24","2025-07-31","2025-08-28","2025-09-25","2025-12-24"
+        ,"2025-07-03","2025-07-10","2025-07-17","2025-07-24","2025-07-31","2025-08-28","2025-09-25","2025-12-24"
       ];
     } else if (instrument_key === "NSE_INDEX|Nifty Bank") {
       expiry_dates = [

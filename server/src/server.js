@@ -753,6 +753,55 @@ cron.schedule('0 6 * * *', fetchAndCacheExpiryDates, {
     timezone: 'Asia/Kolkata',
 });
 
+// --- CRON JOB: Reset Contest with id=5 every night at 12:00 AM IST ---
+const prisma = require('./utils/prisma'); // Import Prisma client
+
+cron.schedule('0 0 * * *', async () => {
+    try {
+        // Fetch all ongoing contests
+        const ongoingContests = await prisma.contest.findMany({ where: { status: 'ongoing' } });
+        if (!ongoingContests.length) {
+            console.log(`[CRON] No ongoing contests found.`);
+            return;
+        }
+        for (const contest of ongoingContests) {
+            const contestId = contest.id;
+            // Find all participants for this contest
+            const participants = await prisma.contestParticipant.findMany({ where: { contest_id: contestId } });
+            const participantIds = participants.map(p => p.id);
+            if (participantIds.length > 0) {
+                // Delete all trades for these participants
+                await prisma.trade.deleteMany({ where: { contest_participant_id: { in: participantIds } } });
+                // Delete all positions for these participants
+                await prisma.position.deleteMany({ where: { contest_participant_id: { in: participantIds } } });
+                // Remove all participants
+                await prisma.contestParticipant.deleteMany({ where: { contest_id: contestId } });
+                console.log(`[CRON] Removed all participants, trades, and positions for contest id=${contestId}`);
+            }
+            // Set start_time to 9:00 AM and end_time to 3:30 PM for tomorrow (IST)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(9, 0, 0, 0); // 9:00 AM
+            const endOfDay = new Date(tomorrow);
+            endOfDay.setHours(15, 30, 0, 0); // 3:30 PM
+            await prisma.contest.update({
+                where: { id: contestId },
+                data: {
+                    start_time: tomorrow,
+                    end_time: endOfDay,
+                    status: 'ongoing',
+                    updated_at: new Date(),
+                },
+            });
+            console.log(`[CRON] Contest id=${contestId} reset for new day with status 'ongoing'.`);
+        }
+    } catch (err) {
+        console.error('[CRON] Error resetting ongoing contests:', err);
+    }
+}, {
+    timezone: 'Asia/Kolkata',
+});
+
 // Start server
 server.listen(PORT, async () => {
     console.log(`🚀 Server running on port ${PORT}`);
