@@ -712,7 +712,7 @@ app.get('/api/v1/verify-instrument/:instrumentKey', async (req, res) => {
         const apiInstance = new UpstoxClient.OptionsApi();
         
         // Try to get instrument details
-        apiInstance.getOptionContracts(instrumentKey, '2025-01-30', (error, data) => {
+        apiInstance.getOptionContracts(instrumentKey, '2025-07-3', (error, data) => {
             if (error) {
                 res.json({ valid: false, error: error.message });
             } else {
@@ -844,6 +844,9 @@ app.post('/api/v1/env', async (req, res) => {
         
         fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
         res.json({ success: true, message: found ? 'Updated' : 'Inserted', key, value });
+        // Restart the server after .env update
+        console.log('🔄 .env updated, restarting server...');
+        process.exit(0);
     } catch (err) {
         console.error('Error updating .env:', err);
         res.status(500).json({ success: false, error: 'Failed to update .env', details: err.message });

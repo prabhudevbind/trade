@@ -12,7 +12,7 @@ export default function Dashboard() {
     <div>
   
       {user?.role?.name=='user' && <OptionChain/>}
-      {user?.role?.name=='admin' && <AdminDashboard/>}
+      {user.role.name=='admin' && <AdminDashboard/>}
     </div>
   )
 }
