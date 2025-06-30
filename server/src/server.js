@@ -192,7 +192,7 @@ const subscribeToUpstoxInstrument = (instrumentKey) => {
             guid: `sub-${instrumentKey}-${Date.now()}`,
             method: "sub",
             data: {
-                mode: "ltpc", // Try "ltpc" mode for basic data
+                mode: "full", // Changed from "full" to "full" for richer data
                 instrumentKeys: [instrumentKey],
             },
         };
@@ -207,9 +207,9 @@ const subscribeToUpstoxInstrument = (instrumentKey) => {
         const timeoutId = setTimeout(() => {
             console.warn(`⚠️  No data received for ${instrumentKey} after 15 seconds`);
             // Try resubscribing with different mode
-            console.log(`🔄 Attempting resubscription with 'ltpc' mode for ${instrumentKey}`);
+            console.log(`🔄 Attempting resubscription with 'full' mode for ${instrumentKey}`);
             resubscribeWithDifferentMode(instrumentKey);
-        }, 15000);
+        }, 2000);
         subscriptionTimers.set(instrumentKey, timeoutId);
 
         // Set up retry mechanism with exponential backoff
@@ -245,18 +245,18 @@ const resubscribeWithDifferentMode = (instrumentKey) => {
         upstoxWs.send(Buffer.from(JSON.stringify(unsubscriptionData)));
         console.log(`📡 Unsubscribed from ${instrumentKey} before mode change`);
 
-        // Wait a moment then resubscribe with ltpc mode
+        // Wait a moment then resubscribe with full mode
         setTimeout(() => {
             const subscriptionData = {
                 guid: `sub-${instrumentKey}-${Date.now()}`,
                 method: "sub",
                 data: {
-                    mode: "ltpc", // Try with ltpc mode
+                    mode: "full", // Try with full mode
                     instrumentKeys: [instrumentKey],
                 },
             };
             upstoxWs.send(Buffer.from(JSON.stringify(subscriptionData)));
-            console.log(`📡 Resubscribed to ${instrumentKey} with ltpc mode`);
+            console.log(`📡 Resubscribed to ${instrumentKey} with full mode`);
         }, 1000);
 
     } catch (error) {
