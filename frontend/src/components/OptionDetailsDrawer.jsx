@@ -67,7 +67,7 @@ export function OptionDetailsDrawer({
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
     // Use Socket.IO for real-time updates
-    const socket = io('http://localhost:5001', {
+    const socket = io('', {
       transports: ['websocket'],
       reconnection: true,
     });
@@ -81,7 +81,7 @@ export function OptionDetailsDrawer({
 
     socket.on('marketData', ({ instrumentKey, data }) => {
       if (instrumentKey === initialOptionData.instrument_key) {
-        console.log('Socket.IO marketData for', instrumentKey, data);
+        // console.log('Socket.IO marketData for', instrumentKey, data);
 
         // Defensive: handle both full and fallback data
         if (data && data.ff && data.ff.marketFF) {
@@ -109,6 +109,28 @@ export function OptionDetailsDrawer({
               vega: greeks.vega,
               iv: greeks.iv * 100,
               pop: greeks.delta * 100
+            }
+          }));
+        } else if (data && data.ltpc) {
+          // Handle Upstox ltpc structure
+          setOptionData(prevData => ({
+            ...prevData,
+            ltp: data.ltpc.ltp,
+            close_price: data.ltpc.cp,
+            bid_price: null,
+            ask_price: null,
+            bid_qty: null,
+            ask_qty: null,
+            volume: null,
+            oi_lots: null,
+            oi_change_lots: null,
+            greeks: {
+              delta: null,
+              gamma: null,
+              theta: null,
+              vega: null,
+              iv: null,
+              pop: null
             }
           }));
         } else if (data && typeof data.ltp !== 'undefined') {
