@@ -11,6 +11,19 @@ const os = require('os');
 const cron = require('node-cron');
 const axios = require('axios');
 const fs = require('fs');
+const redis = require('redis');
+
+// --- REDIS CLIENT SETUP ---
+const Redis = require('ioredis');
+const redisClient = new Redis({
+    host: process.env.REDIS_HOST || '127.0.0.1',
+    port: process.env.REDIS_PORT || 6379,
+    password: process.env.REDIS_PASSWORD || undefined,
+    db: process.env.REDIS_DB || 0,
+    maxRetriesPerRequest: null,
+});
+redisClient.on('connect', () => console.log('✅ Redis connected'));
+redisClient.on('error', (err) => console.error('❌ Redis error:', err));
 
 // Create Express app
 const app = express();
@@ -48,6 +61,9 @@ const instrumentSubscriptions = new Map(); // instrumentKey -> Set<socket.id>
 const pendingSubscriptions = new Set(); // instrumentKeys waiting for connection
 const subscriptionTimers = new Map(); // instrumentKey -> timeout id
 const retryTimers = new Map(); // instrumentKey -> timeout id
+
+// --- REDIS KEY FOR ACTIVE SUBSCRIPTIONS ---
+const ACTIVE_SUBS_KEY = 'active_instrument_keys';
 
 // Middleware
 app.use(cors());
@@ -176,7 +192,7 @@ const subscribeToUpstoxInstrument = (instrumentKey) => {
             guid: `sub-${instrumentKey}-${Date.now()}`,
             method: "sub",
             data: {
-                mode: "full", // Try "ltpc" mode for basic data
+                mode: "ltpc", // Try "ltpc" mode for basic data
                 instrumentKeys: [instrumentKey],
             },
         };
@@ -315,7 +331,7 @@ const connectUpstoxWebSocket = async (wsUrl) => {
             reject(new Error("Connection timeout"));
         }, 30000); // 30 second timeout
 
-        ws.on("open", () => {
+        ws.on("open", async () => {
             clearTimeout(connectionTimeout);
             console.log("✅ Upstox WebSocket connected successfully");
             upstoxWs = ws;
@@ -330,6 +346,10 @@ const connectUpstoxWebSocket = async (wsUrl) => {
 
             // Process pending subscriptions
             processPendingSubscriptions();
+            subscribePredefinedOptions();
+
+            // --- Restore all active subscriptions from Redis ---
+            await restoreActiveSubscriptions();
 
             resolve(ws);
         });
@@ -378,6 +398,15 @@ ws.on("message", async (data) => {
 
                         // Log the actual feed data
                         console.log(`📈 Feed data for ${instrumentKey}:`, JSON.stringify(feed, null, 2));
+
+                        // --- REDIS CACHE FOR PREDEFINED OPTIONS ---
+                        if (PREDEFINED_OPTION_KEYS.includes(instrumentKey)) {
+                            try {
+                                await redisClient.set(`option_live:${instrumentKey}`, JSON.stringify(feed), 'EX', 2);
+                            } catch (err) {
+                                console.error(`❌ Redis cache error for ${instrumentKey}:`, err);
+                            }
+                        }
 
                         // Get room size and emit data
                         const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
@@ -537,11 +566,37 @@ const { registerMarketStreamSocket } = require('./routes/market/marketStream.rou
 const { marketDataService } = require('./services/marketData.service');
 registerMarketStreamSocket(io, marketDataService);
 
+// Restore subscriptions from Redis on startup or reconnect
+async function restoreActiveSubscriptions() {
+    try {
+        const keys = await redisClient.smembers(ACTIVE_SUBS_KEY);
+        if (keys && keys.length > 0) {
+            console.log(`🔄 Restoring ${keys.length} active subscriptions from Redis...`);
+            for (const key of keys) {
+                if (!instrumentSubscriptions.has(key)) {
+                    instrumentSubscriptions.set(key, new Set());
+                }
+                subscribeToUpstoxInstrument(key);
+            }
+        }
+    } catch (err) {
+        console.error('❌ Error restoring active subscriptions from Redis:', err);
+    }
+}
+
+// Add/remove instrumentKey to/from Redis set on subscribe/unsubscribe
+async function addActiveSubscriptionKey(key) {
+    try { await redisClient.sadd(ACTIVE_SUBS_KEY, key); } catch (e) { console.error('Redis sadd error:', e); }
+}
+async function removeActiveSubscriptionKey(key) {
+    try { await redisClient.srem(ACTIVE_SUBS_KEY, key); } catch (e) { console.error('Redis srem error:', e); }
+}
+
 // Socket.IO connection handler
 io.on('connection', (socket) => {
     console.log(`🔌 Socket.IO client connected: ${socket.id}`);
 
-    socket.on('subscribe', (instrumentKey) => {
+    socket.on('subscribe', async (instrumentKey) => {
         if (!instrumentKey || typeof instrumentKey !== 'string') {
             console.error(`❌ Invalid instrumentKey received from ${socket.id}:`, instrumentKey);
             socket.emit('subscriptionError', { 
@@ -574,12 +629,31 @@ io.on('connection', (socket) => {
             if (!subscribed) {
                 console.warn(`⚠️ Failed to subscribe to Upstox for: ${instrumentKey}`);
             }
+            // --- Add to Redis set ---
+            addActiveSubscriptionKey(instrumentKey);
         }
         
         instrumentSubscriptions.get(instrumentKey).add(socket.id);
         
         const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
         console.log(`✅ Socket ${socket.id} subscribed to ${instrumentKey}. Room size: ${roomSize}`);
+
+        // --- SERVE REDIS CACHED DATA IMMEDIATELY IF PREDEFINED ---
+        if (PREDEFINED_OPTION_KEYS.includes(instrumentKey)) {
+            try {
+                const cached = await redisClient.get(`option_live:${instrumentKey}`);
+                if (cached) {
+                    socket.emit('marketData', {
+                        instrumentKey,
+                        data: JSON.parse(cached),
+                        timestamp: Date.now(),
+                        mode: 'cache'
+                    });
+                }
+            } catch (err) {
+                console.error(`❌ Redis fetch error for ${instrumentKey}:`, err);
+            }
+        }
 
         // Send confirmation to client
         socket.emit('subscriptionConfirmed', { 
@@ -607,11 +681,11 @@ io.on('connection', (socket) => {
         // Remove from subscriptions map
         if (instrumentSubscriptions.has(instrumentKey)) {
             instrumentSubscriptions.get(instrumentKey).delete(socket.id);
-            
-            // If no more subscribers, unsubscribe from Upstox
             if (instrumentSubscriptions.get(instrumentKey).size === 0) {
                 instrumentSubscriptions.delete(instrumentKey);
                 unsubscribeFromUpstoxInstrument(instrumentKey);
+                // --- Remove from Redis set ---
+                removeActiveSubscriptionKey(instrumentKey);
             }
         }
 
@@ -712,7 +786,7 @@ app.get('/api/v1/verify-instrument/:instrumentKey', async (req, res) => {
         const apiInstance = new UpstoxClient.OptionsApi();
         
         // Try to get instrument details
-        apiInstance.getOptionContracts(instrumentKey, '2025-01-30', (error, data) => {
+        apiInstance.getOptionContracts(instrumentKey, '2025-07-3', (error, data) => {
             if (error) {
                 res.json({ valid: false, error: error.message });
             } else {
@@ -748,8 +822,69 @@ async function fetchAndCacheExpiryDates() {
     }
 }
 
+const PREDEFINED_OPTION_KEYS = [
+  "NSE_FO|56888", "NSE_FO|55994", "NSE_FO|55995", "NSE_FO|55996", "NSE_FO|55997", "NSE_FO|55998", "NSE_FO|55999", "NSE_FO|56000", "NSE_FO|56001", "NSE_FO|56002", "NSE_FO|56003", "NSE_FO|56004", "NSE_FO|56005", "NSE_FO|56006", "NSE_FO|56007", "NSE_FO|56008", "NSE_FO|56009", "NSE_FO|56010", "NSE_FO|56011", "NSE_FO|56012", "NSE_FO|56013", "NSE_FO|56014", "NSE_FO|56015", "NSE_FO|56016", "NSE_FO|56017", "NSE_FO|56018", "NSE_FO|56019", "NSE_FO|56020", "NSE_FO|56021", "NSE_FO|56022", "NSE_FO|56023", "NSE_FO|56024", "NSE_FO|56025", "NSE_FO|56026", "NSE_FO|56027", "NSE_FO|56028", "NSE_FO|56029", "NSE_FO|56030", "NSE_FO|56031", "NSE_FO|56032", "NSE_FO|56033", "NSE_FO|56034", "NSE_FO|56035", "NSE_FO|56036", "NSE_FO|56037", "NSE_FO|56038", "NSE_FO|56039", "NSE_FO|56040", "NSE_FO|56041", "NSE_FO|56042",
+  "NSE_FO|65001", "NSE_FO|65002", "NSE_FO|65003", "NSE_FO|65004", "NSE_FO|65005", "NSE_FO|65006", "NSE_FO|65007", "NSE_FO|65008", "NSE_FO|65009", "NSE_FO|65010", "NSE_FO|65011", "NSE_FO|65012", "NSE_FO|65013", "NSE_FO|65014", "NSE_FO|65015", "NSE_FO|65016", "NSE_FO|65017", "NSE_FO|65018", "NSE_FO|65019", "NSE_FO|65020", "NSE_FO|65021", "NSE_FO|65022", "NSE_FO|65023", "NSE_FO|65024", "NSE_FO|65025", "NSE_FO|65026", "NSE_FO|65027", "NSE_FO|65028", "NSE_FO|65029", "NSE_FO|65030", "NSE_FO|65031", "NSE_FO|65032", "NSE_FO|65033", "NSE_FO|65034", "NSE_FO|65035", "NSE_FO|65036", "NSE_FO|65037", "NSE_FO|65038", "NSE_FO|65039", "NSE_FO|65040", "NSE_FO|65041", "NSE_FO|65042", "NSE_FO|65043", "NSE_FO|65044", "NSE_FO|65045", "NSE_FO|65046", "NSE_FO|65047", "NSE_FO|65048", "NSE_FO|65049", "NSE_FO|65050"
+];
+
+// 2. On Upstox WebSocket connection, subscribe to all predefined options
+async function subscribePredefinedOptions() {
+  for (const key of PREDEFINED_OPTION_KEYS) {
+    subscribeToUpstoxInstrument(key);
+  }
+}
+
 // Schedule the cron job to run every day at 6:00 AM
 cron.schedule('0 6 * * *', fetchAndCacheExpiryDates, {
+    timezone: 'Asia/Kolkata',
+});
+
+// --- CRON JOB: Reset Contest with id=5 every night at 12:00 AM IST ---
+const prisma = require('./utils/prisma'); // Import Prisma client
+
+cron.schedule('0 0 * * *', async () => {
+    try {
+        // Fetch all ongoing contests
+        const ongoingContests = await prisma.contest.findMany({ where: { status: 'ongoing' } });
+        if (!ongoingContests.length) {
+            console.log(`[CRON] No ongoing contests found.`);
+            return;
+        }
+        for (const contest of ongoingContests) {
+            const contestId = contest.id;
+            // Find all participants for this contest
+            const participants = await prisma.contestParticipant.findMany({ where: { contest_id: contestId } });
+            const participantIds = participants.map(p => p.id);
+            if (participantIds.length > 0) {
+                // Delete all trades for these participants
+                await prisma.trade.deleteMany({ where: { contest_participant_id: { in: participantIds } } });
+                // Delete all positions for these participants
+                await prisma.position.deleteMany({ where: { contest_participant_id: { in: participantIds } } });
+                // Remove all participants
+                await prisma.contestParticipant.deleteMany({ where: { contest_id: contestId } });
+                console.log(`[CRON] Removed all participants, trades, and positions for contest id=${contestId}`);
+            }
+            // Set start_time to 9:00 AM and end_time to 3:30 PM for tomorrow (IST)
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            tomorrow.setHours(9, 0, 0, 0); // 9:00 AM
+            const endOfDay = new Date(tomorrow);
+            endOfDay.setHours(15, 30, 0, 0); // 3:30 PM
+            await prisma.contest.update({
+                where: { id: contestId },
+                data: {
+                    start_time: tomorrow,
+                    end_time: endOfDay,
+                    status: 'ongoing',
+                    updated_at: new Date(),
+                },
+            });
+            console.log(`[CRON] Contest id=${contestId} reset for new day with status 'ongoing'.`);
+        }
+    } catch (err) {
+        console.error('[CRON] Error resetting ongoing contests:', err);
+    }
+}, {
     timezone: 'Asia/Kolkata',
 });
 
@@ -803,6 +938,28 @@ const gracefulShutdown = () => {
     });
 };
 
+// API: Get latest live option data for a predefined instrumentKey
+app.get('/api/v1/option-live/:instrumentKey', async (req, res) => {
+    try {
+        const instrumentKey = decodeURIComponent(req.params.instrumentKey);
+        // Validate instrument key
+        if (!validateInstrumentKey(instrumentKey)) {
+            return res.status(400).json({ success: false, error: 'Invalid instrument key format' });
+        }
+        if (!PREDEFINED_OPTION_KEYS.includes(instrumentKey)) {
+            return res.status(404).json({ success: false, error: 'Instrument key not in predefined list' });
+        }
+        const cached = await redisClient.get(`option_live:${instrumentKey}`);
+        if (!cached) {
+            return res.status(404).json({ success: false, error: 'No live data found for this instrument key' });
+        }
+        return res.json({ success: true, instrumentKey, data: JSON.parse(cached), timestamp: Date.now(), mode: 'cache' });
+    } catch (err) {
+        console.error('❌ Error in /api/v1/option-live/:instrumentKey:', err);
+        return res.status(500).json({ success: false, error: 'Internal server error', details: err.message });
+    }
+});
+
 process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
@@ -844,6 +1001,9 @@ app.post('/api/v1/env', async (req, res) => {
         
         fs.writeFileSync(envPath, newLines.join('\n'), 'utf-8');
         res.json({ success: true, message: found ? 'Updated' : 'Inserted', key, value });
+        // Restart the server after .env update
+        console.log('🔄 .env updated, restarting server...');
+        process.exit(0);
     } catch (err) {
         console.error('Error updating .env:', err);
         res.status(500).json({ success: false, error: 'Failed to update .env', details: err.message });
@@ -863,5 +1023,6 @@ app.get('/api/v1/health', (req, res) => {
     };
     res.json(status);
 });
+
 
 module.exports = app;

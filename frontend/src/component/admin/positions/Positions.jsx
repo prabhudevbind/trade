@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { TrendingDown, Trophy, Plus, Eye, ArrowUpRight, ArrowDownRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 // import { useRouter } from "next/navigation"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 
 export default function Positions() {
   const { data: activeTradesData, isLoading, isError, error } = useGetTradesActiveQuery()
@@ -111,13 +111,18 @@ export default function Positions() {
               </div>
               <h2 className="text-xl font-semibold text-gray-900 mb-2">No Active Contest</h2>
               <p className="text-gray-600 text-sm mb-6">Join a contest to start trading and see your positions here.</p>
+              <Link
+                to="/contests"
+                // className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg"
+              >
               <Button
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="lg"
-                onClick={() => router.push("/contests")}
+                // onClick={() => router.push("/contests")}
               >
                 Browse Contests
               </Button>
+              </Link>
             </>
           ) : (
             <>
