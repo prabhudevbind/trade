@@ -402,7 +402,7 @@ ws.on("message", async (data) => {
                         // --- REDIS CACHE FOR PREDEFINED OPTIONS ---
                         if (PREDEFINED_OPTION_KEYS.includes(instrumentKey)) {
                             try {
-                                await redisClient.set(`option_live:${instrumentKey}`, JSON.stringify(feed), 'EX', 2);
+                                await redisClient.set(`option_live:${instrumentKey}`, JSON.stringify(feed), 'EX', 5);
                             } catch (err) {
                                 console.error(`❌ Redis cache error for ${instrumentKey}:`, err);
                             }

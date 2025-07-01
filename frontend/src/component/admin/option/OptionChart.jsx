@@ -208,8 +208,9 @@ const OptionChain = () => {
 
     socket.on("connect_error", (err) => {
       console.error("❌ Socket connection error:", err);
-      setError("Socket.IO connection error");
-      setConnectionStatus("error");
+      // Do NOT clear optionChainData or set error
+      setConnectionStatus("reconnecting");
+      // Optionally, show a toast or subtle badge: "Reconnecting..."
     });
 
     return () => {
