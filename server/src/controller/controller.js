@@ -1788,6 +1788,63 @@ const positionController = {
         .json({ error: "Failed to delete position", details: error.message });
     }
   },
+   // Sell (update) a position
+  async sellPosition(req, res) {
+    try {
+      const { id } = req.params;
+      const { sellQuantity, sellPrice } = req.body;
+      const userId = parseInt(req.user.userId);
+
+      // Validate input
+      if (!sellQuantity || !sellPrice) {
+        return res.status(400).json({ error: "Missing sellQuantity or sellPrice" });
+      }
+
+      // Find the position
+      const position = await prisma.position.findUnique({
+        where: { id: parseInt(id) },
+        include: { contestParticipant: true, option: true },
+      });
+
+      if (!position) {
+        return res.status(404).json({ error: "Position not found" });
+      }
+      if (position.contestParticipant.user_id !== userId) {
+        return res.status(403).json({ error: "Unauthorized" });
+      }
+      if (position.net_quantity < sellQuantity) {
+        return res.status(400).json({ error: "Not enough quantity to sell" });
+      }
+
+      // Update position (reduce net_quantity)
+      const updatedPosition = await prisma.position.update({
+        where: { id: position.id },
+        data: {
+          net_quantity: { decrement: sellQuantity },
+        },
+      });
+
+      // Record the trade
+      await prisma.trade.create({
+        data: {
+          contest_participant_id: position.contest_participant_id,
+          option_id: position.option_id,
+          action: 'sell',
+          quantity: sellQuantity,
+          price: sellPrice,
+        },
+      });
+
+      return res.json({
+        success: true,
+        message: "Position updated and sell trade recorded",
+        position: updatedPosition,
+      });
+    } catch (error) {
+      console.error("Sell position error:", error);
+      res.status(500).json({ error: "Failed to sell position", details: error.message });
+    }
+  },
 };
 
 // Trade Controller

@@ -164,7 +164,7 @@ const OptionChain = () => {
     }
 
     // Create new socket with optimized settings
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 500,

@@ -18,6 +18,8 @@ import {
   ArrowLeft,
   Plus,
   Minus,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -28,8 +30,6 @@ import {
   useCreateTradeMutation,
 } from "@/store/api/contest";
 import io from "socket.io-client";
-
-// Remove custom hook, use Tailwind CSS classes for responsive drawer
 
 export function OptionDetailsDrawer({
   isOpen,
@@ -69,107 +69,108 @@ export function OptionDetailsDrawer({
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [error, setError] = useState(null);
   const [tradeLimitReached, setTradeLimitReached] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const navigate = useNavigate();
   const { id } = useParams();
 
-  // console.log("Contest Data:", contestData)
   const [createOption] = useCreateOptionMutation();
   const [createPosition] = useCreatePositionMutation();
   const [createTrade] = useCreateTradeMutation();
 
+  // Mobile responsive sheet configuration
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    // Use Socket.IO for real-time updates
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
     });
+
     let subscribed = false;
 
     socket.on("connect", () => {
+      setIsConnected(true);
       socket.emit("subscribe", initialOptionData.instrument_key);
       subscribed = true;
       console.log(
-        "[Socket.IO] Subscribed to",
+        "[Socket.IO] Connected and subscribed to",
         initialOptionData.instrument_key
       );
     });
 
-    socket.on("marketData", ({ instrumentKey, data }) => {
-      if (instrumentKey === initialOptionData.instrument_key) {
-        // console.log('Socket.IO marketData for', instrumentKey, data);
-
-        // Defensive: handle both full and fallback data
-        if (data && data.ff && data.ff.marketFF) {
-          const ff = data.ff;
-          const ltpc = ff.marketFF.ltpc;
-          const marketLevel = ff.marketFF.marketLevel;
-          const greeks = ff.marketFF.optionGreeks;
-          const eFeedDetails = ff.marketFF.eFeedDetails;
-
-          setOptionData((prevData) => ({
-            ...prevData,
-            ltp: ltpc.ltp,
-            close_price: eFeedDetails.cp,
-            bid_price: marketLevel.bidAskQuote[0].bp,
-            ask_price: marketLevel.bidAskQuote[0].ap,
-            bid_qty: parseInt(marketLevel.bidAskQuote[0].bidQ),
-            ask_qty: parseInt(marketLevel.bidAskQuote[0].askQ),
-            volume: parseInt(eFeedDetails.vtt),
-            oi_lots: parseInt(eFeedDetails.oi),
-            oi_change_lots:
-              parseInt(eFeedDetails.poi) - parseInt(eFeedDetails.oi),
-            greeks: {
-              delta: greeks.delta,
-              gamma: greeks.gamma,
-              theta: greeks.theta,
-              vega: greeks.vega,
-              iv: greeks.iv * 100,
-              pop: greeks.delta * 100,
-            },
-          }));
-        } else if (data && data.ltpc) {
-          // Handle Upstox ltpc structure
-          setOptionData((prevData) => ({
-            ...prevData,
-            ltp: data.ltpc.ltp,
-            close_price: data.ltpc.cp,
-            bid_price: null,
-            ask_price: null,
-            bid_qty: null,
-            ask_qty: null,
-            volume: null,
-            oi_lots: null,
-            oi_change_lots: null,
-            greeks: {
-              delta: null,
-              gamma: null,
-              theta: null,
-              vega: null,
-              iv: null,
-              pop: null,
-            },
-          }));
-        } else if (data && typeof data.ltp !== "undefined") {
-          // Fallback: minimal/test data
-          setOptionData((prevData) => ({
-            ...prevData,
-            ltp: data.ltp,
-            volume: data.volume,
-            // Optionally set other fields to null or previous values
-          }));
-        }
-      }
-    });
-
     socket.on("disconnect", () => {
+      setIsConnected(false);
       console.log("[Socket.IO] Disconnected");
     });
 
     socket.on("connect_error", (err) => {
+      setIsConnected(false);
       console.error("Socket.IO connection error:", err);
+    });
+
+    socket.on("marketData", ({ instrumentKey, data }) => {
+      if (instrumentKey === initialOptionData.instrument_key) {
+        setLastUpdated(new Date());
+
+        // Full market data update
+        if (data && data.ff && data.ff.marketFF) {
+          const ff = data.ff;
+          setOptionData((prevData) => ({
+            ...prevData,
+            ltp: ff.marketFF.ltpc.ltp,
+            close_price: ff.marketFF.eFeedDetails.cp,
+            bid_price: ff.marketFF.marketLevel.bidAskQuote[0].bp,
+            ask_price: ff.marketFF.marketLevel.bidAskQuote[0].ap,
+            bid_qty: parseInt(ff.marketFF.marketLevel.bidAskQuote[0].bidQ),
+            ask_qty: parseInt(ff.marketFF.marketLevel.bidAskQuote[0].askQ),
+            volume: parseInt(ff.marketFF.eFeedDetails.vtt),
+            oi_lots: parseInt(ff.marketFF.eFeedDetails.oi),
+            oi_change_lots:
+              parseInt(ff.marketFF.eFeedDetails.poi) -
+              parseInt(ff.marketFF.eFeedDetails.oi),
+            greeks: {
+              delta: ff.marketFF.optionGreeks.delta,
+              gamma: ff.marketFF.optionGreeks.gamma,
+              theta: ff.marketFF.optionGreeks.theta,
+              vega: ff.marketFF.optionGreeks.vega,
+              iv: ff.marketFF.optionGreeks.iv * 100,
+              pop: ff.marketFF.optionGreeks.delta * 100,
+            },
+          }));
+        }
+        // Price-only update
+        else if (data && data.ltpc) {
+          setOptionData((prevData) => ({
+            ...prevData,
+            ltp: data.ltpc.ltp,
+            close_price: data.ltpc.cp,
+          }));
+        }
+        // Minimal update
+        else if (data && typeof data.ltp !== "undefined") {
+          setOptionData((prevData) => ({
+            ...prevData,
+            ltp: data.ltp,
+            volume: data.volume || prevData.volume,
+          }));
+        }
+      }
     });
 
     return () => {
@@ -193,44 +194,36 @@ export function OptionDetailsDrawer({
     setError(null);
 
     try {
-      // Get the execution price based on action
       const executionPrice =
-        action === "buy"
-          ? initialOptionData.ask_price
-          : initialOptionData.bid_price;
-      const lotSize = 25; // Default lot size, can be made dynamic
+        action === "buy" ? optionData.ask_price : optionData.bid_price;
+      const lotSize = 25;
 
-      // Create option record
-      // Format the expiry date to ISO string with time
       const expiryDateTime = new Date(expiry);
-      expiryDateTime.setHours(15, 30, 0); // Set to market closing time (3:30 PM)
+      expiryDateTime.setHours(15, 30, 0);
 
       const newOptionData = {
         symbol: initialOptionData.instrument_key.split("|")[1],
         strikePrice: strikePrice,
-        expiryDate: expiryDateTime.toISOString(), // Send as ISO string
-        optionType: optionType.toUpperCase() === "CALL" ? "CE" : "PE", // Normalize option type
+        expiryDate: expiryDateTime.toISOString(),
+        optionType: optionType.toUpperCase() === "CALL" ? "CE" : "PE",
         lotSize: lotSize,
-        ltp: initialOptionData.ltp,
+        ltp: optionData.ltp,
       };
 
       const option = await createOption(newOptionData).unwrap();
 
-      // Create trade record and wait for response
       const tradeData = {
         contestId: contestData.contest.id || id,
         optionId: option.option.id,
         action: action,
-        quantity: quantity * lotSize, // Total quantity (lots × lot size)
+        quantity: quantity * lotSize,
         price: executionPrice,
         timestamp: new Date(),
       };
 
       const trade = await createTrade(tradeData).unwrap();
-
-      if ((trade.data.success = "true")) {
-        // If trade is successful, update option data
-        // If successful, create a position
+      console.log(trade);
+      if (trade.success) {
         const positionData = {
           contestId: contestData.contest.id || id,
           optionId: option.option.id,
@@ -241,13 +234,10 @@ export function OptionDetailsDrawer({
 
         await createPosition(positionData).unwrap();
 
-        // Show success toast only after trade is confirmed
-
         toast.success(
-          `Trade Executed Successfully: ${action.toUpperCase()} ${quantity} lots of ${strikePrice} ${optionType.toUpperCase()} @ ₹${executionPrice}`
+          `Trade Executed: ${action.toUpperCase()} ${quantity} lots @ ₹${executionPrice}`
         );
 
-        // Close the drawer after toast
         onClose();
       }
     } catch (err) {
@@ -255,13 +245,9 @@ export function OptionDetailsDrawer({
 
       if (err?.data?.error?.includes("Maximum trades limit")) {
         setTradeLimitReached(true);
-        toast.warn(
-          `Trade Limit Reached: You've used all ${err.data.maxAllowed} allowed trades for this contest.`
-        );
+        toast.warn(`Trade Limit Reached: ${err.data.maxAllowed} trades used`);
       } else {
-        toast.error(
-          `Trade Failed: ${err.error || "Something went wrong"}`
-        );
+        toast.error(`Trade Failed: ${err.error || "Something went wrong"}`);
       }
       setError(err.error || `Failed to place ${action} order`);
     } finally {
@@ -302,56 +288,76 @@ export function OptionDetailsDrawer({
     setQuantity(1);
   };
 
-  const lotSize = 25; // Default lot size, you can make this dynamic
+  const lotSize = 25;
   const marketPrice =
-    tradeType === "buy" ? optionData.ask_price : optionData.bid_price;
+    tradeType === "buy" ? optionData.ltp?.toFixed(2) : optionData.ltp?.toFixed(2);
   const totalValue = quantity * lotSize * marketPrice;
 
   const increaseQuantity = () => setQuantity((prev) => prev + 1);
   const decreaseQuantity = () =>
     setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
 
-  // Use Tailwind's responsive classes for SheetContent
-  // On desktop (lg:), open right; on mobile, open bottom
-  const sheetSide =
-    typeof window !== "undefined" && window.innerWidth >= 1024
-      ? "right"
-      : "bottom";
-  const sheetClass =
-    typeof window !== "undefined" && window.innerWidth >= 1024
-      ? "w-[480px] max-w-full overflow-y-auto border-0 shadow-2xl rounded-l-3xl"
-      : "h-[75vh] overflow-y-auto rounded-t-3xl border-0 shadow-2xl";
+  // Connection status indicator
+  const ConnectionStatus = () => (
+    <div
+      className={`flex items-center gap-1 text-xs ${
+        isConnected ? "text-green-600" : "text-red-600"
+      }`}
+    >
+      {isConnected ? (
+        <Wifi className="w-3 h-3" />
+      ) : (
+        <WifiOff className="w-3 h-3" />
+      )}
+      <span className="hidden sm:inline">
+        {isConnected ? "Live" : "Offline"}
+      </span>
+    </div>
+  );
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side={sheetSide} className={sheetClass}>
-        <SheetHeader className="pb-6 border-b">
-          <SheetTitle className="flex items-center justify-between text-lg">
+      <SheetContent
+        side={isMobile ? "bottom" : "right"}
+        className={`
+          ${
+            isMobile
+              ? "h-[85vh] w-full rounded-t-3xl border-0 shadow-2xl"
+              : "w-[480px] max-w-full rounded-l-3xl border-0 shadow-2xl"
+          } 
+          overflow-y-auto p-0
+        `}
+      >
+        {/* Header */}
+        <SheetHeader className="sticky top-0 bg-white/95 backdrop-blur-sm z-10 p-4 sm:p-6 border-b">
+          <SheetTitle className="flex items-center justify-between text-base sm:text-lg">
             {showTradeView ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 flex-1">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleBack}
-                  className="p-2 hover:bg-slate-100 rounded-full"
+                  className="p-2 hover:bg-slate-100 rounded-full shrink-0"
                 >
                   <ArrowLeft className="w-4 h-4" />
                 </Button>
-                <div className="flex flex-col">
+                <div className="flex flex-col min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">{strikePrice}</span>
+                    <span className="text-lg sm:text-xl font-bold truncate">
+                      {strikePrice}
+                    </span>
                     <Badge
                       variant={isCall ? "default" : "destructive"}
                       className={`${
                         isCall
                           ? "bg-green-100 text-green-800 hover:bg-green-200"
                           : "bg-red-100 text-red-800 hover:bg-red-200"
-                      } font-medium`}
+                      } font-medium text-xs`}
                     >
                       {isCall ? "CE" : "PE"}
                     </Badge>
                   </div>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs sm:text-sm text-muted-foreground truncate">
                     {tradeType === "buy" ? "Buy Order" : "Sell Order"}
                   </span>
                 </div>
@@ -360,54 +366,95 @@ export function OptionDetailsDrawer({
               <button
                 type="button"
                 onClick={handleTitleClick}
-                className="flex items-center gap-3 focus:outline-none hover:bg-slate-100 rounded-lg px-1 py-0.5 transition"
+                className="flex items-center gap-2 sm:gap-3 focus:outline-none hover:bg-slate-100 rounded-lg px-1 py-0.5 transition  min-w-0"
                 title="Go to Option Details"
               >
-                <div className="flex flex-col">
+                <div className="flex  ">
                   <div className="flex items-center gap-2">
-                    <span className="text-xl font-bold">{strikePrice}</span>
+                    <div>
+                      <span className="text-xs sm:text-sm text-muted-foreground truncate">
+                        {optionData.symbol || "Nifty Bank"}
+                      </span>
+                    <br/>
+                    <span className="text-lg sm:text-xl font-bold truncate">
+                      {strikePrice}
+                    </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+
+                    
                     <Badge
                       variant={isCall ? "default" : "destructive"}
                       className={`${
                         isCall
                           ? "bg-green-100 text-green-800 hover:bg-green-200"
                           : "bg-red-100 text-red-800 hover:bg-red-200"
-                      } font-medium`}
+                      } font-medium text-xs`}
                     >
                       {isCall ? "CE" : "PE"}
                     </Badge>
-                    <MoveUpRight className="w-4 h-4 text-slate-500" />
+                    <MoveUpRight className="w-3 h-3 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {optionData.symbol || "Nifty Bank"}
-                  </span>
+                  </div>
                 </div>
               </button>
             )}
-            <div className="text-right">
-              <Badge variant="outline" className="text-xs">
-                <Clock className="w-3 h-3 mr-1" />
-                {new Date(expiry).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                })}
-              </Badge>
+
+            {/* Right side - Price and Status */}
+            <div className="flex  items-end gap-1 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <div className="text-lg sm:text-xl font-bold text-slate-900">
+                    ₹{optionData.ltp?.toFixed(2)}
+                  </div>
+                  <div
+                    className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                      isPositive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {isPositive ? (
+                      <TrendingUp className="h-3 w-3" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3" />
+                    )}
+                    <span className="hidden sm:inline">
+                      {isPositive ? "+" : ""}
+                      {priceChange?.toFixed(2)}
+                    </span>
+                    <span>({priceChangePercent?.toFixed(1)}%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs">
+                  <Clock className="w-3 h-3 mr-1" />
+                  {new Date(expiry).toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                  })}
+                </Badge>
+                <ConnectionStatus />
+              </div>
             </div>
           </SheetTitle>
         </SheetHeader>
 
-        <div className="space-y-6 py-4">
+        {/* Content */}
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {showTradeView ? (
             // Trade View
-            <div className="space-y-6">
-              {/* Market Price */}
-              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-6">
+            <div className="space-y-4 sm:space-y-6">
+              {/* Market Price Card */}
+              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-4 sm:p-6">
                 <div className="text-center">
                   <div className="text-sm text-slate-600 mb-1">
                     Market Price
                   </div>
-                  <div className="text-3xl font-bold text-slate-900">
-                    ₹{marketPrice?.toFixed(2)}
+                  <div className="text-2xl sm:text-3xl font-bold text-slate-900">
+                    ₹{optionData.ltp?.toFixed(2)}
                   </div>
                   <div
                     className={`text-sm mt-1 ${
@@ -416,10 +463,13 @@ export function OptionDetailsDrawer({
                   >
                     {tradeType === "buy" ? "Ask Price" : "Bid Price"}
                   </div>
+                  <div className="text-xs text-slate-500 mt-2">
+                    Last updated: {lastUpdated.toLocaleTimeString()}
+                  </div>
                 </div>
               </div>
 
-              {/* Lot Size */}
+              {/* Lot Size Info */}
               <div className="bg-white rounded-xl p-4 border border-slate-200">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium text-slate-700">
@@ -446,7 +496,7 @@ export function OptionDetailsDrawer({
                   >
                     <Minus className="w-4 h-4" />
                   </Button>
-                  <div className="text-2xl font-bold w-16 text-center">
+                  <div className="text-xl sm:text-2xl font-bold w-16 text-center">
                     {quantity}
                   </div>
                   <Button
@@ -459,7 +509,7 @@ export function OptionDetailsDrawer({
                   </Button>
                 </div>
                 <div className="text-center text-sm text-slate-600 mt-2">
-                  Total Quantity: {quantity * lotSize}
+                  Total Quantity: {(quantity * lotSize).toLocaleString()}
                 </div>
               </div>
 
@@ -470,23 +520,23 @@ export function OptionDetailsDrawer({
                     Total Value
                   </span>
                   <span className="text-xl font-bold text-slate-900">
-                    ₹{totalValue}
+                    ₹{totalValue?.toLocaleString()}
                   </span>
                 </div>
                 <div className="text-xs text-slate-600 mt-1 text-right">
-                  {quantity} × {lotSize} × ₹{marketPrice?.toFixed(2)}
+                  {quantity} × {lotSize} ×  ₹{optionData.ltp?.toFixed(2)}
                 </div>
               </div>
 
               {/* Confirm Button */}
               <Button
                 onClick={handleConfirmTrade}
-                className={`w-full font-semibold py-4 rounded-xl shadow-lg text-lg ${
+                className={`w-full font-semibold py-4 rounded-xl shadow-lg text-base sm:text-lg ${
                   tradeType === "buy"
                     ? "bg-green-600 hover:bg-green-700 text-white"
                     : "bg-red-600 hover:bg-red-700 text-white"
                 }`}
-                disabled={isLoading || isPlacingOrder}
+                disabled={isLoading || isPlacingOrder || !isConnected}
               >
                 {isPlacingOrder ? (
                   <span className="flex items-center justify-center">
@@ -525,78 +575,50 @@ export function OptionDetailsDrawer({
               </Button>
             </div>
           ) : (
-            // Default View
+            // Main View
             <>
-              {/* Price Section */}
-              <div className="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-6">
-                <div className="flex items-baseline justify-between mb-3">
-                  <div className="text-3xl font-bold text-slate-900">
-                    ₹{optionData.ltp?.toFixed(2)}
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${
-                      isPositive
-                        ? "bg-green-100 text-green-700"
-                        : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {isPositive ? (
-                      <TrendingUp className="h-4 w-4" />
-                    ) : (
-                      <TrendingDown className="h-4 w-4" />
-                    )}
-                    {isPositive ? "+" : ""}
-                    {priceChange?.toFixed(2)} ({priceChangePercent?.toFixed(2)}
-                    %)
-                  </div>
-                </div>
-                <div className="text-sm text-slate-600">
-                  Previous Close: ₹{optionData.close_price?.toFixed(2)}
-                </div>
-              </div>
-
               {/* Market Depth */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-blue-50 rounded-xl p-3 sm:p-4 border border-blue-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                     <span className="text-sm font-medium text-blue-700">
                       Bid
                     </span>
                   </div>
-                  <div className="text-xl font-bold text-blue-900">
+                  <div className="text-lg sm:text-xl font-bold text-blue-900">
                     ₹{optionData.bid_price?.toFixed(2)}
                   </div>
                   <div className="text-xs text-blue-600 mt-1">
-                    Qty: {optionData.bid_qty}
+                    Qty: {optionData.bid_qty?.toLocaleString()}
                   </div>
                 </div>
-                <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+                <div className="bg-orange-50 rounded-xl p-3 sm:p-4 border border-orange-100">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
                     <span className="text-sm font-medium text-orange-700">
                       Ask
                     </span>
                   </div>
-                  <div className="text-xl font-bold text-orange-900">
+                  <div className="text-lg sm:text-xl font-bold text-orange-900">
                     ₹{optionData.ask_price?.toFixed(2)}
                   </div>
                   <div className="text-xs text-orange-600 mt-1">
-                    Qty: {optionData.ask_qty}
+                    Qty: {optionData.ask_qty?.toLocaleString()}
                   </div>
                 </div>
               </div>
 
               {/* Key Metrics */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-white rounded-xl p-4 border border-slate-200">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200">
                   <div className="flex items-center gap-2 mb-2">
                     <BarChart3 className="w-4 h-4 text-slate-600" />
                     <span className="text-sm font-medium text-slate-700">
                       Open Interest
                     </span>
                   </div>
-                  <div className="text-lg font-bold">
+                  <div className="text-base sm:text-lg font-bold">
                     {optionData.oi_lots?.toLocaleString()}
                   </div>
                   <div
@@ -607,17 +629,17 @@ export function OptionDetailsDrawer({
                     }`}
                   >
                     {optionData.oi_change_lots >= 0 ? "+" : ""}
-                    {optionData.oi_change_lots} lots
+                    {optionData.oi_change_lots?.toLocaleString()} lots
                   </div>
                 </div>
-                <div className="bg-white rounded-xl p-4 border border-slate-200">
+                <div className="bg-white rounded-xl p-3 sm:p-4 border border-slate-200">
                   <div className="flex items-center gap-2 mb-2">
                     <Activity className="w-4 h-4 text-slate-600" />
                     <span className="text-sm font-medium text-slate-700">
                       Volume
                     </span>
                   </div>
-                  <div className="text-lg font-bold">
+                  <div className="text-base sm:text-lg font-bold">
                     {optionData.volume?.toLocaleString()}
                   </div>
                   <div className="text-xs text-slate-500 mt-1">
@@ -631,44 +653,44 @@ export function OptionDetailsDrawer({
                 <h3 className="font-semibold mb-3 text-slate-800">
                   Greeks & IV
                 </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">Delta</span>
+                      <span className="text-slate-600">Delta</span>
                       <span className="font-medium">
-                        {optionData.greeks.delta?.toFixed(4)}
+                        {optionData.greeks?.delta?.toFixed(4)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">Gamma</span>
+                      <span className="text-slate-600">Gamma</span>
                       <span className="font-medium">
-                        {optionData.greeks.gamma?.toFixed(4)}
+                        {optionData.greeks?.gamma?.toFixed(4)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">IV</span>
+                      <span className="text-slate-600">IV</span>
                       <span className="font-medium">
-                        {optionData.greeks.iv?.toFixed(2)}%
+                        {optionData.greeks?.iv?.toFixed(2)}%
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">Theta</span>
+                      <span className="text-slate-600">Theta</span>
                       <span className="font-medium">
-                        {optionData.greeks.theta?.toFixed(2)}
+                        {optionData.greeks?.theta?.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">Vega</span>
+                      <span className="text-slate-600">Vega</span>
                       <span className="font-medium">
-                        {optionData.greeks.vega?.toFixed(2)}
+                        {optionData.greeks?.vega?.toFixed(2)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-sm text-slate-600">PoP</span>
+                      <span className="text-slate-600">PoP</span>
                       <span className="font-medium">
-                        {optionData.greeks.pop?.toFixed(2)}%
+                        {optionData.greeks?.pop?.toFixed(2)}%
                       </span>
                     </div>
                   </div>
@@ -676,19 +698,19 @@ export function OptionDetailsDrawer({
               </div>
 
               {/* Action Buttons */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-2 sticky bottom-0 bg-white pb-2">
                 <Button
                   onClick={handleBuyClick}
-                  className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 rounded-xl shadow-lg"
-                  disabled={isLoading}
+                  className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
+                  disabled={isLoading || !isConnected}
                 >
                   <TrendingUp className="w-4 h-4 mr-2" />
                   Buy
                 </Button>
                 <Button
                   onClick={handleSellClick}
-                  className="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 rounded-xl shadow-lg"
-                  disabled={isLoading}
+                  className="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
+                  disabled={isLoading || !isConnected}
                 >
                   <TrendingDown className="w-4 h-4 mr-2" />
                   Sell

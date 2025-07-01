@@ -1,8 +1,10 @@
 "use client";
 
 import { useGetLeaderStateQuery } from "@/store/api/contest";
-import React, { useEffect, useState, useCallback } from "react";
-import { usePriceStreams } from "@/hooks/use-price-streams";
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import { debounce } from 'lodash';
+import { io } from 'socket.io-client';
+
 import {
   Table,
   TableBody,
@@ -47,6 +49,141 @@ import { cn } from "@/lib/utils";
 import { format, differenceInSeconds, formatDistanceToNow } from "date-fns";
 import "./leaderboard.css";
 import { Link } from "react-router-dom";
+
+// Custom hook for price streams
+function usePriceStreams(realTimeData, setRealTimeData) {
+  const socketRef = useRef(null);
+  const dataUpdateQueue = useRef(new Map());
+  const subscribedInstruments = useRef(new Set());
+
+  useEffect(() => {
+    if (!realTimeData?.leaderboard) return;
+
+    // Get unique instruments from active positions
+    const requiredInstruments = new Set();
+    realTimeData.leaderboard.forEach(participant => {
+      participant.activePositions?.forEach(position => {
+        requiredInstruments.add(`NSE_FO|${position.symbol}`);
+      });
+    });
+
+    // Connect to Socket.IO server if not already
+    if (!socketRef.current) {
+      socketRef.current = io('http://localhost:5001', {
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        autoConnect: true,
+      });
+    }
+    const socket = socketRef.current;
+
+    // Subscribe to new instruments
+    requiredInstruments.forEach(instrumentKey => {
+      if (!subscribedInstruments.current.has(instrumentKey)) {
+        socket.emit('market:subscribe', instrumentKey);
+        subscribedInstruments.current.add(instrumentKey);
+      }
+    });
+    
+    // Unsubscribe from instruments no longer needed
+    Array.from(subscribedInstruments.current).forEach(instrumentKey => {
+      if (!requiredInstruments.has(instrumentKey)) {
+        socket.emit('market:unsubscribe', instrumentKey);
+        subscribedInstruments.current.delete(instrumentKey);
+      }
+    });
+
+    // Debounced update function to batch updates
+    const debouncedUpdate = debounce(() => {
+      if (dataUpdateQueue.current.size === 0) return;
+      setRealTimeData(prevData => {
+        if (!prevData?.leaderboard) return prevData;
+        
+        const updatedLeaderboard = prevData.leaderboard.map(participant => {
+          let updatedUnrealizedPnL = 0;
+          let updatedPositions = participant.activePositions?.map(position => {
+            const newPrice = dataUpdateQueue.current.get(`NSE_FO|${position.symbol}`);
+            if (newPrice !== undefined) {
+              const positionPnL = (newPrice - position.averagePrice) * position.quantity;
+              updatedUnrealizedPnL += positionPnL;
+              return {
+                ...position,
+                currentPrice: newPrice,
+                pnl: positionPnL
+              };
+            }
+            updatedUnrealizedPnL += position.pnl || 0;
+            return position;
+          }) || [];
+          
+          // Calculate percentage P&L (ROI) for this participant
+          const initialValue = (participant.virtualCash || 0) + (participant.activePositions?.reduce((sum, pos) => sum + (pos.averagePrice * pos.quantity), 0) || 0);
+          const roi = initialValue > 0 ? (updatedUnrealizedPnL / initialValue) * 100 : 0;
+          
+          return {
+            ...participant,
+            activePositions: updatedPositions,
+            unrealizedPnL: updatedUnrealizedPnL,
+            totalPnL: updatedUnrealizedPnL + (participant.realizedPnL || 0),
+            portfolioValue: (participant.virtualCash || 0) + updatedUnrealizedPnL + (participant.realizedPnL || 0),
+            roi: roi
+          };
+        });
+        
+        // Sort and update ranks
+        const sortedLeaderboard = updatedLeaderboard
+          .sort((a, b) => b.portfolioValue - a.portfolioValue)
+          .map((participant, index) => ({
+            ...participant,
+            rank: index + 1
+          }));
+        
+        // Clear the update queue after processing
+        dataUpdateQueue.current.clear();
+        
+        return {
+          ...prevData,
+          leaderboard: sortedLeaderboard,
+          contestStats: {
+            averageROI: sortedLeaderboard.reduce((sum, p) => sum + (p.roi || 0), 0) / sortedLeaderboard.length,
+            highestPnL: Math.max(...sortedLeaderboard.map(p => p.totalPnL || 0)),
+            totalTradingVolume: sortedLeaderboard.reduce((sum, p) => sum + (p.tradingStats?.totalTrades || 0), 0),
+          }
+        };
+      });
+    }, 1000);
+
+    // Listen for global market data updates
+    const onMarketData = (data) => {
+      if (!data || !data.instrumentKey) return;
+      // Defensive: handle .data.ltpc.ltp, .data.ff.marketFF.ltpc.ltp, or .data.ltp
+      const newLtp =
+        data.data?.ltpc?.ltp ??
+        data.data?.ff?.marketFF?.ltpc?.ltp ??
+        data.data?.ltp;
+      if (newLtp !== undefined) {
+        dataUpdateQueue.current.set(data.instrumentKey, newLtp);
+        debouncedUpdate();
+      }
+    };
+    
+    socket.on('globalMarketData', onMarketData);
+
+    // Cleanup function
+    return () => {
+      socket.off('globalMarketData', onMarketData);
+      // Unsubscribe from all instruments
+      Array.from(subscribedInstruments.current).forEach(instrumentKey => {
+        socket.emit('market:unsubscribe', instrumentKey);
+      });
+      subscribedInstruments.current.clear();
+      debouncedUpdate.cancel();
+      // Optionally disconnect socket if you want to fully cleanup
+      // socket.disconnect();
+    };
+  }, [realTimeData?.leaderboard, setRealTimeData]);
+}
 
 export default function Leaderboard() {
   const {
@@ -104,6 +241,7 @@ export default function Leaderboard() {
   }, [leaderboardData, error]);
 
   console.log("Real-time data:", error);
+  
   // Use the custom hook for price streams
   usePriceStreams(realTimeData, setRealTimeData);
 
@@ -214,149 +352,6 @@ export default function Leaderboard() {
       {/* Compact Stats Cards - Mobile Optimized */}
       <div className="grid grid-cols-1 gap-3">
         {/* Primary Stats Row */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="cursor-help transition-shadow hover:shadow-md">
-                  {/* --- Top stats cards: AVG ROI and TOP Unrealized P&L --- */}
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        AVG ROI
-                      </span>
-                      <Target className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.contestStats.averageROI >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      {Number.isFinite(realTimeData.contestStats.averageROI)
-                        ? realTimeData.contestStats.averageROI.toFixed(2)
-                        : "0.00"}
-                      %
-                    </div>
-                    <Progress
-                      value={Math.min(
-                        Math.abs(realTimeData.contestStats.averageROI || 0),
-                        100
-                      )}
-                      className={cn(
-                        "mt-1 h-1 transition-all",
-                        realTimeData.contestStats.averageROI >= 0
-                          ? "bg-green-100"
-                          : "bg-red-100"
-                      )}
-                    />
-                  </CardContent>
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        TOP Unrealized P&L
-                      </span>
-                      <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.leaderboard &&
-                          realTimeData.leaderboard.length > 0 &&
-                          realTimeData.leaderboard[0].unrealizedPnL >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      ₹
-                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
-                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
-                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
-                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
-                        : "0.00"}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
-                      Contest leader
-                    </p>
-                  </CardContent>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Average return on investment across all participants</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="cursor-help transition-shadow hover:shadow-md">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        TOP Unrealized P&L
-                      </span>
-                      <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.leaderboard &&
-                          realTimeData.leaderboard.length > 0 &&
-                          realTimeData.leaderboard[0].unrealizedPnL >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      ₹
-                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
-                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
-                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
-                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
-                        : "0.00"}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
-                      Contest leader
-                    </p>
-                  </CardContent>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Highest unrealized profit/loss in the contest</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
-
-        {/* Secondary Stats */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Card className="cursor-help transition-shadow hover:shadow-md">
-                <CardContent className="p-3 sm:p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        Total Activity
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold">
-                        {realTimeData.contestStats.totalTradingVolume.toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        trades executed
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TooltipTrigger>
-          </Tooltip>
-        </TooltipProvider>
       </div>
 
       {/* Mobile-Optimized Leaderboard */}
@@ -489,254 +484,6 @@ export default function Leaderboard() {
                         </div>
                       </CardContent>
                     </Card>
-
-                    {/* Mobile Expanded Details */}
-                    {expandedUser === participant.userId && (
-                      <Card className="bg-slate-50 border-l-4 border-l-blue-500">
-                        <CardContent className="p-3">
-                          <Tabs defaultValue="positions" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3 h-8">
-                              <TabsTrigger
-                                value="positions"
-                                className="text-xs py-1"
-                              >
-                                Positions
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="trades"
-                                className="text-xs py-1"
-                              >
-                                Trades
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="stats"
-                                className="text-xs py-1"
-                              >
-                                Stats
-                              </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent
-                              value="positions"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="space-y-2">
-                                {participant.activePositions.map(
-                                  (position, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="bg-white rounded-lg p-2 border"
-                                    >
-                                      <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium text-sm">
-                                            {position.symbol}
-                                          </span>
-                                          <Badge
-                                            variant={
-                                              position.optionType === "CE"
-                                                ? "default"
-                                                : "destructive"
-                                            }
-                                            className="text-xs px-1 py-0"
-                                          >
-                                            {position.optionType}
-                                          </Badge>
-                                        </div>
-                                        <span
-                                          className={cn(
-                                            "text-sm font-bold",
-                                            position.pnl >= 0
-                                              ? "text-green-600"
-                                              : "text-red-600"
-                                          )}
-                                        >
-                                          ₹{position.pnl.toFixed(0)}
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-4 gap-2 text-xs">
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Strike
-                                          </p>
-                                          <p className="font-medium">
-                                            {position.strikePrice}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Qty
-                                          </p>
-                                          <p className="font-medium">
-                                            {position.quantity}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Avg
-                                          </p>
-                                          <p className="font-medium">
-                                            ₹{position.averagePrice.toFixed(1)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            LTP
-                                          </p>
-                                          <p className="font-medium">
-                                            ₹{position.currentPrice.toFixed(1)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )
-                                )}
-                                {participant.activePositions.length === 0 && (
-                                  <p className="text-center text-muted-foreground py-4 text-sm">
-                                    No active positions
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-
-                            <TabsContent
-                              value="trades"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="space-y-2 max-h-48 overflow-y-auto">
-                                {participant.recentTrades?.map((trade, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="bg-white rounded-lg p-2 border"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <span className="font-medium text-sm truncate">
-                                          {trade.symbol}
-                                        </span>
-                                        <Badge
-                                          variant={
-                                            trade.optionType === "CE"
-                                              ? "default"
-                                              : "destructive"
-                                          }
-                                          className="text-xs px-1 py-0"
-                                        >
-                                          {trade.optionType}
-                                        </Badge>
-                                        <span
-                                          className={cn(
-                                            "text-xs px-1 py-0 rounded",
-                                            trade.action === "buy"
-                                              ? "bg-green-100 text-green-700"
-                                              : "bg-red-100 text-red-700"
-                                          )}
-                                        >
-                                          {trade.action.toUpperCase()}
-                                        </span>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="font-medium text-sm">
-                                          ₹{trade.price.toFixed(1)}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {format(
-                                            new Date(trade.timestamp),
-                                            "HH:mm"
-                                          )}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                {(!participant.recentTrades ||
-                                  participant.recentTrades.length === 0) && (
-                                  <p className="text-center text-muted-foreground py-4 text-sm">
-                                    No recent trades
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-
-                            <TabsContent
-                              value="stats"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-white rounded-lg p-2 border">
-                                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
-                                    Trading
-                                  </h4>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span>Total</span>
-                                      <span className="font-medium">
-                                        {participant.tradingStats.totalTrades}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Buy</span>
-                                      <span className="font-medium text-green-600">
-                                        {participant.tradingStats.buyTrades}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Sell</span>
-                                      <span className="font-medium text-red-600">
-                                        {participant.tradingStats.sellTrades}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="bg-white rounded-lg p-2 border">
-                                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
-                                    Performance
-                                  </h4>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span>Unrealized</span>
-                                      <span
-                                        className={cn(
-                                          "font-medium",
-                                          participant.unrealizedPnL >= 0
-                                            ? "text-green-600"
-                                            : "text-red-600"
-                                        )}
-                                      >
-                                        ₹{participant.unrealizedPnL.toFixed(0)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Realized</span>
-                                      <span
-                                        className={cn(
-                                          "font-medium",
-                                          participant.realizedPnL >= 0
-                                            ? "text-green-600"
-                                            : "text-red-600"
-                                        )}
-                                      >
-                                        ₹{participant.realizedPnL.toFixed(0)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Cash</span>
-                                      <span className="font-medium">
-                                        ₹
-                                        {(
-                                          participant.virtualCash / 1000
-                                        ).toFixed(0)}
-                                        K
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </TabsContent>
-                          </Tabs>
-                        </CardContent>
-                      </Card>
-                    )}
                   </React.Fragment>
                 );
               })}
@@ -791,15 +538,7 @@ export default function Leaderboard() {
                                 {participant.rank}
                               </span>
                             )}
-                            {rankChange !== 0 && (
-                              <div className="flex items-center">
-                                {isRankImproved ? (
-                                  <ChevronUp className="h-3 w-3 text-green-500" />
-                                ) : (
-                                  <ChevronDown className="h-3 w-3 text-red-500" />
-                                )}
-                              </div>
-                            )}
+                         
                           </div>
                         </TableCell>
                         <TableCell>
@@ -855,277 +594,7 @@ export default function Leaderboard() {
                             {Number.isFinite(participant.roi) ? participant.roi.toFixed(2) : "0.00"}%
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setExpandedUser(
-                                expandedUser === participant.userId
-                                  ? null
-                                  : participant.userId
-                              )
-                            }
-                            className="h-8 w-8 p-0"
-                          >
-                            {expandedUser === participant.userId ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
                       </TableRow>
-                      {expandedUser === participant.userId && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="bg-slate-50 p-4">
-                            <Tabs defaultValue="positions" className="w-full">
-                              <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:grid-cols-none sm:flex">
-                                <TabsTrigger value="positions">
-                                  Positions
-                                </TabsTrigger>
-                                <TabsTrigger value="trades">Trades</TabsTrigger>
-                                <TabsTrigger value="stats">Stats</TabsTrigger>
-                              </TabsList>
-
-                              <TabsContent value="positions" className="mt-4">
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                  {participant.activePositions.map(
-                                    (position, idx) => (
-                                      <Card
-                                        key={idx}
-                                        className="transition-all hover:shadow-md"
-                                      >
-                                        <CardContent className="p-3">
-                                          <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                              <p className="font-medium text-sm">
-                                                {position.symbol}
-                                              </p>
-                                              <Badge
-                                                variant={
-                                                  position.optionType === "CE"
-                                                    ? "default"
-                                                    : "destructive"
-                                                }
-                                              >
-                                                {position.optionType}
-                                              </Badge>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                              <div>
-                                                <p className="text-muted-foreground">
-                                                  Strike
-                                                </p>
-                                                <p className="font-medium">
-                                                  {position.strikePrice}
-                                                </p>
-                                              </div>
-                                              <div className="text-right">
-                                                <p className="text-muted-foreground">
-                                                  Qty
-                                                </p>
-                                                <p className="font-medium">
-                                                  {position.quantity}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <p className="text-muted-foreground">
-                                                  Avg Price
-                                                </p>
-                                                <p className="font-medium">
-                                                  ₹
-                                                  {position.averagePrice.toFixed(
-                                                    1
-                                                  )}
-                                                </p>
-                                              </div>
-                                              <div className="text-right">
-                                                <p className="text-muted-foreground">
-                                                  Current
-                                                </p>
-                                                <p className="font-medium">
-                                                  ₹
-                                                  {position.currentPrice.toFixed(
-                                                    1
-                                                  )}
-                                                </p>
-                                              </div>
-                                            </div>
-                                            <div className="pt-1 border-t">
-                                              <p
-                                                className={cn(
-                                                  "font-medium text-center",
-                                                  position.pnl >= 0
-                                                    ? "text-green-600"
-                                                    : "text-red-600"
-                                                )}
-                                              >
-                                                P&L: ₹{position.pnl.toFixed(2)}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    )
-                                  )}
-                                  {participant.activePositions.length === 0 && (
-                                    <p className="text-center text-muted-foreground py-8 col-span-full">
-                                      No active positions
-                                    </p>
-                                  )}
-                                </div>
-                              </TabsContent>
-
-                              <TabsContent value="trades" className="mt-4">
-                                <div className="space-y-2 max-h-60 overflow-y-auto">
-                                  {participant.recentTrades?.map(
-                                    (trade, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center justify-between p-3 rounded-lg border bg-white"
-                                      >
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <p className="font-medium text-sm truncate">
-                                              {trade.symbol}
-                                            </p>
-                                            <Badge
-                                              variant={
-                                                trade.optionType === "CE"
-                                                  ? "default"
-                                                  : "destructive"
-                                              }
-                                            >
-                                              {trade.optionType}
-                                            </Badge>
-                                          </div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {trade.action.toUpperCase()}
-                                          </p>
-                                        </div>
-                                        <div className="text-right">
-                                          <p className="font-medium text-sm">
-                                            ₹{trade.price.toFixed(2)}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {format(
-                                              new Date(trade.timestamp),
-                                              "HH:mm"
-                                            )}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    )
-                                  )}
-                                  {(!participant.recentTrades ||
-                                    participant.recentTrades.length === 0) && (
-                                    <p className="text-center text-muted-foreground py-8">
-                                      No recent trades
-                                    </p>
-                                  )}
-                                </div>
-                              </TabsContent>
-
-                              <TabsContent value="stats" className="mt-4">
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                  <Card>
-                                    <CardContent className="p-4">
-                                      <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                                        Trading Activity
-                                      </h4>
-                                      <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Total Trades
-                                          </span>
-                                          <span className="font-medium">
-                                            {
-                                              participant.tradingStats
-                                                .totalTrades
-                                            }
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Buy Trades
-                                          </span>
-                                          <span className="font-medium text-green-600">
-                                            {participant.tradingStats.buyTrades}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Sell Trades
-                                          </span>
-                                          <span className="font-medium text-red-600">
-                                            {
-                                              participant.tradingStats
-                                                .sellTrades
-                                            }
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                  <Card>
-                                    <CardContent className="p-4">
-                                      <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                                        Performance
-                                      </h4>
-                                      <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Unrealized P&L
-                                          </span>
-                                          <span
-                                            className={cn(
-                                              "font-medium",
-                                              participant.unrealizedPnL >= 0
-                                                ? "text-green-600"
-                                                : "text-red-600"
-                                            )}
-                                          >
-                                            ₹
-                                            {participant.unrealizedPnL.toFixed(
-                                              2
-                                            )}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Realized P&L
-                                          </span>
-                                          <span
-                                            className={cn(
-                                              "font-medium",
-                                              participant.realizedPnL >= 0
-                                                ? "text-green-600"
-                                                : "text-red-600"
-                                            )}
-                                          >
-                                            ₹
-                                            {participant.realizedPnL.toFixed(2)}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Virtual Cash
-                                          </span>
-                                          <span className="font-medium">
-                                            ₹
-                                            {participant.virtualCash.toLocaleString()}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </div>
-                              </TabsContent>
-                            </Tabs>
-                          </TableCell>
-                        </TableRow>
-                      )}
                     </React.Fragment>
                   );
                 })}

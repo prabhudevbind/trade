@@ -9,6 +9,7 @@ import { TrendingDown, Trophy, Plus, Eye, ArrowUpRight, ArrowDownRight } from "l
 import { Button } from "@/components/ui/button"
 // import { useRouter } from "next/navigation"
 import { Link, useNavigate } from "react-router-dom"
+import axios from "axios"
 
 export default function Positions() {
   const { data: activeTradesData, isLoading, isError, error } = useGetTradesActiveQuery()
@@ -16,6 +17,13 @@ export default function Positions() {
   const [totalPnL, setTotalPnL] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
   const router = useNavigate()
+
+  // Sell Modal State
+  const [sellModal, setSellModal] = useState({ open: false, position: null })
+  const [sellQty, setSellQty] = useState(0)
+  const [sellPrice, setSellPrice] = useState(0)
+  const [sellLoading, setSellLoading] = useState(false)
+  const [sellError, setSellError] = useState("")
 
   // Check if mobile
   useEffect(() => {
@@ -35,7 +43,7 @@ export default function Positions() {
     setPositions(activeTradesData.positions)
 
     // Connect to Socket.IO server (singleton per component instance)
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -50,13 +58,19 @@ export default function Positions() {
 
     // Listen for market data updates
     socket.on("marketData", (data) => {
-      if (!data || !data.instrumentKey) return
+      if (!data || !data.instrumentKey) return;
       setPositions((prev) =>
         prev.map((p) => {
           if (`NSE_FO|${p.option.symbol}` === data.instrumentKey) {
-            // Defensive: handle both .data.ff.marketFF.ltpc.ltp and .data.ltp
-            const newLtp = data.data?.ff?.marketFF?.ltpc?.ltp ?? data.data?.ltp ?? p.option.ltp
-            const pnl = (newLtp - Number.parseFloat(p.average_entry_price)) * p.net_quantity
+            // Prefer .data.ltpc.ltp, fallback to .data.ltp, fallback to previous ltp
+            const newLtp =
+              data.data?.ltpc?.ltp ??
+              data.data?.ff?.marketFF?.ltpc?.ltp ??
+              data.data?.ltp ??
+              p.option.ltp;
+            const pnl =
+              (newLtp - Number.parseFloat(p.average_entry_price)) *
+              p.net_quantity;
             return {
               ...p,
               option: {
@@ -65,9 +79,9 @@ export default function Positions() {
               },
               unrealizedPnL: pnl,
               currentValue: newLtp * p.net_quantity,
-            }
+            };
           }
-          return p
+          return p;
         }),
       )
     })
@@ -86,6 +100,28 @@ export default function Positions() {
     const total = positions.reduce((sum, pos) => sum + (pos.unrealizedPnL || 0), 0)
     setTotalPnL(total)
   }, [positions])
+
+  // Sell handler
+  const handleSell = async () => {
+    if (!sellModal.position) return;
+    setSellLoading(true);
+    setSellError("");
+    try {
+      await axios.patch(
+        `/api/v1/positions/${sellModal.position.id}/sell`,
+        { sellQuantity: sellQty, sellPrice: sellPrice }
+      );
+      setSellModal({ open: false, position: null });
+      setSellQty(0);
+      setSellPrice(0);
+      // Optionally refetch positions or optimistically update state
+      window.location.reload(); // or refetch positions via your query
+    } catch (err) {
+      setSellError(err.response?.data?.error || "Sell failed");
+    } finally {
+      setSellLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -196,6 +232,21 @@ export default function Positions() {
             <span>Value: ₹{(ltp * Math.abs(position.net_quantity)).toFixed(2)}</span>
           </div>
         </div>
+      
+{position.net_quantity > 0 && (
+  <Button
+    size="sm"
+    variant="outline"
+    className="mt-3 w-full"
+    onClick={() => {
+      setSellModal({ open: true, position });
+      setSellQty(position.net_quantity);
+      setSellPrice(Number(position.option.ltp));
+    }}
+  >
+    Sell
+  </Button>
+)}
       </div>
     )
   }
@@ -270,6 +321,7 @@ export default function Positions() {
               </Button>
             )}
           </div>
+          
 
           {positions.length === 0 ? (
             <div className="bg-white rounded-lg p-8 text-center shadow-sm border border-gray-200">
@@ -278,12 +330,15 @@ export default function Positions() {
               </div>
               <h3 className="font-medium text-gray-900 mb-2">No positions yet</h3>
               <p className="text-sm text-gray-600 mb-4">Start trading to see your positions here</p>
+              <Link to={`/option-chain/${activeTradesData.contest.id}`}>
+            
               <Button
                 className="bg-blue-600 hover:bg-blue-700"
-                onClick={() => router.push(`/option-chain/${activeTradesData.contest.id}`)}
+                // onClick={() => router(`/option-chain/${activeTradesData.contest.id}`)}
               >
                 Start Trading
               </Button>
+                </Link>
             </div>
           ) : (
             <>
@@ -305,12 +360,13 @@ export default function Positions() {
                         <TableHead className="font-medium">Avg Price</TableHead>
                         <TableHead className="font-medium">LTP</TableHead>
                         <TableHead className="font-medium text-right">P&L</TableHead>
+                        <TableHead className="font-medium text-right">Action</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {positions.map((position) => {
-                        const pnl = position.unrealizedPnL || 0
-                        const isProfit = pnl >= 0
+                        const pnl = position.unrealizedPnL || 0;
+                        const isProfit = pnl >= 0;
                         return (
                           <TableRow key={position.id} className="hover:bg-gray-50">
                             <TableCell>
@@ -329,6 +385,21 @@ export default function Positions() {
                                 {isProfit ? "+" : ""}₹{pnl.toFixed(2)}
                               </div>
                             </TableCell>
+                            <TableCell className="text-right">
+                              {position.net_quantity > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setSellModal({ open: true, position });
+                                    setSellQty(position.net_quantity);
+                                    setSellPrice(Number(position.option.ltp));
+                                  }}
+                                >
+                                  Sell
+                                </Button>
+                              )}
+                            </TableCell>
                           </TableRow>
                         )
                       })}
@@ -341,13 +412,61 @@ export default function Positions() {
         </div>
       </div>
 
+      {/* Sell Modal */}
+      {sellModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-lg p-6 w-full max-w-xs shadow-lg">
+            <h3 className="font-semibold mb-2">Sell Position</h3>
+            <div className="mb-2">
+              <label className="block text-xs mb-1">Quantity</label>
+              <input
+                type="number"
+                min={1}
+                max={sellModal.position?.net_quantity}
+                value={sellQty}
+                onChange={e => setSellQty(Number(e.target.value))}
+                className="w-full border rounded px-2 py-1"
+              />
+            </div>
+            <div className="mb-2">
+              <label className="block text-xs mb-1">Price</label>
+              <input
+                type="number"
+                min={0}
+                value={sellPrice}
+                onChange={e => setSellPrice(Number(e.target.value))}
+                className="w-full border rounded px-2 py-1"
+              />
+            </div>
+            {sellError && <div className="text-red-600 text-xs mb-2">{sellError}</div>}
+            <div className="flex gap-2 mt-4">
+              <Button
+                onClick={handleSell}
+                disabled={sellLoading || sellQty < 1 || sellQty > sellModal.position?.net_quantity}
+                className="bg-red-600 hover:bg-red-700 text-white flex-1"
+              >
+                {sellLoading ? "Processing..." : "Confirm Sell"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setSellModal({ open: false, position: null })}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Bottom Action Button */}
       {isMobile && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
+
           <Button
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3"
             size="lg"
-            onClick={() => router.push(`/option-chain/${activeTradesData.contest.id}`)}
+            onClick={() => router(`/option-chain/${activeTradesData.contest.id}`)}
           >
             <Plus className="h-5 w-5 mr-2" />
             New Position
