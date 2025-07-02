@@ -524,10 +524,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
             <div className="flex-grow">
               <div className="flex items-start gap-3 mb-2">
                 <h3 className="text-xl font-bold text-gray-800 leading-tight">{contest.name}</h3>
-                <Badge variant={statusVariant} className="shrink-0">
-                  {isOngoing && <div className="w-2 h-2 bg-green-500 rounded-full mr-1 animate-pulse"></div>}
-                  {contestStatus}
-                </Badge>
+             
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <LineChart className="h-4 w-4" />

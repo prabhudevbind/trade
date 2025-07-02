@@ -10,6 +10,7 @@ import { Link, useNavigate } from "react-router-dom"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import OptionsTrading from "../option/OptionChart"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import PositionsPage from "../positions/Positions"
 
 export default function MyContests() {
   const router = useNavigate()
@@ -139,8 +140,8 @@ function ContestCard({ participant, handleTrade }) {
                 <BarChart3 className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">P&L:</span>
               </div>
-              <div className={`font-medium text-right ${pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {pnl >= 0 ? '+' : ''}{pnl} ({pnl >= 0 ? '+' : ''}{pnlPercentage.toFixed(2)}%)
+              <div className={`font-medium text-right `}>
+                <PositionsPage onlyprice={true}/>,
               </div>
             </>
           )}
