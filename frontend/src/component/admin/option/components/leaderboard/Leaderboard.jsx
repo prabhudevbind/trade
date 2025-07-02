@@ -1,1139 +1,384 @@
-"use client";
-
-import { useGetLeaderStateQuery } from "@/store/api/contest";
-import React, { useEffect, useState, useCallback } from "react";
-import { usePriceStreams } from "@/hooks/use-price-streams";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Trophy,
-  Users,
-  Target,
-  ChevronUp,
-  ChevronDown,
-  TrendingUp,
-  TrendingDown,
-  Activity,
-  Clock,
-  Info,
-  User,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { format, differenceInSeconds, formatDistanceToNow } from "date-fns";
-import "./leaderboard.css";
-import { Link } from "react-router-dom";
+import React, { useState } from 'react'
+import { useGetContestParticipantByIdQuery, useGetLeaderboardQuery } from '@/store/api/contest'
 
 export default function Leaderboard() {
-  const {
-    data: leaderboardData,
-    isLoading,
-    error,
-    refetch,
-  } = useGetLeaderStateQuery();
-  const [realTimeData, setRealTimeData] = useState(null);
-  const [expandedUser, setExpandedUser] = useState(null);
-  const [timeRemaining, setTimeRemaining] = useState("");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // Countdown timer
-  useEffect(() => {
-    if (!realTimeData?.contestInfo?.endTime) return;
-
-    const updateTimer = () => {
-      const seconds = differenceInSeconds(
-        new Date(realTimeData.contestInfo.endTime),
-        new Date()
-      );
-      if (seconds <= 0) {
-        setTimeRemaining("Contest ended");
-        return;
-      }
-      setTimeRemaining(
-        formatDistanceToNow(new Date(realTimeData.contestInfo.endTime), {
-          addSuffix: true,
-        })
-      );
-    };
-
-    updateTimer();
-    const timer = setInterval(updateTimer, 1000);
-    return () => clearInterval(timer);
-  }, [realTimeData?.contestInfo?.endTime]);
-
-  // Manual refresh handler
-  const handleRefresh = useCallback(async () => {
-    setIsRefreshing(true);
-    await refetch();
-    setIsRefreshing(false);
-  }, [refetch]);
-
-  useEffect(() => {
-    if (leaderboardData) {
-      setRealTimeData(leaderboardData);
-    }
-    // Log error and data for debugging
-    if (error || leaderboardData?.error) {
-      console.log("Leaderboard API error:", leaderboardData);
-      console.log("error:", error);
-    }
-  }, [leaderboardData, error]);
-
-  console.log("Real-time data:", error);
-  // Use the custom hook for price streams
-  usePriceStreams(realTimeData, setRealTimeData);
-
-  if (isLoading)
+  const userId = 1 // Replace with actual user_id from auth context/store
+  const [showMobileView, setShowMobileView] = useState(false)
+  
+  // Get contest participant data to find ongoing contest
+  const { 
+    data: contestParticipant, 
+    isLoading: participantLoading, 
+    error: participantError 
+  } = useGetContestParticipantByIdQuery(userId)
+  
+  // Find ongoing contest ID from participant data
+  const ongoingContest = contestParticipant?.find(
+    participant => participant.contest?.status === 'ongoing'
+  )
+  const contestId = ongoingContest?.contest_id
+  
+  // Get leaderboard data for the ongoing contest
+  const { 
+    data: leaderboardData, 
+    isLoading: leaderboardLoading, 
+    isError: leaderboardError, 
+    error: leaderboardErrorData 
+  } = useGetLeaderboardQuery(contestId, {
+    skip: !contestId // Skip query if no contest ID
+  })
+  
+  // Loading states
+  if (participantLoading) {
     return (
-      <div className="space-y-6 p-6">
-        <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-blue-600/20 to-indigo-600/20 p-8 shadow-lg">
-          <Skeleton className="h-8 w-64 mb-4" />
-          <Skeleton className="h-4 w-40 mb-8" />
-          <div className="grid gap-4 md:grid-cols-4">
-            {[...Array(4)].map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-lg bg-white/5 p-3"
-              >
-                <Skeleton className="h-8 w-8 rounded" />
-                <div className="flex-1">
-                  <Skeleton className="h-3 w-20 mb-2" />
-                  <Skeleton className="h-6 w-16" />
-                </div>
-              </div>
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-32 mb-4"></div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-12 bg-gray-100 rounded-lg"></div>
             ))}
           </div>
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-32 mb-2" />
-                <Skeleton className="h-2 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-6 w-48 mb-2" />
-            <Skeleton className="h-4 w-64" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full" />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
-    );
-
-  if (error) {
-    // If error object has data, show the API error message
-    let errorTitle = "Error";
-    let errorMsg = "There was a problem loading the leaderboard.";
-    let icon = <Info className="h-8 w-8 text-red-500 mb-2" />;
-    let bg = "bg-red-50 border-red-200 text-red-800";
-
-    // If error.data exists, use its message
-    if (error?.data?.error === "No participants found in the active contest") {
-      errorTitle = "No Participants";
-      errorMsg = "There are currently no participants in the active contest.";
-      if (error.data.isParticipating === false) {
-        errorMsg += " You are not participating in this contest.";
-      }
-      icon = <Users className="h-8 w-8 text-yellow-500 mb-2" />;
-      bg = "bg-yellow-50 border-yellow-200 text-yellow-800";
-    } else if (error?.data?.error) {
-      errorMsg = error.data.error;
-    }
-
-    return (
-      <div className="min-h-[40vh] flex items-center justify-center p-6">
-        <div
-          className={`max-w-md w-full border rounded-lg shadow-sm p-8 flex flex-col items-center ${bg}`}
-        >
-          {icon}
-          <h2 className="text-xl font-bold mb-2">{errorTitle}</h2>
-          <p className="mb-4 text-center text-base">{errorMsg}</p>
-          <Button variant="outline" className="mt-2" onClick={handleRefresh}>
-            Try again
-          </Button>
-
-          <Link to="/contests" className="text-sm text-blue-600 mt-2">
-          <Button variant="link" className="text-blue-600"> 
-            View Contests
-            </Button>
-          </Link>
-        </div>
-      </div>
-    );
+    )
   }
-
-  if (!realTimeData) return null;
-
-  const userRankChange = (userId) => {
-    const prevRank =
-      leaderboardData?.leaderboard.find((p) => p.userId === userId)?.rank || 0;
-    const currentRank =
-      realTimeData.leaderboard.find((p) => p.userId === userId)?.rank || 0;
-    return prevRank - currentRank;
-  };
-
-  return (
-    <div className="space-y-3 p-2 sm:p-4 lg:p-6">
-      {/* Compact Stats Cards - Mobile Optimized */}
-      <div className="grid grid-cols-1 gap-3">
-        {/* Primary Stats Row */}
-        <div className="grid grid-cols-2 gap-2 sm:gap-3">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="cursor-help transition-shadow hover:shadow-md">
-                  {/* --- Top stats cards: AVG ROI and TOP Unrealized P&L --- */}
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        AVG ROI
-                      </span>
-                      <Target className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.contestStats.averageROI >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      {Number.isFinite(realTimeData.contestStats.averageROI)
-                        ? realTimeData.contestStats.averageROI.toFixed(2)
-                        : "0.00"}
-                      %
-                    </div>
-                    <Progress
-                      value={Math.min(
-                        Math.abs(realTimeData.contestStats.averageROI || 0),
-                        100
-                      )}
-                      className={cn(
-                        "mt-1 h-1 transition-all",
-                        realTimeData.contestStats.averageROI >= 0
-                          ? "bg-green-100"
-                          : "bg-red-100"
-                      )}
-                    />
-                  </CardContent>
-                  <CardContent>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        TOP Unrealized P&L
-                      </span>
-                      <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.leaderboard &&
-                          realTimeData.leaderboard.length > 0 &&
-                          realTimeData.leaderboard[0].unrealizedPnL >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      ₹
-                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
-                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
-                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
-                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
-                        : "0.00"}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
-                      Contest leader
-                    </p>
-                  </CardContent>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Average return on investment across all participants</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Card className="cursor-help transition-shadow hover:shadow-md">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        TOP Unrealized P&L
-                      </span>
-                      <TrendingUp className="h-3 w-3 text-muted-foreground" />
-                    </div>
-                    <div
-                      className={cn(
-                        "text-lg sm:text-xl font-bold transition-colors",
-                        realTimeData.leaderboard &&
-                          realTimeData.leaderboard.length > 0 &&
-                          realTimeData.leaderboard[0].unrealizedPnL >= 0
-                          ? "text-green-600"
-                          : "text-red-600"
-                      )}
-                    >
-                      ₹
-                      {realTimeData.leaderboard && realTimeData.leaderboard.length > 0
-                        ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) >= 1000
-                            ? (Math.abs(realTimeData.leaderboard[0].unrealizedPnL) / 1000).toFixed(1) + "K"
-                            : Math.abs(realTimeData.leaderboard[0].unrealizedPnL).toFixed(2))
-                        : "0.00"}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1 truncate">
-                      Contest leader
-                    </p>
-                  </CardContent>
-                </Card>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Highest unrealized profit/loss in the contest</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+  
+  if (leaderboardLoading) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="animate-pulse">
+          <div className="h-6 bg-gray-200 rounded w-40 mb-2"></div>
+          <div className="h-4 bg-gray-100 rounded w-24 mb-6"></div>
+          <div className="space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-16 bg-gray-100 rounded-lg"></div>
+            ))}
+          </div>
         </div>
-
-        {/* Secondary Stats */}
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Card className="cursor-help transition-shadow hover:shadow-md">
-                <CardContent className="p-3 sm:p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        Total Activity
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold">
-                        {realTimeData.contestStats.totalTradingVolume.toLocaleString()}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        trades executed
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TooltipTrigger>
-          </Tooltip>
-        </TooltipProvider>
       </div>
-
-      {/* Mobile-Optimized Leaderboard */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+    )
+  }
+  
+  // Error states
+  if (participantError) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
+          <p className="text-gray-500">{participantError?.data?.error || "Failed to load participant data"}</p>
+        </div>
+      </div>
+    )
+  }
+  
+  if (leaderboardError) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Leaderboard</h3>
+          <p className="text-gray-500">{leaderboardErrorData?.data?.error || "Failed to load leaderboard"}</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // No ongoing contest found
+  if (!ongoingContest) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="text-center py-12">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Contest</h3>
+          <p className="text-gray-500">You're not participating in any ongoing contest.</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // No leaderboard data
+  if (!leaderboardData || !leaderboardData.leaderboard || leaderboardData.leaderboard.length === 0) {
+    return (
+      <div className="bg-white rounded-xl shadow-sm border p-6">
+        <div className="mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Leaderboard</h2>
+          <p className="text-gray-600">{ongoingContest.contest?.name}</p>
+        </div>
+        <div className="text-center py-8">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
+          <p className="text-gray-500">Leaderboard data will appear once trading begins.</p>
+        </div>
+      </div>
+    )
+  }
+  
+  // Helper function to format currency
+  const formatCurrency = (value) => {
+    return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+  }
+  
+  // Helper function to format P&L with color
+  const formatPnL = (value) => {
+    const numValue = Number(value)
+    const colorClass = numValue >= 0 ? 'text-emerald-600' : 'text-red-500'
+    const bgClass = numValue >= 0 ? 'bg-emerald-50' : 'bg-red-50'
+    const sign = numValue > 0 ? '+' : ''
+    return (
+      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass} ${bgClass}`}>
+        {sign}₹{Math.abs(numValue).toFixed(0)}
+      </span>
+    )
+  }
+  
+  // Helper function to format ROI with color
+  const formatROI = (value) => {
+    const numValue = Number(value)
+    const colorClass = numValue >= 0 ? 'text-emerald-600' : 'text-red-500'
+    const sign = numValue > 0 ? '+' : ''
+    return (
+      <span className={`font-medium ${colorClass}`}>
+        {sign}{numValue.toFixed(2)}%
+      </span>
+    )
+  }
+  
+  // Helper function to highlight current user's row
+  const isCurrentUser = (entry) => entry.user_id === userId
+  
+  // Get rank display
+  const getRankDisplay = (rank) => {
+    if (rank === 1) return { emoji: '🏆', color: 'text-yellow-600', bg: 'bg-yellow-50' }
+    if (rank === 2) return { emoji: '🥈', color: 'text-gray-600', bg: 'bg-gray-50' }
+    if (rank === 3) return { emoji: '🥉', color: 'text-orange-600', bg: 'bg-orange-50' }
+    return { emoji: '', color: 'text-gray-700', bg: 'bg-white' }
+  }
+  
+  // Mobile Card Component
+  const MobileCard = ({ entry, index }) => {
+    const rankDisplay = getRankDisplay(entry.rank)
+    const isUser = isCurrentUser(entry)
+    
+    return (
+      <div className={`p-4 rounded-xl border-2 transition-all ${
+        isUser ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-white hover:border-gray-200'
+      }`}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${rankDisplay.bg}`}>
+              {rankDisplay.emoji || (
+                <span className={`text-sm font-bold ${rankDisplay.color}`}>
+                  {entry.rank}
+                </span>
+              )}
+            </div>
             <div>
-              <CardTitle className="text-lg">Live Rankings</CardTitle>
-              <CardDescription className="text-sm">
-                Real-time updates
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-1">
-              <Clock className="h-4 w-4 text-green-500 animate-pulse" />
-              <span className="text-xs font-medium text-green-500">Live</span>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {/* Mobile Card Layout */}
-          <div className="block sm:hidden">
-            <div className="space-y-2 p-3">
-              {realTimeData.leaderboard.map((participant) => {
-                const rankChange = userRankChange(participant.userId);
-                const isRankImproved = rankChange > 0;
-                const isRankDeclined = rankChange < 0;
-
-                return (
-                  <React.Fragment key={participant.userId}>
-                    <Card
-                      className={cn(
-                        "transition-all duration-300 cursor-pointer",
-                        participant.isCurrentUser &&
-                          "ring-2 ring-blue-500/20 bg-blue-50/30",
-                        expandedUser === participant.userId && "bg-slate-50",
-                        isRankImproved && "animate-highlight-green",
-                        isRankDeclined && "animate-highlight-red"
-                      )}
-                    >
-                      <CardContent className="p-3">
-                        <div className="flex items-center justify-between">
-                          {/* Left: Rank & User Info */}
-                          <div className="flex items-center gap-3 flex-1 min-w-0">
-                            <div className="flex items-center gap-1">
-                              {participant.rank === 1 ? (
-                                <Trophy className="h-5 w-5 text-yellow-500" />
-                              ) : participant.rank === 2 ? (
-                                <Trophy className="h-5 w-5 text-gray-400" />
-                              ) : participant.rank === 3 ? (
-                                <Trophy className="h-5 w-5 text-amber-600" />
-                              ) : (
-                                <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center">
-                                  <span className="text-xs font-bold">
-                                    {participant.rank}
-                                  </span>
-                                </div>
-                              )}
-                              {rankChange !== 0 && (
-                                <div className="flex items-center">
-                                  {isRankImproved ? (
-                                    <ChevronUp className="h-3 w-3 text-green-500" />
-                                  ) : (
-                                    <ChevronDown className="h-3 w-3 text-red-500" />
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                              <Avatar className="h-8 w-8 flex-shrink-0">
-                                {participant.userImage ? (
-                                  <AvatarImage
-                                    src={
-                                      participant.userImage ||
-                                      "/placeholder.svg"
-                                    }
-                                  />
-                                ) : (
-                                  <AvatarFallback>
-                                    <User className="h-4 w-4" />
-                                  </AvatarFallback>
-                                )}
-                              </Avatar>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium text-sm truncate">
-                                  {participant.userName}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {participant.tradingStats.totalTrades} trades
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Right: Performance & Expand */}
-                          <div className="text-right min-w-[80px]">
-                            <div className={cn(
-                              "flex items-center gap-1 text-base font-bold",
-                              participant.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"
-                            )}>
-                              {participant.unrealizedPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                              <span>
-                                ₹{Math.abs(participant.unrealizedPnL) >= 1000
-                                  ? (Math.abs(participant.unrealizedPnL) / 1000).toFixed(1) + "K"
-                                  : Math.abs(participant.unrealizedPnL).toFixed(2)}
-                              </span>
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {Number.isFinite(participant.roi) ? participant.roi.toFixed(2) : "0.00"}% ROI
-                            </div>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setExpandedUser(
-                                expandedUser === participant.userId
-                                  ? null
-                                  : participant.userId
-                              )
-                            }
-                            className="h-8 w-8 p-0 flex-shrink-0"
-                          >
-                            {expandedUser === participant.userId ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Mobile Expanded Details */}
-                    {expandedUser === participant.userId && (
-                      <Card className="bg-slate-50 border-l-4 border-l-blue-500">
-                        <CardContent className="p-3">
-                          <Tabs defaultValue="positions" className="w-full">
-                            <TabsList className="grid w-full grid-cols-3 h-8">
-                              <TabsTrigger
-                                value="positions"
-                                className="text-xs py-1"
-                              >
-                                Positions
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="trades"
-                                className="text-xs py-1"
-                              >
-                                Trades
-                              </TabsTrigger>
-                              <TabsTrigger
-                                value="stats"
-                                className="text-xs py-1"
-                              >
-                                Stats
-                              </TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent
-                              value="positions"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="space-y-2">
-                                {participant.activePositions.map(
-                                  (position, idx) => (
-                                    <div
-                                      key={idx}
-                                      className="bg-white rounded-lg p-2 border"
-                                    >
-                                      <div className="flex items-center justify-between mb-2">
-                                        <div className="flex items-center gap-2">
-                                          <span className="font-medium text-sm">
-                                            {position.symbol}
-                                          </span>
-                                          <Badge
-                                            variant={
-                                              position.optionType === "CE"
-                                                ? "default"
-                                                : "destructive"
-                                            }
-                                            className="text-xs px-1 py-0"
-                                          >
-                                            {position.optionType}
-                                          </Badge>
-                                        </div>
-                                        <span
-                                          className={cn(
-                                            "text-sm font-bold",
-                                            position.pnl >= 0
-                                              ? "text-green-600"
-                                              : "text-red-600"
-                                          )}
-                                        >
-                                          ₹{position.pnl.toFixed(0)}
-                                        </span>
-                                      </div>
-                                      <div className="grid grid-cols-4 gap-2 text-xs">
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Strike
-                                          </p>
-                                          <p className="font-medium">
-                                            {position.strikePrice}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Qty
-                                          </p>
-                                          <p className="font-medium">
-                                            {position.quantity}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            Avg
-                                          </p>
-                                          <p className="font-medium">
-                                            ₹{position.averagePrice.toFixed(1)}
-                                          </p>
-                                        </div>
-                                        <div>
-                                          <p className="text-muted-foreground">
-                                            LTP
-                                          </p>
-                                          <p className="font-medium">
-                                            ₹{position.currentPrice.toFixed(1)}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )
-                                )}
-                                {participant.activePositions.length === 0 && (
-                                  <p className="text-center text-muted-foreground py-4 text-sm">
-                                    No active positions
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-
-                            <TabsContent
-                              value="trades"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="space-y-2 max-h-48 overflow-y-auto">
-                                {participant.recentTrades?.map((trade, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="bg-white rounded-lg p-2 border"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                                        <span className="font-medium text-sm truncate">
-                                          {trade.symbol}
-                                        </span>
-                                        <Badge
-                                          variant={
-                                            trade.optionType === "CE"
-                                              ? "default"
-                                              : "destructive"
-                                          }
-                                          className="text-xs px-1 py-0"
-                                        >
-                                          {trade.optionType}
-                                        </Badge>
-                                        <span
-                                          className={cn(
-                                            "text-xs px-1 py-0 rounded",
-                                            trade.action === "buy"
-                                              ? "bg-green-100 text-green-700"
-                                              : "bg-red-100 text-red-700"
-                                          )}
-                                        >
-                                          {trade.action.toUpperCase()}
-                                        </span>
-                                      </div>
-                                      <div className="text-right">
-                                        <p className="font-medium text-sm">
-                                          ₹{trade.price.toFixed(1)}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {format(
-                                            new Date(trade.timestamp),
-                                            "HH:mm"
-                                          )}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                {(!participant.recentTrades ||
-                                  participant.recentTrades.length === 0) && (
-                                  <p className="text-center text-muted-foreground py-4 text-sm">
-                                    No recent trades
-                                  </p>
-                                )}
-                              </div>
-                            </TabsContent>
-
-                            <TabsContent
-                              value="stats"
-                              className="mt-3 space-y-0"
-                            >
-                              <div className="grid grid-cols-2 gap-2">
-                                <div className="bg-white rounded-lg p-2 border">
-                                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
-                                    Trading
-                                  </h4>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span>Total</span>
-                                      <span className="font-medium">
-                                        {participant.tradingStats.totalTrades}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Buy</span>
-                                      <span className="font-medium text-green-600">
-                                        {participant.tradingStats.buyTrades}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Sell</span>
-                                      <span className="font-medium text-red-600">
-                                        {participant.tradingStats.sellTrades}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="bg-white rounded-lg p-2 border">
-                                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
-                                    Performance
-                                  </h4>
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span>Unrealized</span>
-                                      <span
-                                        className={cn(
-                                          "font-medium",
-                                          participant.unrealizedPnL >= 0
-                                            ? "text-green-600"
-                                            : "text-red-600"
-                                        )}
-                                      >
-                                        ₹{participant.unrealizedPnL.toFixed(0)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Realized</span>
-                                      <span
-                                        className={cn(
-                                          "font-medium",
-                                          participant.realizedPnL >= 0
-                                            ? "text-green-600"
-                                            : "text-red-600"
-                                        )}
-                                      >
-                                        ₹{participant.realizedPnL.toFixed(0)}
-                                      </span>
-                                    </div>
-                                    <div className="flex justify-between text-xs">
-                                      <span>Cash</span>
-                                      <span className="font-medium">
-                                        ₹
-                                        {(
-                                          participant.virtualCash / 1000
-                                        ).toFixed(0)}
-                                        K
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </TabsContent>
-                          </Tabs>
-                        </CardContent>
-                      </Card>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+              <div className="flex items-center gap-2">
+                {entry.user?.img ? (
+                  <img 
+                    src={entry.user.img} 
+                    alt={entry.user.username}
+                    className="w-8 h-8 rounded-full"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                    <span className="text-white text-sm font-medium">
+                      {entry.user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <h3 className={`font-medium ${isUser ? 'text-blue-700' : 'text-gray-900'}`}>
+                    {entry.user?.username || `User ${entry.user_id}`}
+                  </h3>
+                  {isUser && (
+                    <span className="text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
+                      You
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
-
-          {/* Desktop Table Layout */}
-          <div className="hidden sm:block overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">Rank</TableHead>
-                  <TableHead className="min-w-[180px]">Trader</TableHead>
-                  <TableHead className="text-right min-w-[100px] hidden md:table-cell">
-                    Portfolio
-                  </TableHead>
-                  <TableHead className="text-right min-w-[80px]">P&L</TableHead>
-                  <TableHead className="text-right min-w-[60px] hidden lg:table-cell">
-                    ROI
-                  </TableHead>
-                  <TableHead className="w-12"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {realTimeData.leaderboard.map((participant) => {
-                  const rankChange = userRankChange(participant.userId);
-                  const isRankImproved = rankChange > 0;
-                  const isRankDeclined = rankChange < 0;
-
-                  return (
-                    <React.Fragment key={participant.userId}>
-                      <TableRow
-                        className={cn(
-                          "cursor-pointer transition-all duration-300",
-                          participant.isCurrentUser && "bg-blue-50/50",
-                          expandedUser === participant.userId && "bg-slate-50",
-                          "hover:bg-slate-50",
-                          isRankImproved && "animate-highlight-green",
-                          isRankDeclined && "animate-highlight-red"
-                        )}
-                      >
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-1">
-                            {participant.rank === 1 ? (
-                              <Trophy className="h-4 w-4 text-yellow-500" />
-                            ) : participant.rank === 2 ? (
-                              <Trophy className="h-4 w-4 text-gray-400" />
-                            ) : participant.rank === 3 ? (
-                              <Trophy className="h-4 w-4 text-amber-600" />
-                            ) : (
-                              <span className="text-sm">
-                                {participant.rank}
-                              </span>
-                            )}
-                            {rankChange !== 0 && (
-                              <div className="flex items-center">
-                                {isRankImproved ? (
-                                  <ChevronUp className="h-3 w-3 text-green-500" />
-                                ) : (
-                                  <ChevronDown className="h-3 w-3 text-red-500" />
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Avatar className="h-8 w-8 flex-shrink-0">
-                              {participant.userImage ? (
-                                <AvatarImage
-                                  src={
-                                    participant.userImage || "/placeholder.svg"
-                                  }
-                                />
-                              ) : (
-                                <AvatarFallback>
-                                  <User className="h-4 w-4" />
-                                </AvatarFallback>
-                              )}
-                            </Avatar>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-sm truncate">
-                                {participant.userName}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {participant.tradingStats.totalTrades} trades
-                              </p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right font-medium hidden md:table-cell">
-                          <div className="text-sm">
-                            ₹{(participant.portfolioValue / 1000).toFixed(0)}K
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className={cn(
-                            "flex items-center justify-end gap-1 transition-colors",
-                            participant.unrealizedPnL >= 0 ? "text-green-600" : "text-red-600"
-                          )}>
-                            {participant.unrealizedPnL >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                            <span className="font-medium text-sm">
-                              ₹{Math.abs(participant.unrealizedPnL) >= 1000
-                                ? (Math.abs(participant.unrealizedPnL) / 1000).toFixed(1) + "K"
-                                : Math.abs(participant.unrealizedPnL).toFixed(2)}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className={cn(
-                            "text-right hidden lg:table-cell",
-                            participant.roi >= 0 ? "text-green-600" : "text-red-600"
-                          )}
-                        >
-                          <span className="font-medium text-sm">
-                            {Number.isFinite(participant.roi) ? participant.roi.toFixed(2) : "0.00"}%
+          <div className="text-right">
+           
+            <div className="text-sm">
+              {formatROI(entry.roi)}
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3 text-sm">
+        
+          <div>
+            <div className="text-gray-500 text-xs">Realized P&L</div>
+            <div className="mt-1">{formatPnL(entry.realized_pnl)}</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  
+  return (
+    <div className="bg-white rounded-xl shadow-sm border">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Leaderboard</h2>
+            <p className="text-gray-600 mt-1">{ongoingContest.contest?.name}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${
+                ongoingContest.contest?.status === 'ongoing' ? 'bg-green-500' : 'bg-gray-400'
+              }`}></div>
+              <span className="text-sm text-gray-600 capitalize font-medium">
+                {ongoingContest.contest?.status}
+              </span>
+            </div>
+            {/* View Toggle for mobile */}
+            <div className="sm:hidden">
+              <button
+                onClick={() => setShowMobileView(!showMobileView)}
+                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Mobile View */}
+      <div className="sm:hidden p-4 space-y-3">
+        {leaderboardData.leaderboard.map((entry, index) => (
+          <MobileCard key={entry.id} entry={entry} index={index} />
+        ))}
+      </div>
+      
+      {/* Desktop View */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              <th className="text-left py-4 px-6 font-semibold text-gray-700">Rank</th>
+              <th className="text-left py-4 px-6 font-semibold text-gray-700">User</th>
+              <th className="text-right py-4 px-6 font-semibold text-gray-700">Portfolio</th>
+              <th className="text-right py-4 px-6 font-semibold text-gray-700">Total P&L</th>
+              <th className="text-right py-4 px-6 font-semibold text-gray-700">Realized P&L</th>
+              <th className="text-right py-4 px-6 font-semibold text-gray-700">ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leaderboardData.leaderboard.map((entry, index) => {
+              const rankDisplay = getRankDisplay(entry.rank)
+              const isUser = isCurrentUser(entry)
+              
+              return (
+                <tr 
+                  key={entry.id} 
+                  className={`border-b border-gray-50 hover:bg-gray-25 transition-colors ${
+                    isUser ? 'bg-blue-50 hover:bg-blue-100' : ''
+                  }`}
+                >
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${rankDisplay.bg}`}>
+                        {rankDisplay.emoji || (
+                          <span className={`text-sm font-bold ${rankDisplay.color}`}>
+                            {entry.rank}
                           </span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              setExpandedUser(
-                                expandedUser === participant.userId
-                                  ? null
-                                  : participant.userId
-                              )
-                            }
-                            className="h-8 w-8 p-0"
-                          >
-                            {expandedUser === participant.userId ? (
-                              <ChevronUp className="h-4 w-4" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                      {expandedUser === participant.userId && (
-                        <TableRow>
-                          <TableCell colSpan={6} className="bg-slate-50 p-4">
-                            <Tabs defaultValue="positions" className="w-full">
-                              <TabsList className="grid w-full grid-cols-3 sm:w-auto sm:grid-cols-none sm:flex">
-                                <TabsTrigger value="positions">
-                                  Positions
-                                </TabsTrigger>
-                                <TabsTrigger value="trades">Trades</TabsTrigger>
-                                <TabsTrigger value="stats">Stats</TabsTrigger>
-                              </TabsList>
-
-                              <TabsContent value="positions" className="mt-4">
-                                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                  {participant.activePositions.map(
-                                    (position, idx) => (
-                                      <Card
-                                        key={idx}
-                                        className="transition-all hover:shadow-md"
-                                      >
-                                        <CardContent className="p-3">
-                                          <div className="space-y-2">
-                                            <div className="flex items-center justify-between">
-                                              <p className="font-medium text-sm">
-                                                {position.symbol}
-                                              </p>
-                                              <Badge
-                                                variant={
-                                                  position.optionType === "CE"
-                                                    ? "default"
-                                                    : "destructive"
-                                                }
-                                              >
-                                                {position.optionType}
-                                              </Badge>
-                                            </div>
-                                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                              <div>
-                                                <p className="text-muted-foreground">
-                                                  Strike
-                                                </p>
-                                                <p className="font-medium">
-                                                  {position.strikePrice}
-                                                </p>
-                                              </div>
-                                              <div className="text-right">
-                                                <p className="text-muted-foreground">
-                                                  Qty
-                                                </p>
-                                                <p className="font-medium">
-                                                  {position.quantity}
-                                                </p>
-                                              </div>
-                                              <div>
-                                                <p className="text-muted-foreground">
-                                                  Avg Price
-                                                </p>
-                                                <p className="font-medium">
-                                                  ₹
-                                                  {position.averagePrice.toFixed(
-                                                    1
-                                                  )}
-                                                </p>
-                                              </div>
-                                              <div className="text-right">
-                                                <p className="text-muted-foreground">
-                                                  Current
-                                                </p>
-                                                <p className="font-medium">
-                                                  ₹
-                                                  {position.currentPrice.toFixed(
-                                                    1
-                                                  )}
-                                                </p>
-                                              </div>
-                                            </div>
-                                            <div className="pt-1 border-t">
-                                              <p
-                                                className={cn(
-                                                  "font-medium text-center",
-                                                  position.pnl >= 0
-                                                    ? "text-green-600"
-                                                    : "text-red-600"
-                                                )}
-                                              >
-                                                P&L: ₹{position.pnl.toFixed(2)}
-                                              </p>
-                                            </div>
-                                          </div>
-                                        </CardContent>
-                                      </Card>
-                                    )
-                                  )}
-                                  {participant.activePositions.length === 0 && (
-                                    <p className="text-center text-muted-foreground py-8 col-span-full">
-                                      No active positions
-                                    </p>
-                                  )}
-                                </div>
-                              </TabsContent>
-
-                              <TabsContent value="trades" className="mt-4">
-                                <div className="space-y-2 max-h-60 overflow-y-auto">
-                                  {participant.recentTrades?.map(
-                                    (trade, idx) => (
-                                      <div
-                                        key={idx}
-                                        className="flex items-center justify-between p-3 rounded-lg border bg-white"
-                                      >
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-2 mb-1">
-                                            <p className="font-medium text-sm truncate">
-                                              {trade.symbol}
-                                            </p>
-                                            <Badge
-                                              variant={
-                                                trade.optionType === "CE"
-                                                  ? "default"
-                                                  : "destructive"
-                                              }
-                                            >
-                                              {trade.optionType}
-                                            </Badge>
-                                          </div>
-                                          <p className="text-xs text-muted-foreground">
-                                            {trade.action.toUpperCase()}
-                                          </p>
-                                        </div>
-                                        <div className="text-right">
-                                          <p className="font-medium text-sm">
-                                            ₹{trade.price.toFixed(2)}
-                                          </p>
-                                          <p className="text-xs text-muted-foreground">
-                                            {format(
-                                              new Date(trade.timestamp),
-                                              "HH:mm"
-                                            )}
-                                          </p>
-                                        </div>
-                                      </div>
-                                    )
-                                  )}
-                                  {(!participant.recentTrades ||
-                                    participant.recentTrades.length === 0) && (
-                                    <p className="text-center text-muted-foreground py-8">
-                                      No recent trades
-                                    </p>
-                                  )}
-                                </div>
-                              </TabsContent>
-
-                              <TabsContent value="stats" className="mt-4">
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                  <Card>
-                                    <CardContent className="p-4">
-                                      <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                                        Trading Activity
-                                      </h4>
-                                      <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Total Trades
-                                          </span>
-                                          <span className="font-medium">
-                                            {
-                                              participant.tradingStats
-                                                .totalTrades
-                                            }
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Buy Trades
-                                          </span>
-                                          <span className="font-medium text-green-600">
-                                            {participant.tradingStats.buyTrades}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Sell Trades
-                                          </span>
-                                          <span className="font-medium text-red-600">
-                                            {
-                                              participant.tradingStats
-                                                .sellTrades
-                                            }
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                  <Card>
-                                    <CardContent className="p-4">
-                                      <h4 className="text-sm font-medium text-muted-foreground mb-3">
-                                        Performance
-                                      </h4>
-                                      <div className="space-y-2">
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Unrealized P&L
-                                          </span>
-                                          <span
-                                            className={cn(
-                                              "font-medium",
-                                              participant.unrealizedPnL >= 0
-                                                ? "text-green-600"
-                                                : "text-red-600"
-                                            )}
-                                          >
-                                            ₹
-                                            {participant.unrealizedPnL.toFixed(
-                                              2
-                                            )}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Realized P&L
-                                          </span>
-                                          <span
-                                            className={cn(
-                                              "font-medium",
-                                              participant.realizedPnL >= 0
-                                                ? "text-green-600"
-                                                : "text-red-600"
-                                            )}
-                                          >
-                                            ₹
-                                            {participant.realizedPnL.toFixed(2)}
-                                          </span>
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                          <span className="text-sm">
-                                            Virtual Cash
-                                          </span>
-                                          <span className="font-medium">
-                                            ₹
-                                            {participant.virtualCash.toLocaleString()}
-                                          </span>
-                                        </div>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </div>
-                              </TabsContent>
-                            </Tabs>
-                          </TableCell>
-                        </TableRow>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-6">
+                    <div className="flex items-center gap-3">
+                      {entry.user?.img ? (
+                        <img 
+                          src={entry.user.img} 
+                          alt={entry.user.username}
+                          className="w-10 h-10 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                          <span className="text-white font-medium">
+                            {entry.user?.username?.charAt(0)?.toUpperCase() || 'U'}
+                          </span>
+                        </div>
                       )}
-                    </React.Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                      <div>
+                        <div className={`font-medium ${isUser ? 'text-blue-700' : 'text-gray-900'}`}>
+                          {entry.user?.username || `User ${entry.user_id}`}
+                        </div>
+                        {isUser && (
+                          <span className="text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
+                            You
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                
+                  <td className="py-4 px-6 text-right">
+                    {formatPnL(entry.total_pnl)}
+                  </td>
+                  <td className="py-4 px-6 text-right">
+                    {formatPnL(entry.realized_pnl)}
+                  </td>
+                  <td className="py-4 px-6 text-right">
+                    <div className="font-semibold">
+                      {formatROI(entry.roi)}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm text-gray-500">
+          <div>
+            Last updated: {new Date(leaderboardData.snapshot_time).toLocaleString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
           </div>
-        </CardContent>
-      </Card>
+          <div className="flex items-center gap-1">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            {leaderboardData.leaderboard.length} participants
+          </div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

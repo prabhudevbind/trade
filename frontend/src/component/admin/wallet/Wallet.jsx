@@ -53,6 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import WithDrawUpiId from "./WithDrawUpiId";
+import { useNavigate } from "react-router-dom";
 
 function PaymentDialog({ isOpen, onClose, amount, onPaymentComplete }) {
   const [paymentStatus, setPaymentStatus] = useState("qr_display"); // qr_display -> payment_confirm -> utr_input -> processing
@@ -310,7 +311,7 @@ export default function Wallet() {
   const [depositSuccess, setDepositSuccess] = useState(null);
   const [isDepositing, setIsDepositing] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-
+const navigate=useNavigate();
   // Filter state
   const [typeFilter, setTypeFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -387,6 +388,7 @@ export default function Wallet() {
 
       // Refresh user data to show updated balance
       refetchUser();
+      navigate('/contests');
     } catch (error) {
       setDepositError(error?.data?.message || "Failed to process payment");
     } finally {

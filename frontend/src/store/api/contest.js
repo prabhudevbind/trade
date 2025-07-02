@@ -77,11 +77,11 @@ export const contestApi = apiSlice.injectEndpoints({
   
     getOptions: builder.query({
       query: () => '/options',
-      providesTags: ['Option'],
+      // providesTags: ['Option'],
     }),
     getOptionById: builder.query({
       query: (id) => `/options/${id}`,
-      providesTags: ['Option'],
+      // providesTags: ['Option'],
     }),
     createOption: builder.mutation({
       query: (option) => ({
@@ -89,7 +89,7 @@ export const contestApi = apiSlice.injectEndpoints({
         method: 'POST',
         body: option,
       }),
-      invalidatesTags: ['Option'],
+      // invalidatesTags: ['Option'],
     }),
     updateOption: builder.mutation({
       query: ({ id, ...option }) => ({
@@ -97,14 +97,14 @@ export const contestApi = apiSlice.injectEndpoints({
         method: 'PUT',
         body: option,
       }),
-      invalidatesTags: ['Option'],
+      // invalidatesTags: ['Option'],
     }),
     deleteOption: builder.mutation({
       query: (id) => ({
         url: `/options/${id}`,
         method: 'DELETE',
       }),
-      invalidatesTags: ['Option'],
+      // invalidatesTags: ['Option'],
     }),
 
     // Position Endpoints
@@ -139,6 +139,16 @@ export const contestApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Position'],
     }),
+     // NEW: Sell Position Endpoint
+    sellPosition: builder.mutation({
+      query: ({ id, sellQuantity, sellPrice }) => ({
+        url: `/positions/${id}/sell`,
+        method: 'PATCH',
+        body: { sellQuantity, sellPrice },
+      }),
+      invalidatesTags: ['Position', 'Trade', 'WalletTransaction'],
+    }),
+
 
     // Trade Endpoints
     getTrades: builder.query({
@@ -284,6 +294,20 @@ export const contestApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Referral'],
     }),
+
+    // Leaderboard Endpoints
+    getLeaderboard: builder.query({
+      query: (contestId) => `/leaderboard/contest/${contestId}`,
+      providesTags: ['Leaderboard'],
+    }),
+    getLeaderboardHistory: builder.query({
+      query: (contestId) => `/leaderboard/contest/${contestId}/history`,
+      providesTags: ['Leaderboard'],
+    }),
+    getUserLeaderboard: builder.query({
+      query: (userId) => `/leaderboard/user/${userId}`,
+      providesTags: ['Leaderboard'],
+    }),
   }),
 });
 
@@ -314,6 +338,7 @@ export const {
   useCreatePositionMutation,
   useUpdatePositionMutation,
   useDeletePositionMutation,
+  useSellPositionMutation,
   // Trade Hooks
   useGetTradesQuery,
   useGetTradesActiveQuery,
@@ -342,4 +367,8 @@ export const {
   useCreateReferralMutation,
   useUpdateReferralMutation,
   useDeleteReferralMutation,
+  // Leaderboard Hooks
+  useGetLeaderboardQuery,
+  useGetLeaderboardHistoryQuery,
+  useGetUserLeaderboardQuery,
 } = contestApi;

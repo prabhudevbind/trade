@@ -41,6 +41,7 @@ model User {
   smtpDetails          SmtpDetails?         @relation("UserToSmtpDetails")
   contestParticipants  ContestParticipant[]
   walletTransactions   WalletTransaction[]
+  leader Leaderboard[]
   contestWinners       ContestWinner[]
   referralsMade        Referral[]           @relation("Referrer")
   referralsReceived    Referral[]           @relation("Referred")
@@ -130,7 +131,7 @@ model Contest {
   trading_instrument  TradingInstrument    @default(BOTH)
   created_at          DateTime             @default(now())
   updated_at          DateTime             @updatedAt
-
+  leader Leaderboard[]
   contestParticipants ContestParticipant[]
   contestWinners      ContestWinner[]
 
@@ -154,6 +155,26 @@ model ContestParticipant {
   @@unique([user_id, contest_id])
 }
 
+model Leaderboard {
+  id              Int       @id @default(autoincrement())
+  contest_id      Int
+  user_id         Int
+  rank            Int
+  portfolio_value Decimal   @db.Decimal(15, 2)
+  total_pnl       Decimal   @db.Decimal(15, 2)
+  unrealized_pnl  Decimal   @db.Decimal(15, 2)
+  realized_pnl    Decimal   @db.Decimal(15, 2)
+  roi             Decimal   @db.Decimal(7, 4)
+  virtual_cash    Decimal   @db.Decimal(15, 2)
+  snapshot_time   DateTime  @default(now())
+
+  contest         Contest   @relation(fields: [contest_id], references: [id])
+  user            User      @relation(fields: [user_id], references: [id])
+
+  @@index([contest_id])
+  @@index([user_id])
+  @@unique([contest_id, user_id, snapshot_time])
+}
 // Option market data
 model Option {
   id           Int        @id @default(autoincrement())

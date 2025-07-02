@@ -34,7 +34,8 @@ router.get('/options', optionController.getAllOptions);
 router.get('/options/:id', optionController.getOptionById);
 router.put('/options/:id', optionController.updateOption);
 router.delete('/options/:id', optionController.deleteOption);
-
+// Sell (update) a position: PATCH /positions/:id/sell
+router.patch('/positions/:id/sell', authenticateToken, positionController.sellPosition);
 // Position Routes
 router.post('/positions',authenticateToken, positionController.createPosition);
 router.get('/positions',authenticateToken, positionController.getAllPositions);

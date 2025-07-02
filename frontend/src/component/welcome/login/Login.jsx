@@ -75,9 +75,11 @@ function LoginForm() {
         pauseOnHover: true,
         draggable: true,
       })
+      
 
       // Fetch user details after successful login
-      await dispatch(fetchUserDetails(result.user.id))
+      await dispatch(fetchUserDetails(result.user.id));
+       window.location.reload();
     } catch (error) {
       const errorMessage = error?.error || error?.message || "Login failed. Please try again."
 
@@ -238,8 +240,11 @@ function RegisterForm() {
       // Reset form after successful registration and login
       reset()
 
+
       // Fetch user details using the logged-in user's ID
-      await dispatch(fetchUserDetails(loginResult.user.id))
+      await dispatch(fetchUserDetails(loginResult.user.id));
+
+      window.location.reload();
     } catch (error) {
       const errorMessage = error?.data?.message || error?.message || "Registration failed. Please try again."
 
