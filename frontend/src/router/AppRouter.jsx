@@ -165,7 +165,7 @@ export const createAppRouter = (isAuthenticated) =>
         },
         {
           path: "positions",
-          element: <Positions />,
+          element: <Positions/>,
         },
         {
           path:"admin/settings",

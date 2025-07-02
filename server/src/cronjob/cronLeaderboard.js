@@ -1,7 +1,4 @@
 const cron = require("node-cron");
-const fs = require("fs");
-const path = require("path");
-
 const Redis = require("ioredis");
 const prisma = require("../utils/prisma");
 const redisClient = new Redis({
@@ -110,30 +107,7 @@ async function generateLeaderboard() {
     leaderboard.sort((a, b) => b.portfolioValue - a.portfolioValue);
     leaderboard.forEach((p, i) => (p.rank = i + 1));
 
-    // 5. Write to CSV
-    const csvHeader =
-      "Rank,User ID,Username,Email,Virtual Cash,Unrealized PnL,Realized PnL,Total PnL,Portfolio Value,ROI,Total Trades,Snapshot Time\n";
-    const csvRows = leaderboard.map((p) =>
-      [
-        p.rank,
-        p.userId,
-        p.userName,
-        p.email,
-        p.virtualCash.toFixed(2),
-        p.unrealizedPnL.toFixed(2),
-        p.realizedPnL.toFixed(2),
-        p.totalPnL.toFixed(2),
-        p.portfolioValue.toFixed(2),
-        p.roi.toFixed(4),
-        p.totalTrades,
-        p.snapshot_time.toISOString(),
-      ].join(",")
-    );
-    const csvContent = csvHeader + csvRows.join("\n");
-    const filePath = path.join(__dirname, "./leaderboard.csv");
-    fs.writeFileSync(filePath, csvContent, "utf8");
-
-    // 6. Save to database (Leaderboard table)
+    // 5. Save to database (Leaderboard table)
     for (const p of leaderboard) {
       try {
         await prisma.leaderboard.create({
@@ -174,13 +148,12 @@ async function generateLeaderboard() {
         }
       }
     }
-    // Optionally log: console.log("Leaderboard CSV and DB updated:", filePath);
   } catch (e) {
     console.error("Leaderboard cron error:", e);
   }
 }
 
-// Schedule every 2 minutes (adjust as needed)
-cron.schedule("*/15 * * * *", generateLeaderboard);
+// Schedule every 15 minutes (adjust as needed)
+cron.schedule("*/2 * * * *", generateLeaderboard);
 
 module.exports = {};

@@ -31,6 +31,7 @@ import { MobileOptionChain } from "./option-chain/MobileOptionChain";
 import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi";
 import io from "socket.io-client";
+import PositionsPage from "../positions/Positions";
 
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
@@ -75,54 +76,57 @@ const OptionChain = () => {
 
   // Fast hash function for data comparison
   const fastHash = useCallback((obj) => {
-    if (!obj) return '';
+    if (!obj) return "";
     const str = JSON.stringify({
       underlying: obj.underlying_info,
       timestamp: obj.timestamp,
       // Only hash critical fields for performance
-      chain: obj.option_chain?.map(item => ({
+      chain: obj.option_chain?.map((item) => ({
         strike: item.strike_price,
         call_ltp: item.call_option?.ltp,
         put_ltp: item.put_option?.ltp,
         call_oi: item.call_option?.oi_lots,
-        put_oi: item.put_option?.oi_lots
-      }))
+        put_oi: item.put_option?.oi_lots,
+      })),
     });
-    
+
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return hash.toString();
   }, []);
 
   // Optimized data processing with minimal throttling
-  const processOptionData = useCallback((apiResponse) => {
-    if (!apiResponse?.success || !apiResponse?.option_chain?.length) {
-      setError(apiResponse?.message || "No option chain data available");
-      setIsLoading(false);
-      return;
-    }
+  const processOptionData = useCallback(
+    (apiResponse) => {
+      if (!apiResponse?.success || !apiResponse?.option_chain?.length) {
+        setError(apiResponse?.message || "No option chain data available");
+        setIsLoading(false);
+        return;
+      }
 
-    // Fast data comparison using hash
-    const currentHash = fastHash(apiResponse);
-    if (currentHash === lastDataHashRef.current) {
-      return; // Skip if data hasn't changed
-    }
-    
-    lastDataHashRef.current = currentHash;
-    updateCountRef.current += 1;
+      // Fast data comparison using hash
+      const currentHash = fastHash(apiResponse);
+      if (currentHash === lastDataHashRef.current) {
+        return; // Skip if data hasn't changed
+      }
 
-    // Use requestAnimationFrame for smooth updates
-    requestAnimationFrame(() => {
-      setOptionChainData(apiResponse);
-      setIsLoading(false);
-      setError(null);
-      setLastUpdated(new Date(apiResponse.timestamp));
-    });
-  }, [fastHash]);
+      lastDataHashRef.current = currentHash;
+      updateCountRef.current += 1;
+
+      // Use requestAnimationFrame for smooth updates
+      requestAnimationFrame(() => {
+        setOptionChainData(apiResponse);
+        setIsLoading(false);
+        setError(null);
+        setLastUpdated(new Date(apiResponse.timestamp));
+      });
+    },
+    [fastHash]
+  );
 
   useEffect(() => {
     if (queryLoading) {
@@ -156,7 +160,7 @@ const OptionChain = () => {
     setIsLoading(true);
     setConnectionStatus("connecting");
     setError(null);
-    
+
     // Clean up previous socket
     if (socketRef.current) {
       socketRef.current.emit("optionChain:unsubscribe");
@@ -170,7 +174,7 @@ const OptionChain = () => {
       reconnectionDelay: 500,
       reconnectionAttempts: 10,
       timeout: 5000,
-      forceNew: true
+      forceNew: true,
     });
 
     socketRef.current = socket;
@@ -261,22 +265,25 @@ const OptionChain = () => {
     fetchExpiryDates();
   }, [selectedIndex, selectedExpiry]);
 
-  const handleOptionClick = useCallback((strikeData, type) => {
-    if (!strikeData) return;
+  const handleOptionClick = useCallback(
+    (strikeData, type) => {
+      if (!strikeData) return;
 
-    // Check if user has active contest participation
-    if (!activeContest) {
-      return;
-    }
+      // Check if user has active contest participation
+      if (!activeContest) {
+        return;
+      }
 
-    const optionData =
-      type === "call" ? strikeData.call_option : strikeData.put_option;
-    if (!optionData?.instrument_key) return;
+      const optionData =
+        type === "call" ? strikeData.call_option : strikeData.put_option;
+      if (!optionData?.instrument_key) return;
 
-    navigate(
-      `/option-details/${id}/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
-    );
-  }, [activeContest, navigate, id]);
+      navigate(
+        `/option-details/${id}/${optionData.instrument_key}?type=${type}&strike=${strikeData.strike_price}`
+      );
+    },
+    [activeContest, navigate, id]
+  );
 
   const handleParticipateInContest = useCallback(() => {
     navigate("/contests");
@@ -299,7 +306,9 @@ const OptionChain = () => {
     if (!oi) return "0";
     if (oi >= 10000000) return `${(oi / 10000000).toFixed(2)}Cr`;
     if (oi >= 100000) return `${(oi / 100000).toFixed(2)}L`;
-    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(oi);
+    return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(
+      oi
+    );
   }, []);
 
   const calculatePriceChange = useCallback((ltp, closePrice) => {
@@ -512,7 +521,7 @@ const OptionChain = () => {
             )}
 
             {/* Compact Contest Info */}
-            {activeContest && <CompactContestInfo contestData={contestData} />}
+          
 
             {/* Option Chain */}
             {isLoading ? (
@@ -523,7 +532,7 @@ const OptionChain = () => {
                       {[1, 2, 3, 4, 5].map((j) => (
                         <Skeleton
                           key={j}
-                          className="h-12 w-full bg-slate-800"
+                          className="h-10 w-full bg-slate-800"
                         />
                       ))}
                     </div>
@@ -552,125 +561,10 @@ const OptionChain = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-3">
-            <Card className="h-full bg-slate-900 border-slate-800">
-              <CardHeader className="pb-3 border-b border-slate-800">
-                <CardTitle className="text-base flex items-center gap-2 text-white">
-                  <Activity className="h-4 w-4" />
-                  Positions & Orders
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 p-4">
-                {/* Contest Status */}
-                {showParticipationPrompt ? (
-                  <div className="text-center py-8 space-y-4">
-                    <AlertCircle className="h-12 w-12 text-orange-400 mx-auto" />
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium text-slate-300">
-                        No Active Contest
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        Join a contest to view positions and place trades
-                      </p>
-                    </div>
-                    <Button
-                      onClick={handleParticipateInContest}
-                      size="sm"
-                      className="bg-orange-600 hover:bg-orange-700 text-white"
-                    >
-                      <Trophy className="h-3 w-3 mr-1" />
-                      Browse Contests
-                    </Button>
-                  </div>
-                ) : (
-                  <>
-                    {/* Active Contest Badge */}
-                    {activeContest && (
-                      <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 mb-4">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Trophy className="h-4 w-4 text-green-400" />
-                          <Badge
-                            variant="outline"
-                            className="bg-green-900/50 text-green-300 border-green-600"
-                          >
-                            Active Contest
-                          </Badge>
-                        </div>
-                        <p className="text-sm font-medium text-green-300">
-                          {activeContest.contest.name}
-                        </p>
-                        <p className="text-xs text-green-400">
-                          Virtual Cash: ₹
-                          {Number.parseInt(
-                            activeContest.virtual_cash
-                          ).toLocaleString()}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Positions */}
-                    <div>
-                      <h3 className="text-sm font-medium mb-3 text-slate-300">
-                        Open Positions
-                      </h3>
-                      {contestData?.contest?.participation?.positions?.length >
-                      0 ? (
-                        <div className="space-y-3">
-                          {contestData.contest.participation.positions.map(
-                            (position) => (
-                              <div
-                                key={position.id}
-                                className="p-3 rounded-lg border border-slate-700 bg-slate-800/50"
-                              >
-                                <div className="flex justify-between items-center mb-2">
-                                  <span className="text-sm font-medium text-slate-300">
-                                    {position.strikePrice} {position.optionType}
-                                  </span>
-                                  <Badge
-                                    variant={
-                                      position.pnl >= 0
-                                        ? "default"
-                                        : "destructive"
-                                    }
-                                    className={`text-xs ${
-                                      position.pnl >= 0
-                                        ? "bg-green-600 text-white"
-                                        : "bg-red-600 text-white"
-                                    }`}
-                                  >
-                                    {position.pnl >= 0 ? "+" : ""}
-                                    {position.pnl.toFixed(2)}
-                                  </Badge>
-                                </div>
-                                <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
-                                  <div>Qty: {position.quantity}</div>
-                                  <div>Avg: ₹{position.averagePrice}</div>
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-center py-6 text-slate-500 text-sm">
-                          <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                          No positions
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Recent Orders */}
-                    <div>
-                      <h3 className="text-sm font-medium mb-3 text-slate-300">
-                        Recent Orders
-                      </h3>
-                      <div className="text-center py-6 text-slate-500 text-sm">
-                        <Activity className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        No recent orders
-                      </div>
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
+            <div className="h-full text-white  overflow-y-auto bg-slate-900 over border-slate-800">
+               {activeContest && <PositionsPage only={true} />}
+              {activeContest && <PositionsPage options={true} />}
+            </div>
           </div>
         </div>
       </div>
