@@ -181,6 +181,6 @@ async function generateLeaderboard() {
 }
 
 // Schedule every 2 minutes (adjust as needed)
-cron.schedule("*/2 * * * *", generateLeaderboard);
+cron.schedule("*/15 * * * *", generateLeaderboard);
 
 module.exports = {};
