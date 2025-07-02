@@ -78,17 +78,7 @@ export default function PopoverDemo() {
             </div>
           </div>
 
-          {/* Quick Stats */}
-          <div className="bg-slate-800/50 rounded-lg p-3 space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Active Contests</span>
-              <span className="text-green-400 font-medium">2</span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-slate-400">Total P&L</span>
-              <span className="text-green-400 font-medium">+₹1,250</span>
-            </div>
-          </div>
+       
 
           <div className="border-t border-slate-700" />
 

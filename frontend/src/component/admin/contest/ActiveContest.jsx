@@ -415,7 +415,7 @@ export default function ActiveContests() {
           </CardTitle>
           <CardDescription>Participate in any ongoing contest</CardDescription>
         </CardHeader>
-        <CardContent className="p-6">
+        <CardContent className="sm:p-6 w-full">
           {ongoingContests.length === 0 ? (
             <div className="text-center py-12">
               <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -433,41 +433,6 @@ export default function ActiveContests() {
                   isLoading={processingContestId === contest.id}
                   hasActiveContest={hasActiveContest}
                   currentActiveContest={currentActiveContest}
-                />
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Upcoming Contests Section (view only, no join) */}
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-slate-50 to-slate-100 border-b">
-          <CardTitle className="text-xl flex items-center gap-2">
-            <CalendarIcon className="h-6 w-6 text-primary" />
-            Upcoming Contests
-          </CardTitle>
-          <CardDescription>Upcoming contests (joining will open when live)</CardDescription>
-        </CardHeader>
-        <CardContent className="p-6">
-          {upcomingContests.length === 0 ? (
-            <div className="text-center py-12">
-              <Trophy className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground mb-2">No Upcoming Contests</h3>
-              <p className="text-sm text-muted-foreground">No upcoming contests scheduled at the moment.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {upcomingContests.map((contest) => (
-                <ContestCard
-                  key={contest.id}
-                  contest={contest}
-                  userBalance={userBalance}
-                  handleJoinContest={() => {}} // Disable join for upcoming
-                  isLoading={false}
-                  hasActiveContest={hasActiveContest}
-                  currentActiveContest={currentActiveContest}
-                  disableJoinButton={true}
                 />
               ))}
             </div>
@@ -552,7 +517,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
   }
 
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-lg border-l-4 border-l-primary">
+    <Card className="overflow-hidden transition-all hover:shadow-lg border-l-4 w-full border-l-primary">
       <div className="flex flex-col lg:flex-row">
         <div className="flex-grow p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">

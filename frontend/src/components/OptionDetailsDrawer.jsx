@@ -95,7 +95,7 @@ export function OptionDetailsDrawer({
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    const socket = io("http://localhost:5001", {
+    const socket = io("", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -290,7 +290,9 @@ export function OptionDetailsDrawer({
 
   const lotSize = 25;
   const marketPrice =
-    tradeType === "buy" ? optionData.ltp?.toFixed(2) : optionData.ltp?.toFixed(2);
+    tradeType === "buy"
+      ? optionData.ltp?.toFixed(2)
+      : optionData.ltp?.toFixed(2);
   const totalValue = quantity * lotSize * marketPrice;
 
   const increaseQuantity = () => setQuantity((prev) => prev + 1);
@@ -314,6 +316,15 @@ export function OptionDetailsDrawer({
       </span>
     </div>
   );
+
+  function isMarketOpen() {
+    const now = new Date();
+    const open = new Date(now);
+    open.setHours(9, 15, 0, 0); // 9:15 AM
+    const close = new Date(now);
+    close.setHours(15, 30, 0, 0); // 3:30 PM
+    return now >= open && now <= close;
+  }
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
@@ -363,26 +374,24 @@ export function OptionDetailsDrawer({
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={handleTitleClick}
-                className="flex items-center gap-2 sm:gap-3 focus:outline-none hover:bg-slate-100 rounded-lg px-1 py-0.5 transition  min-w-0"
-                title="Go to Option Details"
-              >
-                <div className="flex  ">
-                  <div className="flex items-center gap-2">
-                    <div>
-                      <span className="text-xs sm:text-sm text-muted-foreground truncate">
-                        {optionData.symbol || "Nifty Bank"}
-                      </span>
-                    <br/>
+              // <button
+              //   type="button"
+              //   // onClick={handleTitleClick}
+              //   className="flex items-center gap-2 sm:gap-3 focus:outline-none hover:bg-slate-100 rounded-lg px-1 py-0.5 transition  min-w-0"
+              //   title="Go to Option Details"
+              // >
+              <div className="flex items-start justify-start gap-2 sm:gap-3 flex-1">
+                <div className="flex items-center gap-2">
+                  <div className=" flex items-start">
+                    <span className="text-xs sm:text-sm text-muted-foreground truncate">
+                      {optionData.symbol || ""}
+                    </span>
+                    <br />
                     <span className="text-lg sm:text-xl font-bold truncate">
                       {strikePrice}
                     </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-
-                    
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Badge
                       variant={isCall ? "default" : "destructive"}
                       className={`${
@@ -395,9 +404,9 @@ export function OptionDetailsDrawer({
                     </Badge>
                     <MoveUpRight className="w-3 h-3 sm:w-4 sm:h-4 text-slate-500 shrink-0" />
                   </div>
-                  </div>
                 </div>
-              </button>
+              </div>
+              // </button>
             )}
 
             {/* Right side - Price and Status */}
@@ -524,7 +533,7 @@ export function OptionDetailsDrawer({
                   </span>
                 </div>
                 <div className="text-xs text-slate-600 mt-1 text-right">
-                  {quantity} × {lotSize} ×  ₹{optionData.ltp?.toFixed(2)}
+                  {quantity} × {lotSize} × ₹{optionData.ltp?.toFixed(2)}
                 </div>
               </div>
 
@@ -702,7 +711,7 @@ export function OptionDetailsDrawer({
                 <Button
                   onClick={handleBuyClick}
                   className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
-                  disabled={isLoading || !isConnected}
+                  disabled={isLoading || !isConnected || !isMarketOpen()}
                 >
                   <TrendingUp className="w-4 h-4 mr-2" />
                   Buy
@@ -710,12 +719,19 @@ export function OptionDetailsDrawer({
                 <Button
                   onClick={handleSellClick}
                   className="bg-red-600 hover:bg-red-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
-                  disabled={isLoading || !isConnected}
+                  disabled={isLoading || !isConnected || !isMarketOpen()}
                 >
                   <TrendingDown className="w-4 h-4 mr-2" />
                   Sell
                 </Button>
               </div>
+
+              {/* Market Closed Message */}
+              {!isMarketOpen() && (
+                <div className="text-center text-xs text-red-600 mt-2">
+                  Market is closed. Trading allowed from 9:15 AM to 3:30 PM.
+                </div>
+              )}
             </>
           )}
         </div>

@@ -519,7 +519,7 @@ export default function ContestManager() {
 
       {/* Create Contest Modal */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className=" w-[90vw] h-[90vh] overflow-y-scroll sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle>Create New Contest</DialogTitle>
             <DialogDescription>Fill in the details to create a new trading contest</DialogDescription>
@@ -666,7 +666,7 @@ export default function ContestManager() {
 
       {/* Update Contest Modal */}
       <Dialog open={isUpdateOpen} onOpenChange={setIsUpdateOpen}>
-        <DialogContent className="sm:max-w-[550px]">
+        <DialogContent className=" w-[90vw] h-[90vh] overflow-y-scroll sm:max-w-[550px]">
           <DialogHeader>
             <DialogTitle>Update Contest</DialogTitle>
             <DialogDescription>Edit the details of "{selectedContest?.name}"</DialogDescription>

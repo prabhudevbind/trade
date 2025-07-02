@@ -14,7 +14,9 @@ const cron = require("node-cron");
 const axios = require("axios");
 const fs = require("fs");
 const redis = require("redis");
-
+require("./cronjob/cronExpiryDates");
+require("./cronjob/cronContestReset");
+require("./cronjob/cronLeaderboard");
 // --- REDIS CLIENT SETUP ---
 const Redis = require("ioredis");
 const redisClient = new Redis({
@@ -102,7 +104,7 @@ app.use("/api/v1", require("./utils/profileupload"));
 app.use("/api/v1", require("./routes/contest/bulk.router"));
 app.use("/api/v1", require("./routes/user/price.router"));
 app.use("/api/v1", require("./routes/dashboard/dashboard.router"));
-
+app.use("/api/v1/leaderboard", require("./routes/leaderboard.routes"));
 // Error handling middleware
 app.use(errorHandler);
 
@@ -119,22 +121,22 @@ function logMemoryUsage() {
     used: os.totalmem() - os.freemem(),
   };
 
-  console.log("\n📊 Memory Usage Statistics:");
-  console.log("─────────────────────────");
-  console.log("🔸 Process Memory:");
-  console.log(`   • Heap Used: ${formatMemoryUsage(memoryUsage.heapUsed)}`);
-  console.log(`   • Heap Total: ${formatMemoryUsage(memoryUsage.heapTotal)}`);
-  console.log(`   • RSS: ${formatMemoryUsage(memoryUsage.rss)}`);
-  console.log("🔸 System Memory:");
-  console.log(`   • Total: ${formatMemoryUsage(systemMemory.total)}`);
-  console.log(`   • Free: ${formatMemoryUsage(systemMemory.free)}`);
-  console.log(`   • Used: ${formatMemoryUsage(systemMemory.used)}`);
-  console.log(
-    `   • Usage: ${((systemMemory.used / systemMemory.total) * 100).toFixed(
-      2
-    )}%`
-  );
-  console.log("─────────────────────────");
+  // console.log("\n📊 Memory Usage Statistics:");
+  // console.log("─────────────────────────");
+  // console.log("🔸 Process Memory:");
+  // console.log(`   • Heap Used: ${formatMemoryUsage(memoryUsage.heapUsed)}`);
+  // console.log(`   • Heap Total: ${formatMemoryUsage(memoryUsage.heapTotal)}`);
+  // console.log(`   • RSS: ${formatMemoryUsage(memoryUsage.rss)}`);
+  // console.log("🔸 System Memory:");
+  // console.log(`   • Total: ${formatMemoryUsage(systemMemory.total)}`);
+  // console.log(`   • Free: ${formatMemoryUsage(systemMemory.free)}`);
+  // console.log(`   • Used: ${formatMemoryUsage(systemMemory.used)}`);
+  // console.log(
+  //   `   • Usage: ${((systemMemory.used / systemMemory.total) * 100).toFixed(
+  //     2
+  //   )}%`
+  // );
+  // console.log("─────────────────────────");
 }
 
 // Initialize protobuf
@@ -143,7 +145,7 @@ const initProtobuf = async () => {
     protobufRoot = await protobuf.load(
       path.join(__dirname, "MarketDataFeed.proto")
     );
-    console.log("✅ Protobuf schema loaded successfully");
+    // console.log("✅ Protobuf schema loaded successfully");
     return true;
   } catch (error) {
     console.error("❌ Error loading protobuf:", error);
@@ -181,7 +183,7 @@ const getMarketFeedUrl = async () => {
         console.error("❌ Upstox authorization error:", error);
         reject(error);
       } else {
-        console.log("✅ Upstox WebSocket URL obtained");
+        // console.log("✅ Upstox WebSocket URL obtained");
         resolve(data.data.authorizedRedirectUri);
       }
     });
@@ -204,9 +206,9 @@ const cleanupSubscriptionTimers = (instrumentKey) => {
 // Enhanced debugging for WebSocket data reception
 const subscribeToUpstoxInstrument = (instrumentKey) => {
   if (!upstoxWs || upstoxWs.readyState !== WebSocket.OPEN) {
-    console.log(
-      `⏳ Adding ${instrumentKey} to pending subscriptions (WebSocket not ready)`
-    );
+    // console.log(
+    //   `⏳ Adding ${instrumentKey} to pending subscriptions (WebSocket not ready)`
+    // );
     pendingSubscriptions.add(instrumentKey);
     return false;
   }
@@ -222,34 +224,34 @@ const subscribeToUpstoxInstrument = (instrumentKey) => {
     };
 
     upstoxWs.send(Buffer.from(JSON.stringify(subscriptionData)));
-    console.log(
-      `📡 Subscribed to Upstox for: ${instrumentKey} with mode: ${subscriptionData.data.mode}`
-    );
+    // console.log(
+    //   `📡 Subscribed to Upstox for: ${instrumentKey} with mode: ${subscriptionData.data.mode}`
+    // );
 
     // Enhanced logging for subscription confirmation
-    console.log(
-      `📋 Subscription payload:`,
-      JSON.stringify(subscriptionData, null, 2)
-    );
+    // console.log(
+    //   `📋 Subscription payload:`,
+    //   JSON.stringify(subscriptionData, null, 2)
+    // );
 
     // Set up timeout to detect if no data is received
     const timeoutId = setTimeout(() => {
-      console.warn(
-        `⚠️  No data received for ${instrumentKey} after 15 seconds`
-      );
+      // console.warn(
+      //   `⚠️  No data received for ${instrumentKey} after 15 seconds`
+      // );
       // Try resubscribing with different mode
-      console.log(
-        `🔄 Attempting resubscription with 'full' mode for ${instrumentKey}`
-      );
+      // console.log(
+      //   `🔄 Attempting resubscription with 'full' mode for ${instrumentKey}`
+      // );
       resubscribeWithDifferentMode(instrumentKey);
     }, 2000);
     subscriptionTimers.set(instrumentKey, timeoutId);
 
     // Set up retry mechanism with exponential backoff
     const retryId = setTimeout(() => {
-      console.warn(
-        `🔄 Retrying subscription for ${instrumentKey} after 45 seconds`
-      );
+      // console.warn(
+      //   `🔄 Retrying subscription for ${instrumentKey} after 45 seconds`
+      // );
       subscribeToUpstoxInstrument(instrumentKey);
     }, 45000);
     retryTimers.set(instrumentKey, retryId);
@@ -277,7 +279,7 @@ const resubscribeWithDifferentMode = (instrumentKey) => {
       },
     };
     upstoxWs.send(Buffer.from(JSON.stringify(unsubscriptionData)));
-    console.log(`📡 Unsubscribed from ${instrumentKey} before mode change`);
+    // console.log(`📡 Unsubscribed from ${instrumentKey} before mode change`);
 
     // Wait a moment then resubscribe with full mode
     setTimeout(() => {
@@ -290,7 +292,7 @@ const resubscribeWithDifferentMode = (instrumentKey) => {
         },
       };
       upstoxWs.send(Buffer.from(JSON.stringify(subscriptionData)));
-      console.log(`📡 Resubscribed to ${instrumentKey} with full mode`);
+      // console.log(`📡 Resubscribed to ${instrumentKey} with full mode`);
     }, 1000);
   } catch (error) {
     console.error(`❌ Error resubscribing to ${instrumentKey}:`, error);
@@ -310,7 +312,7 @@ const unsubscribeFromUpstoxInstrument = (instrumentKey) => {
       };
 
       upstoxWs.send(Buffer.from(JSON.stringify(unsubscriptionData)));
-      console.log(`📡 Unsubscribed from Upstox for: ${instrumentKey}`);
+      // console.log(`📡 Unsubscribed from Upstox for: ${instrumentKey}`);
     } catch (error) {
       console.error(`❌ Error unsubscribing from ${instrumentKey}:`, error);
     }
@@ -324,9 +326,9 @@ const unsubscribeFromUpstoxInstrument = (instrumentKey) => {
 // Process pending subscriptions when WebSocket connects
 const processPendingSubscriptions = () => {
   if (pendingSubscriptions.size > 0) {
-    console.log(
-      `🔄 Processing ${pendingSubscriptions.size} pending subscriptions`
-    );
+    // console.log(
+    //   `🔄 Processing ${pendingSubscriptions.size} pending subscriptions`
+    // );
     const subscriptionsToProcess = Array.from(pendingSubscriptions);
     pendingSubscriptions.clear();
 
@@ -342,16 +344,16 @@ const processPendingSubscriptions = () => {
 const connectUpstoxWebSocket = async (wsUrl) => {
   return new Promise((resolve, reject) => {
     if (isConnecting) {
-      console.log("⏳ Connection already in progress...");
+      // console.log("⏳ Connection already in progress...");
       return;
     }
 
     isConnecting = true;
-    console.log(
-      `🔗 Attempting to connect to Upstox WebSocket (Attempt ${
-        connectionAttempts + 1
-      })`
-    );
+    // console.log(
+    //   `🔗 Attempting to connect to Upstox WebSocket (Attempt ${
+    //     connectionAttempts + 1
+    //   })`
+    // );
 
     const ws = new WebSocket(wsUrl, {
       headers: {
@@ -371,7 +373,7 @@ const connectUpstoxWebSocket = async (wsUrl) => {
 
     ws.on("open", async () => {
       clearTimeout(connectionTimeout);
-      console.log("✅ Upstox WebSocket connected successfully");
+      // console.log("✅ Upstox WebSocket connected successfully");
       upstoxWs = ws;
       isConnecting = false;
       connectionAttempts = 0;
@@ -402,9 +404,9 @@ const connectUpstoxWebSocket = async (wsUrl) => {
 
     ws.on("close", (code, reason) => {
       clearTimeout(connectionTimeout);
-      console.log(
-        `🔌 Upstox WebSocket disconnected. Code: ${code}, Reason: ${reason}`
-      );
+      // console.log(
+      //   `🔌 Upstox WebSocket disconnected. Code: ${code}, Reason: ${reason}`
+      // );
       upstoxWs = null;
       isConnecting = false;
 
@@ -421,21 +423,21 @@ const connectUpstoxWebSocket = async (wsUrl) => {
     ws.on("message", async (data) => {
       try {
         if (data instanceof Buffer) {
-          console.log(`📦 Received binary data of size: ${data.length} bytes`);
+          // console.log(`📦 Received binary data of size: ${data.length} bytes`);
 
           const decodedData = decodeProtobuf(data);
           if (decodedData) {
-            console.log(
-              `📊 Decoded data structure:`,
-              JSON.stringify(decodedData, null, 2)
-            );
+            // console.log(
+            //   `📊 Decoded data structure:`,
+            //   JSON.stringify(decodedData, null, 2)
+            // );
 
             if (decodedData.feeds) {
               const receivedKeys = Object.keys(decodedData.feeds);
-              console.log(
-                `📊 Received data for ${receivedKeys.length} instruments:`,
-                receivedKeys
-              );
+              // console.log(
+              //   `📊 Received data for ${receivedKeys.length} instruments:`,
+              //   receivedKeys
+              // );
 
               for (const [instrumentKey, feed] of Object.entries(
                 decodedData.feeds
@@ -486,43 +488,43 @@ const connectUpstoxWebSocket = async (wsUrl) => {
               }
             } else if (decodedData.type) {
               // Handle different message types
-              console.log(`📩 Received message type: ${decodedData.type}`);
+              // console.log(`📩 Received message type: ${decodedData.type}`);
               if (decodedData.type === "ack") {
-                console.log(`✅ Subscription acknowledgment received`);
+                // console.log(`✅ Subscription acknowledgment received`);
               } else if (decodedData.type === "error") {
                 console.error(`❌ Error from Upstox:`, decodedData);
               }
             } else {
-              console.log(
-                `⚠️  Received data without feeds or type:`,
-                decodedData
-              );
+              // console.log(
+              //   `⚠️  Received data without feeds or type:`,
+              //   decodedData
+              // );
             }
           } else {
             console.error(`❌ Failed to decode protobuf data`);
             // Log raw data for debugging
-            console.log(`🔍 Raw data (first 100 bytes):`, data.slice(0, 100));
+            // console.log(`🔍 Raw data (first 100 bytes):`, data.slice(0, 100));
           }
         } else {
           const message = data.toString();
-          console.log("📩 Received text message:", message);
+          // console.log("📩 Received text message:", message);
 
           // Try to parse as JSON for subscription confirmations
           try {
             const jsonMessage = JSON.parse(message);
-            console.log("📋 Parsed JSON message:", jsonMessage);
+            // console.log("📋 Parsed JSON message:", jsonMessage);
 
             // Handle subscription confirmations
             if (jsonMessage.type === "connection_ack") {
-              console.log("✅ Connection acknowledged by Upstox");
+              // console.log("✅ Connection acknowledged by Upstox");
             } else if (jsonMessage.type === "subscription_ack") {
-              console.log(
-                "✅ Subscription acknowledged for:",
-                jsonMessage.instrumentKeys
-              );
+              // console.log(
+              //   "✅ Subscription acknowledged for:",
+              //   jsonMessage.instrumentKeys
+              // );
             }
           } catch (parseError) {
-            console.log("📝 Non-JSON text message received");
+            // console.log("📝 Non-JSON text message received");
           }
         }
       } catch (error) {
@@ -533,12 +535,12 @@ const connectUpstoxWebSocket = async (wsUrl) => {
 
     // Handle ping/pong for connection health
     ws.on("ping", () => {
-      console.log("🏓 Received ping from Upstox");
+      // console.log("🏓 Received ping from Upstox");
       ws.pong();
     });
 
     ws.on("pong", () => {
-      console.log("🏓 Received pong from Upstox");
+      // console.log("🏓 Received pong from Upstox");
     });
   });
 };
@@ -558,9 +560,9 @@ const validateInstrumentKey = (instrumentKey) => {
   const pattern = patterns[segment];
 
   if (!pattern) {
-    console.warn(
-      `⚠️ Unknown segment: ${segment} for instrument: ${instrumentKey}`
-    );
+    // console.warn(
+    //   `⚠️ Unknown segment: ${segment} for instrument: ${instrumentKey}`
+    // );
     return false;
   }
 
@@ -587,7 +589,7 @@ const scheduleReconnection = () => {
     RECONNECT_DELAY * Math.pow(2, connectionAttempts),
     60000
   ); // Max 60 seconds
-  console.log(`⏰ Scheduling reconnection in ${delay / 1000} seconds...`);
+  // console.log(`⏰ Scheduling reconnection in ${delay / 1000} seconds...`);
 
   reconnectInterval = setTimeout(async () => {
     reconnectInterval = null;
@@ -604,13 +606,13 @@ const scheduleReconnection = () => {
 const initUpstoxConnection = async () => {
   try {
     if (isConnecting || (upstoxWs && upstoxWs.readyState === WebSocket.OPEN)) {
-      console.log("⏳ Connection already exists or in progress");
+      // console.log("⏳ Connection already exists or in progress");
       return;
     }
 
     const wsUrl = await getMarketFeedUrl();
     await connectUpstoxWebSocket(wsUrl);
-    console.log("✅ Upstox WebSocket connection established");
+    // console.log("✅ Upstox WebSocket connection established");
   } catch (error) {
     console.error("❌ Error connecting to Upstox:", error);
     connectionAttempts++;
@@ -649,9 +651,9 @@ async function restoreActiveSubscriptions() {
   try {
     const keys = await redisClient.smembers(ACTIVE_SUBS_KEY);
     if (keys && keys.length > 0) {
-      console.log(
-        `🔄 Restoring ${keys.length} active subscriptions from Redis...`
-      );
+      // console.log(
+      //   `🔄 Restoring ${keys.length} active subscriptions from Redis...`
+      // );
       for (const key of keys) {
         if (!instrumentSubscriptions.has(key)) {
           instrumentSubscriptions.set(key, new Set());
@@ -682,14 +684,14 @@ async function removeActiveSubscriptionKey(key) {
 
 // Socket.IO connection handler
 io.on("connection", (socket) => {
-  console.log(`🔌 Socket.IO client connected: ${socket.id}`);
+  // console.log(`🔌 Socket.IO client connected: ${socket.id}`);
 
   socket.on("subscribe", async (instrumentKey) => {
     if (!instrumentKey || typeof instrumentKey !== "string") {
-      console.error(
-        `❌ Invalid instrumentKey received from ${socket.id}:`,
-        instrumentKey
-      );
+      // console.error(
+      //   `❌ Invalid instrumentKey received from ${socket.id}:`,
+      //   instrumentKey
+      // );
       socket.emit("subscriptionError", {
         instrumentKey,
         error: "Invalid instrument key format",
@@ -710,7 +712,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(`📥 Subscribe request from ${socket.id} for: ${instrumentKey}`);
+    // console.log(`📥 Subscribe request from ${socket.id} for: ${instrumentKey}`);
 
     // Join Socket.IO room
     socket.join(instrumentKey);
@@ -730,9 +732,9 @@ io.on("connection", (socket) => {
     instrumentSubscriptions.get(instrumentKey).add(socket.id);
 
     const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
-    console.log(
-      `✅ Socket ${socket.id} subscribed to ${instrumentKey}. Room size: ${roomSize}`
-    );
+    // console.log(
+    //   `✅ Socket ${socket.id} subscribed to ${instrumentKey}. Room size: ${roomSize}`
+    // );
 
     // --- SERVE REDIS CACHED DATA IMMEDIATELY FOR ALL INSTRUMENTS ---
     try {
@@ -768,9 +770,7 @@ io.on("connection", (socket) => {
       return;
     }
 
-    console.log(
-      `📤 Unsubscribe request from ${socket.id} for: ${instrumentKey}`
-    );
+    // console.log(`📤 Unsubscribe request from ${socket.id} for: ${instrumentKey}`);
 
     // Leave Socket.IO room
     socket.leave(instrumentKey);
@@ -787,9 +787,9 @@ io.on("connection", (socket) => {
     }
 
     const roomSize = io.sockets.adapter.rooms.get(instrumentKey)?.size || 0;
-    console.log(
-      `✅ Socket ${socket.id} unsubscribed from ${instrumentKey}. Room size: ${roomSize}`
-    );
+    // console.log(
+    //   `✅ Socket ${socket.id} unsubscribed from ${instrumentKey}. Room size: ${roomSize}`
+    // );
 
     // Send confirmation to client
     socket.emit("unsubscriptionConfirmed", {
@@ -810,9 +810,9 @@ io.on("connection", (socket) => {
 
   // Clean up on disconnect
   socket.on("disconnect", (reason) => {
-    console.log(
-      `🔌 Socket.IO client disconnected: ${socket.id}, reason: ${reason}`
-    );
+    // console.log(
+    //   `🔌 Socket.IO client disconnected: ${socket.id}, reason: ${reason}`
+    // );
 
     // Clean up all subscriptions for this socket
     for (const [
@@ -826,9 +826,9 @@ io.on("connection", (socket) => {
         if (subscribers.size === 0) {
           instrumentSubscriptions.delete(instrumentKey);
           unsubscribeFromUpstoxInstrument(instrumentKey);
-          console.log(
-            `🗑️  Cleaned up subscription for ${instrumentKey} (no more subscribers)`
-          );
+          // console.log(
+          //   `🗑️  Cleaned up subscription for ${instrumentKey} (no more subscribers)`
+          // );
         }
       }
     }
@@ -836,7 +836,7 @@ io.on("connection", (socket) => {
 
   // FIX: Move requestData handler inside connection block
   socket.on("requestData", (instrumentKey) => {
-    console.log(`📋 Manual data request for: ${instrumentKey}`);
+    // console.log(`📋 Manual data request for: ${instrumentKey}`);
 
     // Send current subscription status
     const isSubscribed = instrumentSubscriptions.has(instrumentKey);
@@ -853,9 +853,9 @@ io.on("connection", (socket) => {
 
     // If subscribed but no recent data, try resubscribing
     if (isSubscribed && upstoxWs && upstoxWs.readyState === WebSocket.OPEN) {
-      console.log(
-        `🔄 Attempting to refresh subscription for: ${instrumentKey}`
-      );
+      // console.log(
+      //   `🔄 Attempting to refresh subscription for: ${instrumentKey}`
+      // );
       subscribeToUpstoxInstrument(instrumentKey);
     }
   });
@@ -863,27 +863,27 @@ io.on("connection", (socket) => {
 
 // Add periodic health check for subscriptions
 setInterval(() => {
-  console.log(`📊 Subscription Health Check:`);
-  console.log(`   • Active subscriptions: ${instrumentSubscriptions.size}`);
-  console.log(`   • Pending subscriptions: ${pendingSubscriptions.size}`);
-  console.log(`   • Active timers: ${subscriptionTimers.size}`);
-  console.log(
-    `   • Upstox connected: ${
-      upstoxWs && upstoxWs.readyState === WebSocket.OPEN
-    }`
-  );
+  // console.log(`📊 Subscription Health Check:`);
+  // console.log(`   • Active subscriptions: ${instrumentSubscriptions.size}`);
+  // console.log(`   • Pending subscriptions: ${pendingSubscriptions.size}`);
+  // console.log(`   • Active timers: ${subscriptionTimers.size}`);
+  // console.log(
+  //   `   • Upstox connected: ${
+  //     upstoxWs && upstoxWs.readyState === WebSocket.OPEN
+  //   }`
+  // );
 
   // Log all active subscriptions
   if (instrumentSubscriptions.size > 0) {
-    console.log(
-      `   • Subscribed instruments:`,
-      Array.from(instrumentSubscriptions.keys())
-    );
+    // console.log(
+    //   `   • Subscribed instruments:`,
+    //   Array.from(instrumentSubscriptions.keys())
+    // );
   }
 
   // Log pending subscriptions
   if (pendingSubscriptions.size > 0) {
-    console.log(`   • Pending instruments:`, Array.from(pendingSubscriptions));
+    // console.log(`   • Pending instruments:`, Array.from(pendingSubscriptions));
   }
 }, 60000); // Every minute
 
@@ -924,33 +924,6 @@ const EXPIRY_INSTRUMENTS = [
   "NSE_INDEX|Nifty Bank",
   "NSE_INDEX|Nifty Fin Service",
 ];
-
-// Function to fetch expiry dates for all instruments
-async function fetchAndCacheExpiryDates() {
-  console.log("⏰ [CRON] Fetching expiry dates for all instruments...");
-  for (const instrumentKey of EXPIRY_INSTRUMENTS) {
-    try {
-      const url = `http://localhost:${PORT}/api/v1/available-expiry-dates?instrument_key=${encodeURIComponent(
-        instrumentKey
-      )}`;
-      const res = await axios.get(url);
-      if (res.data && res.data.expiry_dates) {
-        console.log(
-          `✅ [CRON] Expiry dates updated for ${instrumentKey}:`,
-          res.data.expiry_dates.length,
-          "dates"
-        );
-      } else {
-        console.warn(`⚠️  [CRON] No expiry dates found for ${instrumentKey}`);
-      }
-    } catch (err) {
-      console.error(
-        `❌ [CRON] Error fetching expiry dates for ${instrumentKey}:`,
-        err.message
-      );
-    }
-  }
-}
 
 const PREDEFINED_OPTION_KEYS = [
   "NSE_FO|56888",
@@ -1065,86 +1038,14 @@ async function subscribePredefinedOptions() {
   }
 }
 
-// Schedule the cron job to run every day at 6:00 AM
-cron.schedule("0 6 * * *", fetchAndCacheExpiryDates, {
-  timezone: "Asia/Kolkata",
-});
-
-// --- CRON JOB: Reset Contest with id=5 every night at 12:00 AM IST ---
-const prisma = require("./utils/prisma"); // Import Prisma client
-
-cron.schedule(
-  "0 0 * * *",
-  async () => {
-    try {
-      // Fetch all ongoing contests
-      const ongoingContests = await prisma.contest.findMany({
-        where: { status: "ongoing" },
-      });
-      if (!ongoingContests.length) {
-        console.log(`[CRON] No ongoing contests found.`);
-        return;
-      }
-      for (const contest of ongoingContests) {
-        const contestId = contest.id;
-        // Find all participants for this contest
-        const participants = await prisma.contestParticipant.findMany({
-          where: { contest_id: contestId },
-        });
-        const participantIds = participants.map((p) => p.id);
-        if (participantIds.length > 0) {
-          // Delete all trades for these participants
-          await prisma.trade.deleteMany({
-            where: { contest_participant_id: { in: participantIds } },
-          });
-          // Delete all positions for these participants
-          await prisma.position.deleteMany({
-            where: { contest_participant_id: { in: participantIds } },
-          });
-          // Remove all participants
-          await prisma.contestParticipant.deleteMany({
-            where: { contest_id: contestId },
-          });
-          console.log(
-            `[CRON] Removed all participants, trades, and positions for contest id=${contestId}`
-          );
-        }
-        // Set start_time to 9:00 AM and end_time to 3:30 PM for tomorrow (IST)
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(9, 0, 0, 0); // 9:00 AM
-        const endOfDay = new Date(tomorrow);
-        endOfDay.setHours(15, 30, 0, 0); // 3:30 PM
-        await prisma.contest.update({
-          where: { id: contestId },
-          data: {
-            start_time: tomorrow,
-            end_time: endOfDay,
-            status: "ongoing",
-            updated_at: new Date(),
-          },
-        });
-        console.log(
-          `[CRON] Contest id=${contestId} reset for new day with status 'ongoing'.`
-        );
-      }
-    } catch (err) {
-      console.error("[CRON] Error resetting ongoing contests:", err);
-    }
-  },
-  {
-    timezone: "Asia/Kolkata",
-  }
-);
-
 // Start server
 server.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  // console.log(`🚀 Server running on port ${PORT}`);
   try {
     await initializeMarketDataService();
     await initProtobuf();
     await initUpstoxConnection();
-    console.log("✅ All services initialized successfully");
+    // console.log("✅ All services initialized successfully");
 
     // Start memory monitoring
     setInterval(logMemoryUsage, 5 * 60 * 1000); // Log every 5 minutes
@@ -1155,8 +1056,8 @@ server.listen(PORT, async () => {
 
 // Graceful shutdown handler
 const gracefulShutdown = () => {
-  console.log("🛑 Shutting down gracefully...");
-  console.log("📊 Final Memory Usage:");
+  // console.log("🛑 Shutting down gracefully...");
+  // console.log("📊 Final Memory Usage:");
   logMemoryUsage();
 
   // Clear all timers
@@ -1170,19 +1071,19 @@ const gracefulShutdown = () => {
   // Close Socket.IO
   if (io) {
     io.close(() => {
-      console.log("✅ Socket.IO server closed");
+      // console.log("✅ Socket.IO server closed");
     });
   }
 
   // Close Upstox WebSocket
   if (upstoxWs) {
     upstoxWs.close();
-    console.log("✅ Upstox WebSocket closed");
+    // console.log("✅ Upstox WebSocket closed");
   }
 
   // Close HTTP server
   server.close(() => {
-    console.log("✅ HTTP server stopped");
+    // console.log("✅ HTTP server stopped");
     process.exit(0);
   });
 };
@@ -1282,7 +1183,7 @@ app.post("/api/v1/env", async (req, res) => {
       value,
     });
     // Restart the server after .env update
-    console.log("🔄 .env updated, restarting server...");
+    // console.log("🔄 .env updated, restarting server...");
     process.exit(0);
   } catch (err) {
     console.error("Error updating .env:", err);
