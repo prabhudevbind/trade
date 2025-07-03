@@ -1134,6 +1134,20 @@ app.get("/api/v1/option-live/:instrumentKey", async (req, res) => {
   }
 });
 
+// Leaderboard real-time data endpoint
+app.get("/api/v1/leaderboard/contest/:contestId/realtime", async (req, res) => {
+  try {
+    const contestId = req.params.contestId;
+    const cached = await redisClient.get(`leaderboard:contest:${contestId}`);
+    if (!cached) {
+      return res.status(404).json({ error: "No leaderboard data found" });
+    }
+    res.json(JSON.parse(cached));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch leaderboard", details: err.message });
+  }
+});
+
 process.on("SIGINT", gracefulShutdown);
 process.on("SIGTERM", gracefulShutdown);
 

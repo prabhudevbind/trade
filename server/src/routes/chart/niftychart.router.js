@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const redis = require('redis');
 const router = express.Router();
-
+let optionChainApiCallCount = 0;
 // Redis client setup
 const redisClient = redis.createClient();
 redisClient.on('error', (err) => console.error('Redis Client Error', err));
@@ -40,6 +40,7 @@ function registerOptionChainSocket(io) {
       }
       const cooldownKey = `${instrument_key}|${expiry_date}`;
       // Start interval to fetch and emit data every 1s
+      console.log("Option Chain API called:", optionChainApiCallCount, "times");
       const interval = setInterval(async () => {
         const now = Date.now();
         const last429 = optionChainCooldowns.get(cooldownKey) || 0;
@@ -59,6 +60,8 @@ function registerOptionChainSocket(io) {
             Authorization: `Bearer ${process.env.ACCESS_TOKEN}`,
           };
           const response = await axios.get(url, { headers });
+          optionChainApiCallCount++;
+console.log("Option Chain API called:", optionChainApiCallCount, "times");
           const optionChainData = response.data.data || [];
           if (optionChainData.length === 0) {
             socket.emit('optionChain:data', {
@@ -226,8 +229,7 @@ function getLotSize(instrumentKey) {
     "NSE_INDEX|Nifty 50": 50,
     "NSE_INDEX|Nifty Bank": 15,
     "NSE_INDEX|Nifty Fin Service": 40,
-    "NSE_INDEX|Nifty IT": 50,
-    "NSE_INDEX|Nifty Midcap Select": 75,
+   
     // Add more instruments and their lot sizes as needed
   };
   

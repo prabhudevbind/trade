@@ -16,14 +16,15 @@ function getInitialCash() {
 async function getLiveLTP(option) {
   const instrumentKey = `NSE_FO|${option.symbol}`;
   try {
-    const cached = await redisClient.get(`option_live:${instrumentKey}`);
+    const cached = await redisClient.get(
+      `option_chain:${instrumentKey}:${option.expiry_date.split("T")[0]}`
+    );
+    console.log(cached);
     if (cached) {
       const data = JSON.parse(cached);
+      console.log(data);
       return (
-        data.ltpc?.ltp ||
-        data.ff?.marketFF?.ltpc?.ltp ||
-        data.ltp ||
-        option.ltp
+        data.ltpc?.ltp || data.ff?.marketFF?.ltpc?.ltp || data.ltp || option.ltp
       );
     }
   } catch (e) {
@@ -62,10 +63,36 @@ async function generateLeaderboard() {
       let positionsWithLive = [];
       for (const pos of participant.positions) {
         const liveLtp = Number(await getLiveLTP(pos.option));
+        console.log(liveLtp);
         positionsWithLive.push({
           ...pos,
           option: { ...pos.option, ltp: liveLtp },
         });
+        const instrumentKey = `NSE_FO|${pos.option.symbol}`;
+        const expiryStr =
+          typeof pos.option.expiry_date === "string"
+            ? pos.option.expiry_date
+            : pos.option.expiry_date?.toISOString?.() || "";
+        const expiryDateKey = expiryStr.split("T")[0];
+        const cached = await redisClient.get(
+          `option_chain:${instrumentKey}:${expiryDateKey}`
+        );
+        console.log(cached);
+        if (cached) {
+          const data = JSON.parse(cached);
+          console.log(data);
+        }
+        // Debug log for each position
+        console.log(
+          `[LEADERBOARD DEBUG] User: ${participant.user.username} | Symbol: ${
+            pos.option.symbol
+          } | Avg Buy: ${pos.average_entry_price} | LTP: ${liveLtp} | Qty: ${
+            pos.net_quantity
+          } | PnL: ${
+            (liveLtp - Number(pos.average_entry_price)).toFixed(2) *
+            pos.net_quantity
+          }`
+        );
       }
 
       // Calculate unrealized PnL (open positions)
@@ -78,7 +105,9 @@ async function generateLeaderboard() {
       // Calculate realized PnL from trades
       const realizedPnL = participant.trades.reduce((total, trade) => {
         const tradeValue = Number(trade.price) * Math.abs(trade.quantity);
-        return trade.action === "sell" ? total + tradeValue : total - tradeValue;
+        return trade.action === "sell"
+          ? total + tradeValue
+          : total - tradeValue;
       }, 0);
 
       // Portfolio value
@@ -86,7 +115,10 @@ async function generateLeaderboard() {
       const portfolioValue = virtualCash + unrealizedPnL;
       const initialCash = getInitialCash();
       const totalPnL = portfolioValue - initialCash;
-      const roi = initialCash > 0 ? ((portfolioValue - initialCash) / initialCash) * 100 : 0;
+      const roi =
+        initialCash > 0
+          ? ((portfolioValue - initialCash) / initialCash) * 100
+          : 0;
 
       leaderboard.push({
         userId: participant.user.id,
@@ -106,6 +138,29 @@ async function generateLeaderboard() {
     // 4. Sort by portfolio value (descending) and assign rank
     leaderboard.sort((a, b) => b.portfolioValue - a.portfolioValue);
     leaderboard.forEach((p, i) => (p.rank = i + 1));
+
+    // Store leaderboard in Redis for real-time API/streaming
+    try {
+      await redisClient.set(
+        `leaderboard:contest:${activeContest.id}`,
+        JSON.stringify({
+          snapshot_time: now,
+          leaderboard,
+        }),
+        "EX",
+        60 * 15 // expire in 15 minutes
+      );
+      // Emit to Socket.IO if available (optional, see below)
+      if (global.io) {
+        global.io.emit("leaderboardUpdate", {
+          contestId: activeContest.id,
+          snapshot_time: now,
+          leaderboard,
+        });
+      }
+    } catch (err) {
+      console.error("Error caching leaderboard in Redis:", err);
+    }
 
     // 5. Save to database (Leaderboard table)
     for (const p of leaderboard) {
@@ -154,6 +209,6 @@ async function generateLeaderboard() {
 }
 
 // Schedule every 15 minutes (adjust as needed)
-cron.schedule("*/2 * * * *", generateLeaderboard);
+cron.schedule("*/1 * * * *", generateLeaderboard);
 
 module.exports = {};

@@ -168,7 +168,7 @@ const OptionChain = () => {
     }
 
     // Create new socket with optimized settings
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 500,
@@ -521,7 +521,6 @@ const OptionChain = () => {
             )}
 
             {/* Compact Contest Info */}
-          
 
             {/* Option Chain */}
             {isLoading ? (
@@ -561,8 +560,11 @@ const OptionChain = () => {
 
           {/* Sidebar */}
           <div className="lg:col-span-3">
-            <div className="h-full text-white  overflow-y-auto bg-slate-900 over border-slate-800">
-               {activeContest && <PositionsPage only={true} />}
+            <div className="h-full text-white   overflow-y-auto bg-slate-900 over border-slate-800">
+              <div className=" p-4 mb-2 border">
+                {activeContest && <PositionsPage only={true} />}
+              </div>
+
               {activeContest && <PositionsPage options={true} />}
             </div>
           </div>

@@ -95,7 +95,7 @@ export function OptionDetailsDrawer({
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
