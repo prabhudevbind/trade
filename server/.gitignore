@@ -9,3 +9,6 @@ node_modules
 .env
 
 */expiry_dates_nifty_50.json
+env..
+../.env
+*.env

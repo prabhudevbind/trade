@@ -299,10 +299,11 @@ async function generateLeaderboard() {
       try {
         await prisma.leaderboard.upsert({
           where: {
-            contest_id_user_id: {
+            contest_id_user_id_snapshot_time: {
               contest_id: activeContest.id,
               user_id: p.userId,
-            },
+              snapshot_time: p.snapshot_time,
+            }
           },
           update: {
             rank: p.rank,
