@@ -1,10 +1,10 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
+
 const { authenticateToken, authorizeRoles } = require('../../utils/verify');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = require("../../utils/prisma");
 
 
 // Create a new user session

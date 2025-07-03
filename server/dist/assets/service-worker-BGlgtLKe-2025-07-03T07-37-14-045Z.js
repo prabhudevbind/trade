@@ -1,2 +1,2 @@
 self.addEventListener("push",function(t){if(t.data){const i=t.data.json();if(i.type==="check")return;t.waitUntil(self.registration.showNotification(i.title||"New Message",{body:i.message,icon:"/notification-icon.png",badge:"/notification-badge.png",data:i}))}});
-//# sourceMappingURL=service-worker-BGlgtLKe-2025-07-02T07-03-35-600Z.js.map
+//# sourceMappingURL=service-worker-BGlgtLKe-2025-07-03T07-37-14-045Z.js.map

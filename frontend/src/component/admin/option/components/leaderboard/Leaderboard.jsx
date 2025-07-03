@@ -1,382 +1,303 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useGetContestParticipantByIdQuery, useGetLeaderboardQuery } from '@/store/api/contest'
+import { Trophy, TrendingUp, TrendingDown, Users, RefreshCw, Crown, Medal, Award, Star, Zap } from 'lucide-react'
 
 export default function Leaderboard() {
   const userId = 1 // Replace with actual user_id from auth context/store
-  const [showMobileView, setShowMobileView] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
   
+  // Auto-refresh every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshKey(prev => prev + 1)
+    }, 30000)
+    
+    return () => clearInterval(interval)
+  }, [])
+
+  // Manual refresh function
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1)
+  }
+
   // Get contest participant data to find ongoing contest
-  const { 
-    data: contestParticipant, 
-    isLoading: participantLoading, 
-    error: participantError 
-  } = useGetContestParticipantByIdQuery(userId)
-  
-  // Find ongoing contest ID from participant data
+  const { data: contestParticipant, isLoading: participantLoading, refetch: refetchParticipant } = useGetContestParticipantByIdQuery(userId)
   const ongoingContest = contestParticipant?.find(
     participant => participant.contest?.status === 'ongoing'
   )
   const contestId = ongoingContest?.contest_id
-  
+
   // Get leaderboard data for the ongoing contest
-  const { 
-    data: leaderboardData, 
-    isLoading: leaderboardLoading, 
-    isError: leaderboardError, 
-    error: leaderboardErrorData 
-  } = useGetLeaderboardQuery(contestId, {
-    skip: !contestId // Skip query if no contest ID
+  const { data: leaderboardData, isLoading: leaderboardLoading, refetch: refetchLeaderboard } = useGetLeaderboardQuery(contestId, {
+    skip: !contestId
   })
-  
-  // Loading states
-  if (participantLoading) {
+
+  // Refetch data when refreshKey changes
+  useEffect(() => {
+    if (refreshKey > 0) {
+      refetchParticipant()
+      if (contestId) {
+        refetchLeaderboard()
+      }
+    }
+  }, [refreshKey, refetchParticipant, refetchLeaderboard, contestId])
+
+  if (participantLoading || leaderboardLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-32 mb-4"></div>
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 bg-gray-100 rounded-lg"></div>
-            ))}
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 flex flex-col items-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+            <span className="text-blue-700 font-semibold text-lg">Loading leaderboard...</span>
           </div>
         </div>
       </div>
     )
   }
-  
-  if (leaderboardLoading) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="animate-pulse">
-          <div className="h-6 bg-gray-200 rounded w-40 mb-2"></div>
-          <div className="h-4 bg-gray-100 rounded w-24 mb-6"></div>
-          <div className="space-y-3">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-16 bg-gray-100 rounded-lg"></div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  // Error states
-  if (participantError) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Data</h3>
-          <p className="text-gray-500">{participantError?.data?.error || "Failed to load participant data"}</p>
-        </div>
-      </div>
-    )
-  }
-  
-  if (leaderboardError) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Leaderboard</h3>
-          <p className="text-gray-500">{leaderboardErrorData?.data?.error || "Failed to load leaderboard"}</p>
-        </div>
-      </div>
-    )
-  }
-  
-  // No ongoing contest found
+
   if (!ongoingContest) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="text-center py-12">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-sm">
+            <Trophy className="mx-auto h-20 w-20 text-gray-400 mb-6" />
+            <h3 className="text-2xl font-bold text-gray-700 mb-3">No Active Contest</h3>
+            <p className="text-gray-500 leading-relaxed">There's no ongoing contest at the moment. Check back later!</p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Contest</h3>
-          <p className="text-gray-500">You're not participating in any ongoing contest.</p>
         </div>
       </div>
     )
   }
-  
-  // No leaderboard data
-  if (!leaderboardData || !leaderboardData.leaderboard || leaderboardData.leaderboard.length === 0) {
+
+  if (!leaderboardData || !leaderboardData.leaderboard) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border p-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Leaderboard</h2>
-          <p className="text-gray-600">{ongoingContest.contest?.name}</p>
-        </div>
-        <div className="text-center py-8">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
+      <div className="min-h-screen bg-gradient-to-br from-orange-50 to-red-50 p-4">
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 text-center max-w-sm">
+            <Users className="mx-auto h-20 w-20 text-orange-400 mb-6" />
+            <h3 className="text-2xl font-bold text-orange-700 mb-3">No Data Available</h3>
+            <p className="text-orange-600 leading-relaxed">Leaderboard data is not available yet.</p>
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Data Available</h3>
-          <p className="text-gray-500">Leaderboard data will appear once trading begins.</p>
         </div>
       </div>
     )
   }
-  
-  // Helper function to format currency
-  const formatCurrency = (value) => {
-    return `₹${Number(value).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+
+  // Profit/Loss summary
+  const profitCount = leaderboardData.leaderboard.filter(e => e.totalPnL > 0).length
+  const lossCount = leaderboardData.leaderboard.filter(e => e.totalPnL < 0).length
+  const breakEvenCount = leaderboardData.leaderboard.filter(e => e.totalPnL === 0).length
+  const totalParticipants = leaderboardData.leaderboard.length
+
+  // Get rank icon based on position
+  const getRankIcon = (rank) => {
+    switch (rank) {
+      case 1:
+        return <Crown className="h-6 w-6 text-yellow-500" />
+      case 2:
+        return <Medal className="h-6 w-6 text-gray-400" />
+      case 3:
+        return <Award className="h-6 w-6 text-amber-600" />
+      default:
+        return (
+          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+            <span className="text-gray-600 font-bold text-sm">#{rank}</span>
+          </div>
+        )
+    }
   }
-  
-  // Helper function to format P&L with color
-  const formatPnL = (value) => {
-    const numValue = Number(value)
-    const colorClass = numValue >= 0 ? 'text-emerald-600' : 'text-red-500'
-    const bgClass = numValue >= 0 ? 'bg-emerald-50' : 'bg-red-50'
-    const sign = numValue > 0 ? '+' : ''
-    return (
-      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${colorClass} ${bgClass}`}>
-        {sign}₹{Math.abs(numValue).toFixed(0)}
-      </span>
-    )
+
+  // Get rank styling for mobile cards
+  const getRankStyling = (rank) => {
+    switch (rank) {
+      case 1:
+        return "bg-gradient-to-r from-yellow-400 to-yellow-500 text-white shadow-xl border-2 border-yellow-300"
+      case 2:
+        return "bg-gradient-to-r from-gray-300 to-gray-400 text-white shadow-lg border-2 border-gray-200"
+      case 3:
+        return "bg-gradient-to-r from-amber-400 to-amber-500 text-white shadow-lg border-2 border-amber-300"
+      default:
+        return "bg-white shadow-md border border-gray-200 hover:shadow-lg"
+    }
   }
-  
-  // Helper function to format ROI with color
-  const formatROI = (value) => {
-    const numValue = Number(value)
-    const colorClass = numValue >= 0 ? 'text-emerald-600' : 'text-red-500'
-    const sign = numValue > 0 ? '+' : ''
-    return (
-      <span className={`font-medium ${colorClass}`}>
-        {sign}{numValue.toFixed(2)}%
-      </span>
-    )
-  }
-  
-  // Helper function to highlight current user's row
-  const isCurrentUser = (entry) => entry.user_id === userId
-  
-  // Get rank display
-  const getRankDisplay = (rank) => {
-    if (rank === 1) return { emoji: '🏆', color: 'text-yellow-600', bg: 'bg-yellow-50' }
-    if (rank === 2) return { emoji: '🥈', color: 'text-gray-600', bg: 'bg-gray-50' }
-    if (rank === 3) return { emoji: '🥉', color: 'text-orange-600', bg: 'bg-orange-50' }
-    return { emoji: '', color: 'text-gray-700', bg: 'bg-white' }
-  }
-  
-  // Mobile Card Component
-  const MobileCard = ({ entry, index }) => {
-    const rankDisplay = getRankDisplay(entry.rank)
-    const isUser = isCurrentUser(entry)
-    
-    return (
-      <div className={`p-4 rounded-xl border-2 transition-all ${
-        isUser ? 'border-blue-200 bg-blue-50' : 'border-gray-100 bg-white hover:border-gray-200'
-      }`}>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${rankDisplay.bg}`}>
-              {rankDisplay.emoji || (
-                <span className={`text-sm font-bold ${rankDisplay.color}`}>
-                  {entry.rank}
-                </span>
-              )}
+
+  return (
+    <div className="min-h-screen  mx-2 my-2 bg-gradient-to-br from-slate-50 to-blue-50">
+      {/* Mobile Header */}
+      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-4 py-6 text-white">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-yellow-400 rounded-full flex items-center justify-center">
+              <Trophy className="h-6 w-6 text-yellow-800" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                {entry.user?.img ? (
-                  <img 
-                    src={entry.user.img} 
-                    alt={entry.user.username}
-                    className="w-8 h-8 rounded-full"
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">
-                      {entry.user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                    </span>
-                  </div>
-                )}
-                <div>
-                  <h3 className={`font-medium ${isUser ? 'text-blue-700' : 'text-gray-900'}`}>
-                    {entry.user?.username || `User ${entry.user_id}`}
-                  </h3>
-                  {isUser && (
-                    <span className="text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
-                      You
-                    </span>
+              <h1 className="text-2xl font-bold">Leaderboard</h1>
+              <p className="text-blue-100 text-sm opacity-90">Live Rankings</p>
+            </div>
+          </div>
+          <button
+            onClick={handleRefresh}
+            className="w-10 h-10 bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-full flex items-center justify-center transition-all duration-200 active:scale-95"
+          >
+            <RefreshCw className="h-5 w-5" />
+          </button>
+        </div>
+        
+        {/* Contest Name */}
+        <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-4">
+          <p className="text-white font-medium text-center">{ongoingContest.contest?.name}</p>
+        </div>
+      </div>
+
+      {/* Mobile Stats Grid */}
+      <div className="px-4 py-6 bg-white/50 backdrop-blur-sm">
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Total</p>
+                <p className="text-2xl font-bold text-gray-900">{totalParticipants}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Profit</p>
+                <p className="text-2xl font-bold text-emerald-600">{profitCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                <TrendingDown className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Loss</p>
+                <p className="text-2xl font-bold text-red-500">{lossCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-2xl p-4 shadow-lg border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Break Even</p>
+                <p className="text-2xl font-bold text-gray-600">{breakEvenCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Leaderboard Cards */}
+      <div className="px-4 pb-6 space-y-3">
+        {leaderboardData.leaderboard.map((entry, index) => (
+          <div 
+            key={entry.userId} 
+            className={`${getRankStyling(entry.rank)} rounded-2xl p-4 transition-all duration-300 active:scale-[0.98]`}
+          >
+            <div className="flex items-center justify-between">
+              {/* Left side - Rank and User */}
+              <div className="flex items-center space-x-4">
+                {/* Rank */}
+                <div className="flex-shrink-0">
+                  {getRankIcon(entry.rank)}
+                </div>
+                
+                {/* User Info */}
+                <div className="flex items-center space-x-3">
+                  {entry.userImg ? (
+                    <img 
+                      src={entry.userImg} 
+                      alt={entry.userName} 
+                      className="w-12 h-12 rounded-full border-2 border-white shadow-lg" 
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-lg border-2 border-white">
+                      <span className="text-white text-lg font-bold">
+                        {entry.userName?.charAt(0)?.toUpperCase() || 'U'}
+                      </span>
+                    </div>
                   )}
+                  
+                  <div>
+                    <p className={`font-bold text-lg ${entry.rank <= 3 ? 'text-white' : 'text-gray-900'}`}>
+                      {entry.userName}
+                    </p>
+                    {entry.rank <= 3 && (
+                      <div className="flex items-center space-x-1">
+                        <Star className="h-3 w-3 text-white/80" />
+                        <p className="text-xs text-white/80 font-medium">
+                          {entry.rank === 1 ? 'Champion' : entry.rank === 2 ? 'Runner-up' : 'Third Place'}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Right side - P&L and ROI */}
+              <div className="text-right">
+                <div className="flex items-center space-x-1 justify-end mb-1">
+                  <span className={`font-bold text-lg ${
+                    entry.totalPnL > 0 
+                      ? entry.rank <= 3 ? 'text-white' : 'text-emerald-600'
+                      : entry.totalPnL < 0 
+                        ? entry.rank <= 3 ? 'text-white' : 'text-red-500'
+                        : entry.rank <= 3 ? 'text-white' : 'text-gray-500'
+                  }`}>
+                    ₹{Number(entry.totalPnL).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </span>
+                  {entry.totalPnL > 0 && <Zap className="h-4 w-4 text-current" />}
+                </div>
+                
+                <div className="flex items-center space-x-1 justify-end">
+                  <span className={`font-bold text-sm ${
+                    entry.roi > 0 
+                      ? entry.rank <= 3 ? 'text-white/90' : 'text-emerald-600'
+                      : entry.roi < 0 
+                        ? entry.rank <= 3 ? 'text-white/90' : 'text-red-500'
+                        : entry.rank <= 3 ? 'text-white/90' : 'text-gray-500'
+                  }`}>
+                    {entry.roi > 0 ? '+' : ''}{entry.roi.toFixed(2)}%
+                  </span>
+                  {entry.roi > 0 ? (
+                    <TrendingUp className="h-3 w-3 text-current" />
+                  ) : entry.roi < 0 ? (
+                    <TrendingDown className="h-3 w-3 text-current" />
+                  ) : null}
                 </div>
               </div>
             </div>
           </div>
-          <div className="text-right">
-           
-            <div className="text-sm">
-              {formatROI(entry.roi)}
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-3 text-sm">
-        
-          <div>
-            <div className="text-gray-500 text-xs">Realized P&L</div>
-            <div className="mt-1">{formatPnL(entry.realized_pnl)}</div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-  
-  return (
-    <div className="bg-white rounded-xl shadow-sm border">
-      {/* Header */}
-      <div className="p-6 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">Leaderboard</h2>
-            <p className="text-gray-600 mt-1">{ongoingContest.contest?.name}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 rounded-full ${
-                ongoingContest.contest?.status === 'ongoing' ? 'bg-green-500' : 'bg-gray-400'
-              }`}></div>
-              <span className="text-sm text-gray-600 capitalize font-medium">
-                {ongoingContest.contest?.status}
-              </span>
-            </div>
-            {/* View Toggle for mobile */}
-            <div className="sm:hidden">
-              <button
-                onClick={() => setShowMobileView(!showMobileView)}
-                className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Mobile View */}
-      <div className="sm:hidden p-4 space-y-3">
-        {leaderboardData.leaderboard.map((entry, index) => (
-          <MobileCard key={entry.id} entry={entry} index={index} />
         ))}
       </div>
-      
-      {/* Desktop View */}
-      <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50">
-              <th className="text-left py-4 px-6 font-semibold text-gray-700">Rank</th>
-              <th className="text-left py-4 px-6 font-semibold text-gray-700">User</th>
-              <th className="text-right py-4 px-6 font-semibold text-gray-700">Portfolio</th>
-              <th className="text-right py-4 px-6 font-semibold text-gray-700">Total P&L</th>
-              <th className="text-right py-4 px-6 font-semibold text-gray-700">Realized P&L</th>
-              <th className="text-right py-4 px-6 font-semibold text-gray-700">ROI</th>
-            </tr>
-          </thead>
-          <tbody>
-            {leaderboardData.leaderboard.map((entry, index) => {
-              const rankDisplay = getRankDisplay(entry.rank)
-              const isUser = isCurrentUser(entry)
-              
-              return (
-                <tr 
-                  key={entry.id} 
-                  className={`border-b border-gray-50 hover:bg-gray-25 transition-colors ${
-                    isUser ? 'bg-blue-50 hover:bg-blue-100' : ''
-                  }`}
-                >
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${rankDisplay.bg}`}>
-                        {rankDisplay.emoji || (
-                          <span className={`text-sm font-bold ${rankDisplay.color}`}>
-                            {entry.rank}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-6">
-                    <div className="flex items-center gap-3">
-                      {entry.user?.img ? (
-                        <img 
-                          src={entry.user.img} 
-                          alt={entry.user.username}
-                          className="w-10 h-10 rounded-full"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            {entry.user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                          </span>
-                        </div>
-                      )}
-                      <div>
-                        <div className={`font-medium ${isUser ? 'text-blue-700' : 'text-gray-900'}`}>
-                          {entry.user?.username || `User ${entry.user_id}`}
-                        </div>
-                        {isUser && (
-                          <span className="text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
-                            You
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                
-                  <td className="py-4 px-6 text-right">
-                    {formatPnL(entry.total_pnl)}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    {formatPnL(entry.realized_pnl)}
-                  </td>
-                  <td className="py-4 px-6 text-right">
-                    <div className="font-semibold">
-                      {formatROI(entry.roi)}
-                    </div>
-                  </td>
-                </tr>
-              )
+
+      {/* Mobile Footer */}
+      <div className="bg-white/80 backdrop-blur-sm px-4 py-4 border-t border-gray-200">
+        <div className="text-center">
+          <p className="text-sm text-gray-600 font-medium mb-1">
+            Last updated: {new Date().toLocaleTimeString('en-IN', { 
+              hour: '2-digit', 
+              minute: '2-digit' 
             })}
-          </tbody>
-        </table>
-      </div>
-      
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-100 bg-gray-50">
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 text-sm text-gray-500">
-          <div>
-            Last updated: {new Date(leaderboardData.snapshot_time).toLocaleString('en-IN', {
-              day: '2-digit',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </div>
-          <div className="flex items-center gap-1">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-            </svg>
-            {leaderboardData.leaderboard.length} participants
-          </div>
+          </p>
+          <p className="text-xs text-gray-500">
+            Auto-refresh every 30 seconds
+          </p>
         </div>
       </div>
     </div>

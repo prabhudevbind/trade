@@ -1,10 +1,9 @@
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require("../../utils/prisma");;
 const { body, param, validationResult } = require('express-validator');
 const {  authorizeRoles } = require('../../utils/verify');
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // Validation middleware
 const validateSmtpDetails = [

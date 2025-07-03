@@ -1048,7 +1048,7 @@ server.listen(PORT, async () => {
     // console.log("✅ All services initialized successfully");
 
     // Start memory monitoring
-    setInterval(logMemoryUsage, 5 * 60 * 1000); // Log every 5 minutes
+    setInterval(logMemoryUsage, 1 * 60 * 1000); // Log every 5 minutes
   } catch (error) {
     console.error("❌ Failed to initialize services:", error);
   }
@@ -1131,6 +1131,20 @@ app.get("/api/v1/option-live/:instrumentKey", async (req, res) => {
         error: "Internal server error",
         details: err.message,
       });
+  }
+});
+
+// Leaderboard real-time data endpoint
+app.get("/api/v1/leaderboard/contest/:contestId/realtime", async (req, res) => {
+  try {
+    const contestId = req.params.contestId;
+    const cached = await redisClient.get(`leaderboard:contest:${contestId}`);
+    if (!cached) {
+      return res.status(404).json({ error: "No leaderboard data found" });
+    }
+    res.json(JSON.parse(cached));
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch leaderboard", details: err.message });
   }
 });
 

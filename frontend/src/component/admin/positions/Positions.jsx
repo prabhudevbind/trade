@@ -212,8 +212,8 @@ export default function PositionsPage({
     (sum, pos) => sum + Number(pos.option.ltp) * pos.net_quantity,
     0
   );
-  const portfolioValue = virtualCash + currentPositionsValue;
-  const totalPnL = portfolioValue - initialCash;
+  const portfolioValue = currentPositionsValue;
+  const totalPnL = virtualCash + portfolioValue - initialCash;
 
   // UI rendering
   if (isLoading) {
@@ -238,9 +238,7 @@ export default function PositionsPage({
               <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trophy className="h-8 w-8 text-blue-600" />
               </div>
-              <h2 className="text-xl font-semibold text-gray-900 mb-2">
-                No Active Contest
-              </h2>
+              <h2 className="text-xl font-semibold  mb-2">No Active Contest</h2>
               <p className="text-gray-600 text-sm mb-6">
                 Join a contest to start trading and see your positions here.
               </p>
@@ -445,64 +443,34 @@ export default function PositionsPage({
       );
     }
 
-    const initialCash = 100000;
-    const trades = activeTradesData.trades || [];
-    const totalBuyValue = trades
-      .filter((t) => t.action === "buy")
-      .reduce((sum, t) => sum + t.price * t.quantity, 0);
-    const totalSellValue = trades
-      .filter((t) => t.action === "sell")
-      .reduce((sum, t) => sum + t.price * t.quantity, 0);
-    const virtualCash = initialCash - totalBuyValue + totalSellValue;
-    const activePositions =
-      activeTradesData.positions?.filter((pos) => pos.net_quantity > 0) || [];
-    const currentPositionsValue = activePositions.reduce(
-      (sum, pos) => sum + Number(pos.option.ltp) * pos.net_quantity,
-      0
-    );
-    const portfolioValue = virtualCash + currentPositionsValue;
-    const totalPnL = portfolioValue - initialCash;
-    const maxTrades = activeTradesData.contest?.maxTrade || 0;
-
     return (
-      <div className=" mb-2 rounded-lg border shadow-sm p-2 w-full max-w-sm mx-auto">
-        {/* Contest Name */}
-        <div className="font-medium pl-4text-sm truncate mb-3">
-          {activeTradesData.contest?.name}
+      <div className="grid grid-cols-3  border-red-800 gap-4">
+        <div className="text-center">
+          <div className="text-xs text-gray-500 mb-1">Virtual Cash</div>
+          <div className="font-semibold ">
+            ₹
+            {virtualCash.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
+          </div>
         </div>
-
-        {/* Stats Grid */}
-        <div className="space-y-2 grid grid-cols-3">
-          {/* Balance */}
-          <div className="flex flex-col justify-between items-center">
-            <span className="text-xs ">Balance</span>
-
-            <span className="font-semibold text-sm">
-              ₹
-              {virtualCash.toLocaleString(undefined, {
-                maximumFractionDigits: 0,
-              })}
-            </span>
+        <div className="text-center">
+          <div className="text-xs text-gray-500 mb-1">Portfolio Value</div>
+          <div className="font-semibold ">
+            ₹
+            {portfolioValue.toLocaleString(undefined, {
+              maximumFractionDigits: 2,
+            })}
           </div>
-
-          {/* P&L */}
-          <div className="flex  flex-col justify-between items-center">
-            <span className="text-xs ">P&L</span>
-            <span
-              className={`font-semibold text-sm ${
-                totalPnL >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {totalPnL >= 0 ? "+" : ""}₹{Math.abs(totalPnL).toFixed(0)}
-            </span>
-          </div>
-
-          {/* Trades */}
-          <div className="flex  flex-col justify-between items-center">
-            <span className="text-xs ">Trades</span>
-            <span className="font-semibold text-sm ">
-              {trades.length}/{maxTrades}
-            </span>
+        </div>
+        <div className="text-center">
+          <div className="text-xs mb-1">Total P&L</div>
+          <div
+            className={`font-semibold ${
+              totalPnL >= 0 ? "text-green-600" : "text-red-600"
+            }`}
+          >
+            {totalPnL >= 0 ? "+" : ""}₹{totalPnL.toFixed(2)}
           </div>
         </div>
       </div>

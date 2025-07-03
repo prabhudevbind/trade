@@ -1,10 +1,27 @@
 const prisma = require("../utils/prisma");
+const Redis = require("ioredis");
+
+const redisClient = new Redis({
+  host: process.env.REDIS_HOST || "127.0.0.1",
+  port: process.env.REDIS_PORT || 6379,
+  password: process.env.REDIS_PASSWORD || undefined,
+  db: process.env.REDIS_DB || 0,
+  maxRetriesPerRequest: null,
+});
+
+const CACHE_TTL = 10; // seconds
 
 const leaderboardController = {
   // Get leaderboard for a contest (latest snapshot)
   async getLeaderboardByContest(req, res) {
     try {
       const { contestId } = req.params;
+      const cacheKey = `leaderboard:contest:${contestId}`;
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+
       // Get latest snapshot_time for this contest
       const latest = await prisma.leaderboard.findFirst({
         where: { contest_id: parseInt(contestId) },
@@ -24,7 +41,9 @@ const leaderboardController = {
         },
         orderBy: { rank: "asc" },
       });
-      res.json({ snapshot_time: latest.snapshot_time, leaderboard: entries });
+      const result = { snapshot_time: latest.snapshot_time, leaderboard: entries };
+      await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch leaderboard", details: error.message });
     }
@@ -34,6 +53,12 @@ const leaderboardController = {
   async getLeaderboardHistory(req, res) {
     try {
       const { contestId } = req.params;
+      const cacheKey = `leaderboard:history:${contestId}`;
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+
       const history = await prisma.leaderboard.findMany({
         where: { contest_id: parseInt(contestId) },
         orderBy: [{ snapshot_time: "desc" }, { rank: "asc" }],
@@ -41,7 +66,9 @@ const leaderboardController = {
           user: { select: { id: true, username: true, img: true, email: true } },
         },
       });
-      res.json({ history });
+      const result = { history };
+      await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch leaderboard history", details: error.message });
     }
@@ -51,6 +78,12 @@ const leaderboardController = {
   async getUserLeaderboard(req, res) {
     try {
       const userId = req.user?.userId || req.params.userId;
+      const cacheKey = `leaderboard:user:${userId}`;
+      const cached = await redisClient.get(cacheKey);
+      if (cached) {
+        return res.json(JSON.parse(cached));
+      }
+
       const entries = await prisma.leaderboard.findMany({
         where: { user_id: parseInt(userId) },
         orderBy: [{ snapshot_time: "desc" }, { contest_id: "desc" }],
@@ -58,7 +91,9 @@ const leaderboardController = {
           contest: { select: { id: true, name: true, start_time: true, end_time: true } },
         },
       });
-      res.json({ leaderboard: entries });
+      const result = { leaderboard: entries };
+      await redisClient.setex(cacheKey, CACHE_TTL, JSON.stringify(result));
+      res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch user leaderboard", details: error.message });
     }
