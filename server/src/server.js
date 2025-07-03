@@ -1048,7 +1048,7 @@ server.listen(PORT, async () => {
     // console.log("✅ All services initialized successfully");
 
     // Start memory monitoring
-    setInterval(logMemoryUsage, 5 * 60 * 1000); // Log every 5 minutes
+    setInterval(logMemoryUsage, 1 * 60 * 1000); // Log every 5 minutes
   } catch (error) {
     console.error("❌ Failed to initialize services:", error);
   }
