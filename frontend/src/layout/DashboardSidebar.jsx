@@ -140,7 +140,7 @@ const navigation = [
         permission: "view-my-contests",
       },
       {
-        title: "Refer a Friend",
+        title: "Refer & earn",
         icon: Medal,
         url: "/refer",
         permission: "refer-friend",
