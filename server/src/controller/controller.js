@@ -235,122 +235,123 @@ const contestController = {
   },
 
   // Get a single contest by ID
-  async getContestById(req, res) {
-    try {
-      const { id } = req.params;
-      const userId = parseInt(req.user.userId);
+ async getContestById(req, res) {
+  try {
+    let { id } = req.params;
+    const userId = parseInt(req.user.userId);
 
-      const contest = await prisma.contest.findUnique({
+    let contest;
+
+    if (!id || id === "undefined" || id === "null") {
+      // No contest id provided: find user's ongoing contest or any ongoing contest
+      contest = await prisma.contest.findFirst({
         where: {
-          id: parseInt(id),
+          status: "ongoing",
+          OR: [
+            { contestParticipants: { some: { user_id: userId } } },
+            {}, // fallback to any ongoing contest if user not joined
+          ],
         },
         include: {
           contestParticipants: {
-            where: {
-              user_id: userId,
-            },
+            where: { user_id: userId },
             include: {
-              user: {
-                select: {
-                  firstName: true,
-                  lastName: true,
-                  email: true,
-                },
-              },
-              positions: {
-                include: {
-                  option: true,
-                },
-              },
+              user: { select: { firstName: true, lastName: true, email: true } },
+              positions: { include: { option: true } },
               trades: {
-                include: {
-                  option: true,
-                },
-                orderBy: {
-                  timestamp: "desc",
-                },
+                include: { option: true },
+                orderBy: { timestamp: "desc" },
               },
             },
           },
-          contestWinners: {
-            where: {
-              user_id: userId,
-            },
-          },
-          _count: {
-            select: {
-              contestParticipants: true,
-            },
-          },
+          contestWinners: { where: { user_id: userId } },
+          _count: { select: { contestParticipants: true } },
         },
       });
-
-      if (!contest) {
-        return res.status(404).json({ error: "Contest not found" });
-      }
-
-      // Format response
-      const formattedContest = {
-        id: contest.id,
-        name: contest.name,
-        startTime: contest.start_time,
-        endTime: contest.end_time,
-        entryFee: parseFloat(contest.entry_fee),
-        maxTrade: contest.maxTrade,
-        status: contest.status,
-        tradingInstrument: contest.trading_instrument,
-        totalParticipants: contest._count.contestParticipants,
-        participation: contest.contestParticipants[0]
-          ? {
-              id: contest.contestParticipants[0].id,
-              virtualCash: parseFloat(
-                contest.contestParticipants[0].virtual_cash
-              ),
-              trades_taken: contest.contestParticipants[0].trades.length,
-              positions: contest.contestParticipants[0].positions.map(
-                (pos) => ({
-                  id: pos.id,
-                  symbol: pos.option.symbol,
-                  strikePrice: parseFloat(pos.option.strike_price),
-                  optionType: pos.option.option_type,
-                  quantity: pos.net_quantity,
-                  averagePrice: parseFloat(pos.average_entry_price),
-                  currentPrice: parseFloat(pos.option.ltp),
-                  pnl:
-                    (parseFloat(pos.option.ltp) -
-                      parseFloat(pos.average_entry_price)) *
-                    pos.net_quantity,
-                })
-              ),
-              recentTrades: contest.contestParticipants[0].trades
-                .slice(0, 5)
-                .map((trade) => ({
-                  id: trade.id,
-                  timestamp: trade.timestamp,
-                  action: trade.action,
-                  symbol: trade.option.symbol,
-                  strikePrice: parseFloat(trade.option.strike_price),
-                  quantity: trade.quantity,
-                  price: parseFloat(trade.price),
-                })),
-            }
-          : null,
-        winning: contest.contestWinners[0] || null,
-      };
-
-      res.status(200).json({
-        success: true,
-        contest: formattedContest,
-      });
-    } catch (error) {
-      console.error("Error fetching contest:", error);
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch contest",
-        details: error.message,
+    } else {
+      // Contest id provided
+      contest = await prisma.contest.findUnique({
+        where: { id: parseInt(id) },
+        include: {
+          contestParticipants: {
+            where: { user_id: userId },
+            include: {
+              user: { select: { firstName: true, lastName: true, email: true } },
+              positions: { include: { option: true } },
+              trades: {
+                include: { option: true },
+                orderBy: { timestamp: "desc" },
+              },
+            },
+          },
+          contestWinners: { where: { user_id: userId } },
+          _count: { select: { contestParticipants: true } },
+        },
       });
     }
-  },
+
+    if (!contest) {
+      return res.status(404).json({ error: "Contest not found" });
+    }
+
+    // ...rest of your formatting and response code...
+    const formattedContest = {
+      id: contest.id,
+      name: contest.name,
+      startTime: contest.start_time,
+      endTime: contest.end_time,
+      entryFee: parseFloat(contest.entry_fee),
+      maxTrade: contest.maxTrade,
+      status: contest.status,
+      tradingInstrument: contest.trading_instrument,
+      totalParticipants: contest._count.contestParticipants,
+      participation: contest.contestParticipants[0]
+        ? {
+            id: contest.contestParticipants[0].id,
+            virtualCash: parseFloat(contest.contestParticipants[0].virtual_cash),
+            trades_taken: contest.contestParticipants[0].trades.length,
+            positions: contest.contestParticipants[0].positions.map((pos) => ({
+              id: pos.id,
+              symbol: pos.option.symbol,
+              strikePrice: parseFloat(pos.option.strike_price),
+              optionType: pos.option.option_type,
+              quantity: pos.net_quantity,
+              averagePrice: parseFloat(pos.average_entry_price),
+              currentPrice: parseFloat(pos.option.ltp),
+              pnl:
+                (parseFloat(pos.option.ltp) -
+                  parseFloat(pos.average_entry_price)) *
+                pos.net_quantity,
+            })),
+            recentTrades: contest.contestParticipants[0].trades
+              .slice(0, 5)
+              .map((trade) => ({
+                id: trade.id,
+                timestamp: trade.timestamp,
+                action: trade.action,
+                symbol: trade.option.symbol,
+                strikePrice: parseFloat(trade.option.strike_price),
+                quantity: trade.quantity,
+                price: parseFloat(trade.price),
+              })),
+          }
+        : null,
+      winning: contest.contestWinners[0] || null,
+    };
+
+    res.status(200).json({
+      success: true,
+      contest: formattedContest,
+    });
+  } catch (error) {
+    console.error("Error fetching contest:", error);
+    res.status(500).json({
+      success: false,
+      error: "Failed to fetch contest",
+      details: error.message,
+    });
+  }
+},
 
   // Update a contest
   async updateContest(req, res) {

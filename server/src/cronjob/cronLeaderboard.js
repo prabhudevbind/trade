@@ -348,7 +348,7 @@ async function generateLeaderboard() {
 }
 
 // Enhanced cron scheduling with error handling
-cron.schedule("*/2 * * * *", async () => {
+cron.schedule("*/30 * * * *", async () => {
   try {
     console.log(`[LEADERBOARD] Starting scheduled leaderboard generation at ${new Date().toISOString()}`);
     await generateLeaderboard();

@@ -32,6 +32,7 @@ model User {
   updatedAt            DateTime             @updatedAt
   img                  String?              @db.VarChar(255)
   amount               Int?
+  referralCode         String?
   amounts             Decimal?             @default(0.00) @db.Decimal(15, 2)
   roleId               Int
   role                 Role                 @relation(fields: [roleId], references: [id])

@@ -210,7 +210,7 @@ export function MobileOptionChain({
         ref={listRef}
       >
         {/* Header with Toggle */}
-        <div className="sticky top-0 bg-slate-800 z-20 border-b border-slate-700 p-4">
+        <div className="sticky top-0 bg-slate-800  mb z-20 border-b border-slate-700 p-4">
           {/* View Toggle */}
           <div className="flex items-center justify-start gap-0 mb-4">
             <Button
@@ -246,28 +246,23 @@ export function MobileOptionChain({
             <div className="grid grid-cols-5 text-xs font-medium text-slate-400 gap-2">
               <div className="text-center">
                 Call OI
-                <br />
-                (Chg %)
+                
               </div>
               <div className="text-center">
                 Call LTP
-                <br />
-                (Chg %)
+               
               </div>
               <div className="text-center">
                 Strike
-                <br />
-                Price
+            
               </div>
               <div className="text-center">
                 Put LTP
-                <br />
-                (Chg %)
+               
               </div>
               <div className="text-center">
                 Put OI
-                <br />
-                (Chg %)
+               
               </div>
             </div>
           ) : (
@@ -293,7 +288,7 @@ export function MobileOptionChain({
         )}
 
         {/* Options List */}
-        <div className="overflow-y-auto max-h-[calc(100vh-12rem)]">
+        <div className="overflow-y-auto hidescrollbar max-h-[calc(100vh-12rem)] mb-8">
           {data?.option_chain.map((strikeData) => {
             const isATM = strikeData.strike_price === atmStrike
             return (

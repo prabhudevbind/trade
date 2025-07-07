@@ -35,7 +35,7 @@ import PositionsPage from "../positions/Positions";
 
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
-  const [selectedExpiry, setSelectedExpiry] = useState("2025-06-12");
+  const [selectedExpiry, setSelectedExpiry] = useState(null);
   const { data: activeContest, isLoading: activeContestLoading } =
     useGetActiveContestForUserQuery();
   const { data: user } = useGetUserByIdQuery();
@@ -366,7 +366,7 @@ const OptionChain = () => {
           {/* Underlying Info */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-4">
-              <h1 className="text-lg text-nowrap font-bold text-white">
+              <h1 className=" text-base text-nowrap font-bold text-white">
                 NSE:{" "}
                 {selectedIndex.includes("Nifty Bank")
                   ? "Nifty Bank"
@@ -375,7 +375,7 @@ const OptionChain = () => {
                   : "Nifty Fin Service"}
               </h1>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-white">
+                <span className="text-base font-bold text-white">
                   {spotPrice.toLocaleString()}
                 </span>
                 <div
@@ -388,17 +388,11 @@ const OptionChain = () => {
                   ) : (
                     <TrendingDown className="w-4 h-4" />
                   )}
-                  <span className="font-medium">
+                  <span className="font-medium text-xs">
                     {priceChange >= 0 ? "+" : ""}
                     {priceChange.toFixed(2)} ({priceChangePercent.toFixed(2)}%)
                   </span>
                 </div>
-                <Badge
-                  variant="outline"
-                  className="bg-green-600 text-white border-green-500"
-                >
-                  LIVE
-                </Badge>
               </div>
             </div>
 
@@ -407,9 +401,7 @@ const OptionChain = () => {
               <div
                 className={`w-2 h-2 rounded-full ${getConnectionStatusColor()}`}
               ></div>
-              <span className="text-xs text-slate-400">
-                Updates: {updateCountRef.current}
-              </span>
+
               {lastUpdated && (
                 <span className="text-xs text-slate-500">
                   {lastUpdated.toLocaleTimeString()}
@@ -419,10 +411,61 @@ const OptionChain = () => {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex gap-6">
-            <button className="text-blue-400 border-b-2 border-blue-400 pb-2 font-medium">
-              Option Chain
-            </button>
+          <div className="flex gap-6 items-center justify-start">
+            {/* Navigation Tabs */}
+            <div className="flex gap-6">
+              <button className="text-blue-400 border-b-2 border-blue-400 pb-2 font-medium bg-transparent">
+                Option Chain
+              </button>
+            </div>
+            {/* Dropdowns on right side */}
+            <div className="flex gap-2">
+              <Select value={selectedExpiry} onValueChange={setSelectedExpiry}>
+                <SelectTrigger className="w-[120px] bg-transparent border-0 shadow-none text-white px-2 focus:ring-0 focus:outline-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-0 shadow-lg">
+                  {expiryDates.map((date) => (
+                    <SelectItem
+                      key={date}
+                      value={date}
+                      className="text-white hover:bg-slate-700"
+                    >
+                      {new Date(date).toLocaleDateString("en-IN", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={selectedIndex} onValueChange={setSelectedIndex}>
+                <SelectTrigger className="w-[120px] bg-transparent border-0 shadow-none text-white px-2 focus:ring-0 focus:outline-none">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-0 shadow-lg">
+                  <SelectItem
+                    value="NSE_INDEX|Nifty Bank"
+                    className="text-white hover:bg-slate-700"
+                  >
+                    BANKNIFTY
+                  </SelectItem>
+                  <SelectItem
+                    value="NSE_INDEX|Nifty 50"
+                    className="text-white hover:bg-slate-700"
+                  >
+                    NIFTY
+                  </SelectItem>
+                  <SelectItem
+                    value="NSE_INDEX|Nifty Fin Service"
+                    className="text-white hover:bg-slate-700"
+                  >
+                    FINNIFTY
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </div>
       </div>
@@ -431,68 +474,6 @@ const OptionChain = () => {
         <div className="grid grid-cols-1 lg:grid-cols-8 gap-6">
           <div className="lg:col-span-5">
             {/* Controls */}
-            <div className="bg-slate-900 rounded-lg p-4 mb-6 border border-slate-800">
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                <div className="flex sm:flex-row gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">Exp:</span>
-                    <Select
-                      value={selectedExpiry}
-                      onValueChange={setSelectedExpiry}
-                    >
-                      <SelectTrigger className="w-[140px] bg-slate-800 border-slate-700 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
-                        {expiryDates.map((date) => (
-                          <SelectItem
-                            key={date}
-                            value={date}
-                            className="text-white hover:bg-slate-700"
-                          >
-                            {new Date(date).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Select
-                      value={selectedIndex}
-                      onValueChange={setSelectedIndex}
-                    >
-                      <SelectTrigger className="w-[160px] bg-slate-800 border-slate-700 text-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent className="bg-slate-800 border-slate-700">
-                        <SelectItem
-                          value="NSE_INDEX|Nifty Bank"
-                          className="text-white hover:bg-slate-700"
-                        >
-                          BANKNIFTY
-                        </SelectItem>
-                        <SelectItem
-                          value="NSE_INDEX|Nifty 50"
-                          className="text-white hover:bg-slate-700"
-                        >
-                          NIFTY
-                        </SelectItem>
-                        <SelectItem
-                          value="NSE_INDEX|Nifty Fin Service"
-                          className="text-white hover:bg-slate-700"
-                        >
-                          FINNIFTY
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            </div>
 
             {/* Contest Participation Alert */}
             {showParticipationPrompt && (

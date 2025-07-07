@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const prisma = require("../utils/prisma");
 // cron.schedule("*/5 * * * *",
 // --- CRON JOB: Reset all ongoing contests every night at 12:00 AM IST ---
-cron.schedule("0 0 * * *",
+cron.schedule("*/1 * * * *",
   async () => {
     try {
       // Fetch all ongoing contests
@@ -33,17 +33,31 @@ cron.schedule("0 0 * * *",
             where: { contest_id: contestId },
           });
         }
-        // Set start_time to 9:00 AM and end_time to 3:30 PM for tomorrow (IST)
+        // Set start_time to 9:00 AM IST and end_time to 3:30 PM IST for tomorrow
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(9, 0, 0, 0); // 9:00 AM
-        const endOfDay = new Date(tomorrow);
-        endOfDay.setHours(15, 30, 0, 0); // 3:30 PM
+
+        // 9:00 AM IST = 3:30 AM UTC
+        const startTimeUTC = new Date(Date.UTC(
+          tomorrow.getFullYear(),
+          tomorrow.getMonth(),
+          tomorrow.getDate(),
+          3, 30, 0, 0
+        ));
+
+        // 3:30 PM IST = 10:00 AM UTC
+        const endTimeUTC = new Date(Date.UTC(
+          tomorrow.getFullYear(),
+          tomorrow.getMonth(),
+          tomorrow.getDate(),
+          10, 0, 0, 0
+        ));
+
         await prisma.contest.update({
           where: { id: contestId },
           data: {
-            start_time: tomorrow,
-            end_time: endOfDay,
+            start_time: startTimeUTC,
+            end_time: endTimeUTC,
             status: "ongoing",
             updated_at: new Date(),
           },

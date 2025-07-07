@@ -30,6 +30,7 @@ import WithDraw from "@/component/admin/withdrawals/WithDraw";
 import Price from "@/component/admin/price/Price";
 import ContestPrizeDistribution from "@/component/admin/price/Price";
 import Enci from "@/component/admin/Enci/Enci";
+import Refer from "@/component/refer/Refer";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -153,6 +154,14 @@ export const createAppRouter = (isAuthenticated) =>
         },
         {
           path: "option-chain/:id",
+          element: <OptionChart />,
+        },
+        {
+          path:"refer",
+          element:<Refer/>
+        },
+         {
+          path: "option-chain",
           element: <OptionChart />,
         },
         {

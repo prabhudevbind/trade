@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useGetContestParticipantByIdQuery, useGetLeaderboardQuery } from '@/store/api/contest'
+import { useGetContestParticipantByIdQuery, useGetLeaderboardQuery, useGetPrizeDistributionsQuery } from '@/store/api/contest'
 import { Trophy, TrendingUp, TrendingDown, Users, RefreshCw, Crown, Medal, Award, Star, Zap } from 'lucide-react'
 
 export default function Leaderboard() {
@@ -31,6 +31,9 @@ export default function Leaderboard() {
   const { data: leaderboardData, isLoading: leaderboardLoading, refetch: refetchLeaderboard } = useGetLeaderboardQuery(contestId, {
     skip: !contestId
   })
+
+  // Get prize distributions for the ongoing contest
+  const { data: prizeDistributions, isLoading: prizeLoading } = useGetPrizeDistributionsQuery(contestId, { skip: !contestId })
 
   // Refetch data when refreshKey changes
   useEffect(() => {
@@ -284,6 +287,25 @@ export default function Leaderboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Prize Distribution Section */}
+      <div className="px-4 pb-6">
+        <h2 className="text-lg font-bold text-blue-700 mb-2">Prize Distribution</h2>
+        {prizeLoading ? (
+          <div className="text-gray-500 text-sm">Loading prizes...</div>
+        ) : prizeDistributions && prizeDistributions.length > 0 ? (
+          <ul className="space-y-2">
+            {prizeDistributions.map(prize => (
+              <li key={prize.id} className="bg-blue-50 rounded-lg p-3 flex items-center justify-between">
+                <span className="font-medium text-blue-900">Rank {prize.fromRank}{prize.fromRank !== prize.toRank ? ` - ${prize.toRank}` : ''}</span>
+                <span className="font-bold text-green-700">₹{Number(prize.amount).toLocaleString('en-IN')}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-gray-500 text-sm">No prize distribution set for this contest.</div>
+        )}
       </div>
 
       {/* Mobile Footer */}
