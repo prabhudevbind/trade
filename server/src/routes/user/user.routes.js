@@ -192,7 +192,7 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { firstName, lastName, email, password } = req.body;
+    const { firstName, lastName, email, password, referralCode } = req.body;
 
     // Check if email already exispts
     const existingEmail = await prisma.user.findUnique({
@@ -220,6 +220,7 @@ router.post('/register', async (req, res) => {
         email,
         password: hashedPassword,
         firstName,
+        referralCode,
         lastName,
         roleId: 3, // Default user role
         isActive: true,
@@ -241,6 +242,30 @@ router.post('/register', async (req, res) => {
         createdAt: true
       }
     });
+
+    // Referral logic
+    if (referralCode && referralCode.length >= 4) {
+      // Parse referralCode: first part is referrer_id, last 3 chars are email prefix
+      const referrerId = parseInt(referralCode.slice(0, referralCode.length - 3));
+      const referrerEmailPrefix = referralCode.slice(-3);
+      if (!isNaN(referrerId)) {
+        // Find referrer user with id and email prefix
+        const referrer = await prisma.user.findUnique({
+          where: { id: referrerId },
+          select: { id: true, email: true }
+        });
+        if (referrer && referrer.email && referrer.email.slice(0, 3) === referrerEmailPrefix) {
+          // Create Referral record
+          await prisma.referral.create({
+            data: {
+              referrer_id: referrer.id,
+              referred_id: newUser.id,
+              reward_amount: 50,
+            }
+          });
+        }
+      }
+    }
 
     // Log user creation
     await prisma.userActivityLog.create({
@@ -395,6 +420,8 @@ router.get('/',
           amount:true,
           createdAt: true,
           img: true,
+          referralsMade:true,
+          referralsReceived:true,
           role: {
             select: {
               id: true,

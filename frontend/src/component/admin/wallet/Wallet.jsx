@@ -414,7 +414,7 @@ const navigate=useNavigate();
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
+              <div className="space-y-6 ">
                 {/* Balance Display */}
                 <div className="flex items-center justify-between p-4 bg-primary/5 rounded-lg">
                   <div className="space-y-1">
@@ -512,10 +512,10 @@ const navigate=useNavigate();
 
         {/* Warning for unverified payment */}
         {hasUnverifiedPayment && (
-          <Alert variant="info" className="mb-4">
+          <Alert variant="info" className="mb-4 mx-2 w-[90vw]">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Information</AlertTitle>
-            <AlertDescription>
+            <AlertDescription className="text-wrap">
               Your payment could not be verified. Your account may be blocked if
               false payments are detected.
             </AlertDescription>

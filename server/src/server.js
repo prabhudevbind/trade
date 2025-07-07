@@ -17,6 +17,7 @@ const redis = require("redis");
 require("./cronjob/cronExpiryDates");
 require("./cronjob/cronContestReset");
 require("./cronjob/cronLeaderboard");
+require("./cronjob/cronrefer");
 // --- REDIS CLIENT SETUP ---
 const Redis = require("ioredis");
 const redisClient = new Redis({

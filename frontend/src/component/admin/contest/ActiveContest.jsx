@@ -517,7 +517,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
   }
 
   return (
-    <Card className="overflow-hidden transition-all hover:shadow-lg border-l-4 w-full border-l-primary">
+    <Card className="overflow-hidden transition-all  my-4 w-full ">
       <div className="flex flex-col lg:flex-row">
         <div className="flex-grow p-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 mb-4">

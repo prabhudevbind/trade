@@ -1,7 +1,13 @@
 "use client";
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, HelpCircle, ScissorsSquareIcon, TrendingUp, TrophyIcon } from "lucide-react";
+import {
+  ChevronDown,
+  HelpCircle,
+  ScissorsSquareIcon,
+  TrendingUp,
+  TrophyIcon,
+} from "lucide-react";
 import {
   // Overview Icons
   LayoutDashboard, // Dashboard icon
@@ -61,8 +67,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useSelector } from "react-redux";
+import { useSelector, useDispatch } from "react-redux";
 import { createSelector } from "reselect";
+import { clearAllDetails } from "@/store/reducer/authSlice";
+import Cookies from "js-cookie";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import { LogOut } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const submenuLineStyles = `
   relative before:absolute before:left-[11px] before:top-0 before:h-full before:w-px before:bg-gray-200
@@ -98,17 +111,17 @@ const navigation = [
       },
 
       {
-        title:"Leader Board",
-        icon:Bell,
-        url:"/leaderboard",
-        permission:"view-rank"
+        title: "Leader Board",
+        icon: Bell,
+        url: "/leaderboard",
+        permission: "view-rank",
       },
       {
         title: "Trade History",
         icon: History,
         url: "/trade-history",
         permission: "view-trades",
-      }
+      },
     ],
   },
   {
@@ -127,10 +140,10 @@ const navigation = [
         permission: "view-my-contests",
       },
       {
-        title: "Leaderboard",
+        title: "Refer a Friend",
         icon: Medal,
-        url: "/leaderboard",
-        permission: "view-leaderboard",
+        url: "/refer",
+        permission: "refer-friend",
       },
     ],
   },
@@ -148,7 +161,7 @@ const navigation = [
         icon: PiggyBank,
         url: "/withdrawals",
         permission: "request-withdrawal",
-      }
+      },
     ],
   },
   // Admin-only section
@@ -189,7 +202,7 @@ const navigation = [
             icon: UserCog,
             url: "/roles",
             permission: "manage-roles",
-          }
+          },
         ],
       },
       {
@@ -208,12 +221,12 @@ const navigation = [
             url: "/admin/withdrawals",
             permission: "manage-withdrawals",
           },
-           {
+          {
             title: "Price",
             icon: TrophyIcon,
             url: "/admin/price",
             permission: "manage-price",
-          }
+          },
         ],
       },
       {
@@ -237,11 +250,11 @@ const navigation = [
             icon: FileText,
             url: "/admin/reports",
             permission: "view-reports",
-          }
+          },
         ],
-      }
+      },
     ],
-  }
+  },
 ];
 // Memoized selector for permissions
 const selectPermissions = createSelector(
@@ -281,6 +294,9 @@ export default function DashboardSidebar() {
   const { themeColor } = useThemeContext();
   // State to track if the screen is mobile
   const [isMobile, setIsMobile] = useState(false);
+  const dispatch = useDispatch();
+  const router = useNavigate();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Check screen size on mount and on resize
   useEffect(() => {
@@ -355,6 +371,34 @@ export default function DashboardSidebar() {
     }
   };
 
+  const handleLogout = async () => {
+    setIsLoading(true);
+    try {
+      dispatch(clearAllDetails());
+      const token = Cookies.get("token");
+
+      await axios.post(
+        "/api/v1/sessions/logout",
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      dispatch(clearAllDetails());
+      Cookies.remove("token");
+      toast.success("You have been successfully logged out.");
+      router("/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+      toast.error("Unable to log out. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getThemeStyles = (isActive) => {
     const baseStyles = "transition-colors";
     const activeStyles = isActive
@@ -367,14 +411,12 @@ export default function DashboardSidebar() {
     <Sidebar className="scrollbar-thin">
       <SidebarHeader className="px-6 py-4 ">
         <div className="flex items-center justify-center  text-xl font-semibold">
-         <div className="flex items-center space-x-2 w-full">
-              <div className="w-8 h-8 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-xl font-bold text-gray-900">
-                StockVerses
-              </span>
+          <div className="flex items-center space-x-2 w-full">
+            <div className="w-8 h-8 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-white" />
             </div>
+            <span className="text-xl font-bold text-gray-900">StockVerses</span>
+          </div>
         </div>
       </SidebarHeader>
 
@@ -507,15 +549,29 @@ export default function DashboardSidebar() {
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>My Account</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <User className="mr-2 h-4 w-4" />
-                  <Link to={"profile"}>Profile</Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
+                <Link to={"profile"} className="cursor-pointer">
+                  <DropdownMenuItem className=" cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    Profile
+                  </DropdownMenuItem>
+                </Link>
+                {/* <DropdownMenuItem>
                   <HelpCircle className="mr-2 h-4 w-4" />
                   <span>Help & Support</span>
-                </DropdownMenuItem>
+                </DropdownMenuItem> */}
                 <DropdownMenuSeparator />
+                <Button
+                  variant="ghost"
+                  onClick={handleLogout}
+                  disabled={isLoading}
+                  className={cn(
+                    "w-full justify-start text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors",
+                    isLoading && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  <LogOut className="mr-3 h-4 w-4" />
+                  {isLoading ? "Logging out..." : "Log out"}
+                </Button>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuSubItem>

@@ -308,6 +308,42 @@ export const contestApi = apiSlice.injectEndpoints({
       query: (userId) => `/leaderboard/user/${userId}`,
       providesTags: ['Leaderboard'],
     }),
+    // Prize Distribution Endpoints
+    createPrizeDistribution: builder.mutation({
+      query: ({ contestId, fromRank, toRank, amount }) => ({
+        url: '/prize-distribution',
+        method: 'POST',
+        body: { contestId, fromRank, toRank, amount },
+      }),
+      invalidatesTags: ['Contest'],
+    }),
+    getPrizeDistributions: builder.query({
+      query: (contestId) => `/prize-distribution/${contestId}`,
+      providesTags: ['Contest'],
+    }),
+    updatePrizeDistribution: builder.mutation({
+      query: ({ id, fromRank, toRank, amount }) => ({
+        url: `/prize-distribution/${id}`,
+        method: 'PUT',
+        body: { fromRank, toRank, amount },
+      }),
+      invalidatesTags: ['Contest'],
+    }),
+    deletePrizeDistribution: builder.mutation({
+      query: (id) => ({
+        url: `/prize-distribution/${id}`,
+        method: 'DELETE',
+      }),
+      invalidatesTags: ['Contest'],
+    }),
+    bulkPrizeDistribution: builder.mutation({
+      query: ({ contestId, prizes }) => ({
+        url: '/prize-distribution/bulk',
+        method: 'POST',
+        body: { contestId, prizes },
+      }),
+      invalidatesTags: ['Contest'],
+    }),
   }),
 });
 
@@ -371,4 +407,10 @@ export const {
   useGetLeaderboardQuery,
   useGetLeaderboardHistoryQuery,
   useGetUserLeaderboardQuery,
+  // Prize Distribution Hooks
+  useCreatePrizeDistributionMutation,
+  useGetPrizeDistributionsQuery,
+  useUpdatePrizeDistributionMutation,
+  useDeletePrizeDistributionMutation,
+  useBulkPrizeDistributionMutation,
 } = contestApi;

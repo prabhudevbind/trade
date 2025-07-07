@@ -1,6 +1,6 @@
 "use client"
-
-import { useState } from "react"
+import React from "react"
+import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import {
   Eye,
@@ -30,6 +30,7 @@ import { useRegisterUserMutation } from "@/store/api/userSliceApi"
 import { loginUser } from "@/store/reducer/authSlice" 
 import { fetchUserDetails } from "@/store/reducer/userDetailsSlice"
 import { useDispatch } from "react-redux"
+import { useLocation } from "react-router-dom"
 
 const loginTheme = {
   gradientBg: "bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800",
@@ -45,6 +46,11 @@ const loginTheme = {
   textMuted: "text-gray-500",
   textSecondary: "text-gray-600",
   link: "text-green-700 hover:text-green-900 underline underline-offset-4",
+}
+
+function useQuery() {
+  const { search } = useLocation()
+  return React.useMemo(() => new URLSearchParams(search), [search])
 }
 
 function LoginForm() {
@@ -79,7 +85,7 @@ function LoginForm() {
 
       // Fetch user details after successful login
       await dispatch(fetchUserDetails(result.user.id));
-       window.location.reload();
+      //  window.location.reload();
     } catch (error) {
       const errorMessage = error?.error || error?.message || "Login failed. Please try again."
 
@@ -198,12 +204,11 @@ function LoginForm() {
   )
 }
 
-function RegisterForm() {
+function RegisterForm({ referralCode = "" }) {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [registerUser] = useRegisterUserMutation()
   const dispatch = useDispatch()
-
 
   const {
     register,
@@ -213,9 +218,16 @@ function RegisterForm() {
     reset,
     setError,
     clearErrors,
+    setValue,
   } = useForm()
 
   const password = watch("password")
+
+  useEffect(() => {
+    if (referralCode) {
+      setValue("referral", referralCode)
+    }
+  }, [referralCode, setValue])
 
   const onSubmit = async (data) => {
     try {
@@ -230,6 +242,7 @@ function RegisterForm() {
         lastName,
         email,
         password,
+        referralCode,
       }).unwrap()
 
       // Then automatically log in
@@ -244,7 +257,7 @@ function RegisterForm() {
       // Fetch user details using the logged-in user's ID
       await dispatch(fetchUserDetails(loginResult.user.id));
 
-      window.location.reload();
+      // window.location.reload();
     } catch (error) {
       const errorMessage = error?.data?.message || error?.message || "Registration failed. Please try again."
 
@@ -411,6 +424,19 @@ function RegisterForm() {
           )}
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="referral">Referral Code (optional)</Label>
+          <Input
+            id="referral"
+            readOnly
+            placeholder="Referral code"
+            disabled={isLoading}
+            {...register("referral")}
+            defaultValue={referralCode}
+            className="pl-3 uppercase"
+          />
+        </div>
+
         <Button
           type="submit"
           disabled={isLoading || isSubmitting}
@@ -458,6 +484,19 @@ export default function StockverseLogin() {
   ]
 
   const [isLogin, setIsLogin] = useState(true)
+  const [referral, setReferral] = useState({ ref: "", e: "" })
+
+  const query = useQuery()
+
+  // Show RegisterForm by default if referral params exist, and prefill referral code
+  useEffect(() => {
+    const ref = query.get("ref")
+    const e = query.get("e")
+    if (ref && e) {
+      setIsLogin(false)
+      setReferral({ ref, e })
+    }
+  }, [query])
 
   return (
     <div className={`min-h-screen ${loginTheme.gradientBg}`}>
@@ -548,7 +587,11 @@ export default function StockverseLogin() {
                 </p>
               </div>
 
-              {isLogin ? <LoginForm /> : <RegisterForm />}
+              {isLogin ? (
+                <LoginForm />
+              ) : (
+                <RegisterForm referralCode={referral.ref && referral.e ? `${referral.ref}${referral.e}` : ""} />
+              )}
 
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
