@@ -1677,15 +1677,21 @@ const positionController = {
       const userId = parseInt(req.user.userId);
 
       // First find the contest participant
-      const contestParticipant = await prisma.contestParticipant.findFirst({
+     const contestParticipant = await prisma.contestParticipant.findFirst({
         where: {
           user_id: userId,
-          contest_id: parseInt(contestId),
+          // contest_id: parseInt(contestId),
           contest: {
             status: "ongoing",
           },
         },
+        include: {
+          contest: true,
+          trades:true,
+        },
       });
+
+      console.log(contestParticipant);
 
       if (!contestParticipant) {
         return res.status(404).json({
@@ -1928,8 +1934,7 @@ const tradeController = {
   // Create a new trade
 
   // Helper method to safely delete option
-
- async createTrade(req, res) {
+async createTrade(req, res) {
   let createdOptionId = null; // Track if we need to cleanup
   
   try {
@@ -1977,25 +1982,21 @@ const tradeController = {
       });
     }
 
-    // Find specific contest participation
-    const contestParticipant = await prisma.contestParticipant.findFirst({
-      where: {
-        user_id: userId,
-        contest_id: parsedContestId,
-      },
-      include: {
-        contest: true,
-        trades: {
-          where: {
-            contestParticipant: {
-              contest_id: parsedContestId,
-            },
+    // Find specific contest participation for the exact contest
+     const contestParticipant = await prisma.contestParticipant.findFirst({
+        where: {
+          user_id: userId,
+          contest: {
+            status: "ongoing",
           },
         },
-      },
-    });
+        include: {
+          contest: true,
+          trades:true,
+        },
+      });
 
-    console.log("Contest Participant:", contestParticipant);
+     
     
     // Validate contest participation
     if (!contestParticipant) {
@@ -2006,14 +2007,28 @@ const tradeController = {
       });
     }
     
-    console.log(contestParticipant.contest);
+
     
-    // Check if contest is active
-    if (contestParticipant.contest.status !== "ongoing") {
+    // Check if contest is active - Fixed: Check for 'ongoing' status and time bounds
+    const now = new Date();
+    const contestStartTime = new Date(contestParticipant.contest.start_time);
+    const contestEndTime = new Date(contestParticipant.contest.end_time);
+    
+    // Contest is active if:
+    // 1. Status is 'ongoing' OR
+    // 2. Current time is between start and end time (regardless of status)
+   
+    if (contestParticipant.contest.status != 'ongoing') {
       // Delete option if contest is not active
       await cleanupOption(parsedOptionId);
       return res.status(400).json({
         error: "Contest is not active",
+        details: {
+          contestStatus: contestParticipant.contest.status,
+          startTime: contestParticipant.contest.start_time,
+          endTime: contestParticipant.contest.end_time,
+          currentTime: now.toISOString()
+        }
       });
     }
 

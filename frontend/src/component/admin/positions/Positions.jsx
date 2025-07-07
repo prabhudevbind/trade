@@ -51,6 +51,7 @@ export default function PositionsPage({
     isLoading,
     isError,
     error,
+    refetch
   } = useGetTradesActiveQuery();
   const [activePositions, setActivePositions] = useState([]);
   const [closedPositions, setClosedPositions] = useState([]);
@@ -92,7 +93,7 @@ export default function PositionsPage({
     setActivePositions(active);
     setClosedPositions(closed);
     setTrades(activeTradesData.trades);
-  }, [activeTradesData]);
+  }, [activeTradesData,refetch]);
 
   // Real-time market data updates for positions
   useEffect(() => {
@@ -158,8 +159,8 @@ export default function PositionsPage({
       });
       socket.disconnect();
     };
-  }, [activeTradesData?.positions]);
-
+  }, [activeTradesData?.positions,refetch]);
+  useEffect(()=>{refetch();},[refetch]);
   // Sell handler
   const handleSell = async () => {
     if (!sellModal.position) return;
