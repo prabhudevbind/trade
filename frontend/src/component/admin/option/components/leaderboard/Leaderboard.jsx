@@ -45,6 +45,22 @@ export default function Leaderboard() {
     }
   }, [refreshKey, refetchParticipant, refetchLeaderboard, contestId])
 
+  // Helper function to safely format ROI
+  const formatROI = (roi) => {
+    if (roi === null || roi === undefined || isNaN(roi)) {
+      return '0.00'
+    }
+    return Number(roi).toFixed(2)
+  }
+
+  // Helper function to safely format PnL
+  const formatPnL = (pnl) => {
+    if (pnl === null || pnl === undefined || isNaN(pnl)) {
+      return '0'
+    }
+    return Number(pnl).toLocaleString('en-IN', { maximumFractionDigits: 0 })
+  }
+
   if (participantLoading || leaderboardLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
@@ -87,9 +103,9 @@ export default function Leaderboard() {
   }
 
   // Profit/Loss summary
-  const profitCount = leaderboardData.leaderboard.filter(e => e.totalPnL > 0).length
-  const lossCount = leaderboardData.leaderboard.filter(e => e.totalPnL < 0).length
-  const breakEvenCount = leaderboardData.leaderboard.filter(e => e.totalPnL === 0).length
+  const profitCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) > 0).length
+  const lossCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) < 0).length
+  const breakEvenCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) === 0).length
   const totalParticipants = leaderboardData.leaderboard.length
 
   // Get rank icon based on position
@@ -207,86 +223,91 @@ export default function Leaderboard() {
 
       {/* Mobile Leaderboard Cards */}
       <div className="px-4 pb-6 space-y-3">
-        {leaderboardData.leaderboard.map((entry, index) => (
-          <div 
-            key={entry.userId} 
-            className={`${getRankStyling(entry.rank)} rounded-2xl p-4 transition-all duration-300 active:scale-[0.98]`}
-          >
-            <div className="flex items-center justify-between">
-              {/* Left side - Rank and User */}
-              <div className="flex items-center space-x-4">
-                {/* Rank */}
-                <div className="flex-shrink-0">
-                  {getRankIcon(entry.rank)}
-                </div>
-                
-                {/* User Info */}
-                <div className="flex items-center space-x-3">
-                  {entry.userImg ? (
-                    <img 
-                      src={entry.userImg} 
-                      alt={entry.userName} 
-                      className="w-12 h-12 rounded-full border-2 border-white shadow-lg" 
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-lg border-2 border-white">
-                      <span className="text-white text-lg font-bold">
-                        {entry.userName?.charAt(0)?.toUpperCase() || 'U'}
-                      </span>
-                    </div>
-                  )}
+        {leaderboardData.leaderboard.map((entry, index) => {
+          const pnl = entry.totalPnL || 0
+          const roi = entry.roi || 0
+          
+          return (
+            <div 
+              key={entry.userId} 
+              className={`${getRankStyling(entry.rank)} rounded-2xl p-4 transition-all duration-300 active:scale-[0.98]`}
+            >
+              <div className="flex items-center justify-between">
+                {/* Left side - Rank and User */}
+                <div className="flex items-center space-x-4">
+                  {/* Rank */}
+                  <div className="flex-shrink-0">
+                    {getRankIcon(entry.rank)}
+                  </div>
                   
-                  <div>
-                    <p className={`font-bold text-lg ${entry.rank <= 3 ? 'text-white' : 'text-gray-900'}`}>
-                      {entry.userName}
-                    </p>
-                    {entry.rank <= 3 && (
-                      <div className="flex items-center space-x-1">
-                        <Star className="h-3 w-3 text-white/80" />
-                        <p className="text-xs text-white/80 font-medium">
-                          {entry.rank === 1 ? 'Champion' : entry.rank === 2 ? 'Runner-up' : 'Third Place'}
-                        </p>
+                  {/* User Info */}
+                  <div className="flex items-center space-x-3">
+                    {entry.userImg ? (
+                      <img 
+                        src={entry.userImg} 
+                        alt={entry.userName} 
+                        className="w-12 h-12 rounded-full border-2 border-white shadow-lg" 
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center shadow-lg border-2 border-white">
+                        <span className="text-white text-lg font-bold">
+                          {entry.userName?.charAt(0)?.toUpperCase() || 'U'}
+                        </span>
                       </div>
                     )}
+                    
+                    <div>
+                      <p className={`font-bold text-lg ${entry.rank <= 3 ? 'text-white' : 'text-gray-900'}`}>
+                        {entry.userName}
+                      </p>
+                      {entry.rank <= 3 && (
+                        <div className="flex items-center space-x-1">
+                          <Star className="h-3 w-3 text-white/80" />
+                          <p className="text-xs text-white/80 font-medium">
+                            {entry.rank === 1 ? 'Champion' : entry.rank === 2 ? 'Runner-up' : 'Third Place'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Right side - P&L and ROI */}
+                <div className="text-right">
+                  <div className="flex items-center space-x-1 justify-end mb-1">
+                    <span className={`font-bold text-lg ${
+                      pnl > 0 
+                        ? entry.rank <= 3 ? 'text-white' : 'text-emerald-600'
+                        : pnl < 0 
+                          ? entry.rank <= 3 ? 'text-white' : 'text-red-500'
+                          : entry.rank <= 3 ? 'text-white' : 'text-gray-500'
+                    }`}>
+                      ₹{formatPnL(pnl)}
+                    </span>
+                    {pnl > 0 && <Zap className="h-4 w-4 text-current" />}
+                  </div>
+                  
+                  <div className="flex items-center space-x-1 justify-end">
+                    <span className={`font-bold text-sm ${
+                      roi > 0 
+                        ? entry.rank <= 3 ? 'text-white/90' : 'text-emerald-600'
+                        : roi < 0 
+                          ? entry.rank <= 3 ? 'text-white/90' : 'text-red-500'
+                          : entry.rank <= 3 ? 'text-white/90' : 'text-gray-500'
+                    }`}>
+                      {roi > 0 ? '+' : ''}{formatROI(roi)}%
+                    </span>
+                    {roi > 0 ? (
+                      <TrendingUp className="h-3 w-3 text-current" />
+                    ) : roi < 0 ? (
+                      <TrendingDown className="h-3 w-3 text-current" />
+                    ) : null}
                   </div>
                 </div>
               </div>
-              
-              {/* Right side - P&L and ROI */}
-              <div className="text-right">
-                <div className="flex items-center space-x-1 justify-end mb-1">
-                  <span className={`font-bold text-lg ${
-                    entry.totalPnL > 0 
-                      ? entry.rank <= 3 ? 'text-white' : 'text-emerald-600'
-                      : entry.totalPnL < 0 
-                        ? entry.rank <= 3 ? 'text-white' : 'text-red-500'
-                        : entry.rank <= 3 ? 'text-white' : 'text-gray-500'
-                  }`}>
-                    ₹{Number(entry.totalPnL).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </span>
-                  {entry.totalPnL > 0 && <Zap className="h-4 w-4 text-current" />}
-                </div>
-                
-                <div className="flex items-center space-x-1 justify-end">
-                  <span className={`font-bold text-sm ${
-                    entry.roi > 0 
-                      ? entry.rank <= 3 ? 'text-white/90' : 'text-emerald-600'
-                      : entry.roi < 0 
-                        ? entry.rank <= 3 ? 'text-white/90' : 'text-red-500'
-                        : entry.rank <= 3 ? 'text-white/90' : 'text-gray-500'
-                  }`}>
-                    {entry.roi > 0 ? '+' : ''}{entry.roi.toFixed(2)}%
-                  </span>
-                  {entry.roi > 0 ? (
-                    <TrendingUp className="h-3 w-3 text-current" />
-                  ) : entry.roi < 0 ? (
-                    <TrendingDown className="h-3 w-3 text-current" />
-                  ) : null}
-                </div>
-              </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Prize Distribution Section */}
