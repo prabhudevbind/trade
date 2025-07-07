@@ -260,7 +260,7 @@ export default function ActiveContests() {
         // Step 3: Mark transaction as completed
         await createWalletTransaction({
           ...transactionData,
-          id: transactionResponse.id,
+          id: transactionResponse.transaction.id,
           status: "COMPLETED"
         }).unwrap()
 
@@ -274,16 +274,16 @@ export default function ActiveContests() {
 
       } catch (participantError) {
         // Step 4: Refund on failure
-        const refundData = {
-          amount: entry_fee,
-          type: "CREDIT",
-          status: "COMPLETED",
-          contest_id: contestId,
-          description: `Refund for failed contest join: ${contestName}`
-        }
+      //   const refundData = {
+      //     amount: entry_fee,
+      //     type: "CREDIT",
+      //     status: "COMPLETED",
+      //     contest_id: contestId,
+      //     description: `Refund for failed contest join: ${contestName}`
+      //   }
 
-        await createWalletTransaction(refundData).unwrap()
-        throw new Error(participantError?.data?.error || "Failed to join contest")
+      //   await createWalletTransaction(refundData).unwrap()
+      //   throw new Error(participantError?.data?.error || "Failed to join contest")
       }
     } catch (err) {
       setTransactionError(err?.message || "Failed to join contest. Your money has been refunded.")
