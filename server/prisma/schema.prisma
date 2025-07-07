@@ -124,8 +124,8 @@ enum Encryption {
 model Contest {
   id                  Int                  @id @default(autoincrement())
   name                String               @db.VarChar(255)
-  start_time          DateTime
-  end_time            DateTime
+  start_time          String?
+  end_time            String?
   maxTrade            Decimal?
   entry_fee           Decimal              @db.Decimal(10, 2) @default(50.00)
   status              ContestStatus        @default(upcoming)

@@ -423,7 +423,7 @@ const contestController = {
 // ContestParticipant Controller
 const contestParticipantController = {
   // Create a new contest participant
-  async createContestParticipant(req, res) {
+ async createContestParticipant(req, res) {
     try {
       const { contest_id, virtual_cash } = req.body;
       const user_id = req.user.userId;
@@ -441,7 +441,9 @@ const contestParticipantController = {
         });
       }
 
-      if (newContest.end_time < new Date()) {
+      // Convert end_time string to Date for comparison
+      const contestEndTime = new Date(newContest.end_time);
+      if (contestEndTime < new Date()) {
         return res.status(400).json({
           error: "Contest has already ended",
         });
@@ -462,12 +464,15 @@ const contestParticipantController = {
       }
 
       // Check if user is already participating in any other active contest
+      // Convert current date to ISO string for comparison with string field
+      const currentTimeString = new Date().toISOString();
+      
       const existingParticipation = await prisma.contestParticipant.findFirst({
         where: {
           user_id: parseInt(user_id),
           contest: {
             end_time: {
-              gt: new Date(),
+              gt: currentTimeString,
             },
           },
         },
@@ -521,8 +526,8 @@ const contestParticipantController = {
           user_id: parseInt(user_id),
           contest: {
             end_time: {
-              gt: new Date(), // Contest end date is greater than current date
-            },
+        gt: new Date().toISOString(), // Convert to ISO string
+      },
           },
         },
         include: {
