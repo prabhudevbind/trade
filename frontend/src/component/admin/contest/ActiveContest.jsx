@@ -5,6 +5,7 @@ import {
   useGetContestsQuery,
   useCreateWalletTransactionMutation,
   useCreateContestParticipantMutation,
+  useUpdateWalletTransactionMutation,
 } from "@/store/api/contest"
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -141,6 +142,7 @@ export default function ActiveContests() {
   // Mutations
   const [createWalletTransaction, { isLoading: isTransactionLoading }] = useCreateWalletTransactionMutation()
   const [createContestParticipant, { isLoading: isParticipantLoading }] = useCreateContestParticipantMutation()
+  const [updateWalletTransaction]=useUpdateWalletTransactionMutation();
 
   useEffect(() => {
     // Refetch data when component mounts
@@ -258,7 +260,7 @@ export default function ActiveContests() {
         const participantResponse = await createContestParticipant(participantData).unwrap()
 
         // Step 3: Mark transaction as completed
-        await createWalletTransaction({
+        await updateWalletTransaction({
           ...transactionData,
           id: transactionResponse.transaction.id,
           status: "COMPLETED"

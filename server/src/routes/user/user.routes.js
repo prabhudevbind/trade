@@ -6,7 +6,7 @@ const jwt = require('jsonwebtoken');
 const {  authorizeRoles, authenticateToken } = require('../../utils/verify');
 const { z } = require('zod');
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma =require('../../utils/prisma');
 
 // Validation middleware for user creation/update
 const userValidation = [
