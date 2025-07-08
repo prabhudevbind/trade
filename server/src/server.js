@@ -1202,7 +1202,21 @@ app.post("/api/v1/env", async (req, res) => {
     });
     // Restart the server after .env update
     // console.log("🔄 .env updated, restarting server...");
-    process.exit(0);
+    if (process.env.pm_id !== undefined) {
+      // Running under PM2
+      const { exec } = require("child_process");
+      const pmId = process.env.pm_id;
+      exec(`pm2 restart ${pmId}`, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Failed to restart via PM2: ${error.message}`);
+          process.exit(0);
+        } else {
+          console.log(`PM2 restart output: ${stdout}`);
+        }
+      });
+    } else {
+      process.exit(0);
+    }
   } catch (err) {
     console.error("Error updating .env:", err);
     res
