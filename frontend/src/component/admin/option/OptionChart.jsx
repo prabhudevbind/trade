@@ -32,7 +32,7 @@ import { DesktopOptionChain } from "./option-chain/DesktopOptionChain";
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi";
 import io from "socket.io-client";
 import PositionsPage from "../positions/Positions";
-
+import { socketServerUrl } from "@/lib/utidata";
 const OptionChain = () => {
   const [selectedIndex, setSelectedIndex] = useState("NSE_INDEX|Nifty 50");
   const [selectedExpiry, setSelectedExpiry] = useState(null);
@@ -168,7 +168,8 @@ const OptionChain = () => {
     }
 
     // Create new socket with optimized settings
-    const socket = io("", {
+    
+    const socket = io(socketServerUrl, {
       transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 500,
@@ -534,6 +535,9 @@ const OptionChain = () => {
                   formatOI={formatOI}
                   atmStrike={atmStrike}
                   disabled={showParticipationPrompt}
+                  instrumentKey={selectedIndex}
+                  expiryDate={selectedExpiry}
+                  instrumentExpiryKey={selectedIndex && selectedExpiry ? `${selectedIndex}:${selectedExpiry}` : ""}
                 />
               </>
             )}

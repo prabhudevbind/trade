@@ -168,7 +168,10 @@ model Leaderboard {
   roi             Decimal   @db.Decimal(7, 4)
   virtual_cash    Decimal   @db.Decimal(15, 2)
   snapshot_time   DateTime  @default(now())
-
+  win_rate        Decimal?
+  deployed_capital Decimal?
+  market_value    Decimal?
+  profit_loss_status String?
   contest         Contest   @relation(fields: [contest_id], references: [id])
   user            User      @relation(fields: [user_id], references: [id])
 
@@ -180,6 +183,7 @@ model Leaderboard {
 model Option {
   id           Int        @id @default(autoincrement())
   symbol       Decimal
+  instrumentExpiryKey String?
   expiry_date  DateTime
   strike_price Decimal    @db.Decimal(10, 2)
   option_type  OptionType

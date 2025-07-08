@@ -1538,7 +1538,7 @@ const optionController = {
   // Create a new option
   async createOption(req, res) {
     try {
-      const { symbol, expiryDate, strikePrice, optionType, ltp, lotSize } =
+      const { symbol, expiryDate,instrumentExpiryKey, strikePrice, optionType, ltp, lotSize } =
         req.body;
 
       // Validate required fields
@@ -1565,6 +1565,7 @@ const optionController = {
           strike_price: strikePrice,
           option_type: optionType,
           ltp: ltp,
+          instrumentExpiryKey:instrumentExpiryKey,
           lot_size: parseInt(lotSize),
           updated_at: new Date(),
         },
