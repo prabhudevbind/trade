@@ -38,6 +38,7 @@ import {
   useGetTradesActiveQuery,
   useSellPositionMutation,
 } from "@/store/api/contest";
+import { socketServerUrl } from "@/lib/utidata";
 
 // Dummy data
 
@@ -108,7 +109,7 @@ export default function PositionsPage({
     setTrades(activeTradesData.trades);
 
     // Connect to Socket.IO server
-    const socket = io("http://localhost:5001", {
+    const socket = io(socketServerUrl, {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,

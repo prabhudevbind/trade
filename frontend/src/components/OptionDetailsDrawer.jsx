@@ -30,7 +30,7 @@ import {
   useCreateTradeMutation,
 } from "@/store/api/contest";
 import io from "socket.io-client";
-
+import { socketServerUrl } from "@/lib/utidata";
 export function OptionDetailsDrawer({
   isOpen,
   onClose,
@@ -96,7 +96,7 @@ export function OptionDetailsDrawer({
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    const socket = io("http://localhost:5001", {
+    const socket = io(socketServerUrl, {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
