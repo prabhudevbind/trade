@@ -34,6 +34,7 @@ import io from "socket.io-client";
 export function OptionDetailsDrawer({
   isOpen,
   onClose,
+  instrumentExpiryKey,
   optionData: initialOptionData,
   strikePrice,
   optionType,
@@ -95,7 +96,7 @@ export function OptionDetailsDrawer({
   useEffect(() => {
     if (!isOpen || !initialOptionData?.instrument_key) return;
 
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
@@ -208,6 +209,7 @@ export function OptionDetailsDrawer({
         optionType: optionType.toUpperCase() === "CALL" ? "CE" : "PE",
         lotSize: lotSize,
         ltp: optionData.ltp,
+        instrumentExpiryKey: instrumentExpiryKey
       };
 
       const option = await createOption(newOptionData).unwrap();
@@ -711,7 +713,7 @@ export function OptionDetailsDrawer({
                 <Button
                   onClick={handleBuyClick}
                   className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
-                  disabled={isLoading || !isConnected || !isMarketOpen()}
+                //  disabled={isLoading || !isConnected || !isMarketOpen()}
                 >
                   <TrendingUp className="w-4 h-4 mr-2" />
                   Buy

@@ -13,6 +13,7 @@ export function MobileOptionChain({
   formatPrice,
   formatOI,
   atmStrike,
+  instrumentExpiryKey,
   disabled = false,
 }) {
   const listRef = useRef(null)
@@ -321,6 +322,7 @@ export function MobileOptionChain({
         onClose={() => setIsDrawerOpen(false)}
         optionData={selectedOption}
         contestData={contestData}
+        instrumentExpiryKey={data?.underlying_info?.instrument_key+":"+data?.underlying_info?.expiry_date}
         strikePrice={selectedStrike}
         optionType={selectedType}
         expiry={data?.option_chain?.[0]?.expiry}

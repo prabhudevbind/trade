@@ -101,11 +101,12 @@ app.use(
   authenticateToken,
   require("./routes/user/smtp.routes")
 );
+const {router:autoleader}=require("./routes/leaderboard.routes");
 app.use("/api/v1", require("./utils/profileupload"));
 app.use("/api/v1", require("./routes/contest/bulk.router"));
 app.use("/api/v1", require("./routes/user/price.router"));
 app.use("/api/v1", require("./routes/dashboard/dashboard.router"));
-app.use("/api/v1/leaderboard", require("./routes/leaderboard.routes"));
+app.use("/api/v1/leaderboard", autoleader);
 // Error handling middleware
 app.use(errorHandler);
 
@@ -640,6 +641,8 @@ const {
 } = require("./routes/chart/niftychart.router");
 registerOptionChainSocket(io);
 
+const {registerLeaderboardSocket}=require('./routes/leaderboard.routes');
+registerLeaderboardSocket(io);
 // Market Data streaming
 const {
   registerMarketStreamSocket,
@@ -1212,7 +1215,7 @@ app.post("/api/v1/env", async (req, res) => {
   }
 });
 
-// Health check endpoint
+
 app.get("/api/v1/health", (req, res) => {
   const status = {
     server: "running",
@@ -1226,6 +1229,7 @@ app.get("/api/v1/health", (req, res) => {
     memoryUsage: process.memoryUsage(),
     uptime: process.uptime(),
   };
+
   res.json(status);
 });
 

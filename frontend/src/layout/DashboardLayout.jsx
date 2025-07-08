@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
 export default function DashboardLayout({ children }) {
-  const [activeTab, setActiveTab] = useState("portfolio");
+  const [activeTab, setActiveTab] = useState("options");
   const [isDark, setIsDark] = useState(false);
 
   const handleThemeToggle = () => {

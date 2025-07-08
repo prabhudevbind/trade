@@ -168,7 +168,7 @@ const OptionChain = () => {
     }
 
     // Create new socket with optimized settings
-    const socket = io("", {
+    const socket = io("http://localhost:5001", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionDelay: 500,
@@ -534,6 +534,9 @@ const OptionChain = () => {
                   formatOI={formatOI}
                   atmStrike={atmStrike}
                   disabled={showParticipationPrompt}
+                  instrumentKey={selectedIndex}
+                  expiryDate={selectedExpiry}
+                  instrumentExpiryKey={selectedIndex && selectedExpiry ? `${selectedIndex}:${selectedExpiry}` : ""}
                 />
               </>
             )}
