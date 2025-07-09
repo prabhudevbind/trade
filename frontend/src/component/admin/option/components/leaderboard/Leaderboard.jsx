@@ -311,6 +311,8 @@ export default function Leaderboard() {
       </div>
 
       {/* Prize Distribution Section */}
+      {prizeLoading && prizeDistributions?.length > 0 && 
+     
       <div className="px-4 pb-6">
         <h2 className="text-lg font-bold text-blue-700 mb-2">Prize Distribution</h2>
         {prizeLoading ? (
@@ -328,6 +330,7 @@ export default function Leaderboard() {
           <div className="text-gray-500 text-sm">No prize distribution set for this contest.</div>
         )}
       </div>
+       }
 
       {/* Mobile Footer */}
       <div className="bg-white/80 backdrop-blur-sm px-4 py-4 border-t border-gray-200">

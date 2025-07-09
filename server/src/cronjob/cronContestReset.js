@@ -40,6 +40,9 @@ cron.schedule(
           await prisma.contestParticipant.deleteMany({
             where: { contest_id: contestId },
           });
+          await prisma.prizeDistribution.deleteMany({
+            where: { contestId: contestId },
+          });
         }
 
         // Set start_time to 9:00 AM IST and end_time to 3:30 PM IST for tomorrow
