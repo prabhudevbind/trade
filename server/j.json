@@ -1,0 +1,70 @@
+[
+    "optionChain:data",
+    {
+        "success": true,
+        "timestamp": "2025-07-09T20:44:45.663Z",
+        "underlying_info": {
+            "instrument_key": "NSE_INDEX|Nifty 50",
+            "spot_price": 25476.1,
+            "expiry_date": "2025-07-10"
+        },
+        "summary": {
+            "total_strikes": 90,
+            "total_call_oi_lots": 3631879,
+            "total_put_oi_lots": 2559051,
+            "overall_pcr": "0.70"
+        },
+        "option_chain": [
+            {
+                "expiry": "2025-07-10",
+                "strike_price": 22950,
+                "underlying_key": "NSE_INDEX|Nifty 50",
+                "underlying_spot_price": 25476.1,
+                "pcr": 1160.4615,
+                "call_option": {
+                    "instrument_key": "NSE_FO|39836",
+                    "ltp": 2604,
+                    "volume": 5550,
+                    "oi_quantity": 2925,
+                    "oi_lots": 59,
+                    "oi_change_lots": -55,
+                    "close_price": 2484.6,
+                    "bid_price": 2490.55,
+                    "bid_qty": 150,
+                    "ask_price": 2576.75,
+                    "ask_qty": 75,
+                    "greeks": {
+                        "delta": 0.9146,
+                        "gamma": 0.0001,
+                        "theta": -156.0123,
+                        "vega": 2.0828,
+                        "iv": 149.81,
+                        "pop": 46.83
+                    }
+                },
+                "put_option": {
+                    "instrument_key": "NSE_FO|39837",
+                    "ltp": 0.35,
+                    "volume": 10611900,
+                    "oi_quantity": 3394350,
+                    "oi_lots": 67887,
+                    "oi_change_lots": -4478,
+                    "close_price": 0.6,
+                    "bid_price": 0.35,
+                    "bid_qty": 51900,
+                    "ask_price": 0.4,
+                    "ask_qty": 2400,
+                    "greeks": {
+                        "delta": -0.0013,
+                        "gamma": 0,
+                        "theta": -1.8573,
+                        "vega": 0.0559,
+                        "iv": 66.41,
+                        "pop": 0.14
+                    }
+                }
+            }
+         
+        ]
+    }
+]

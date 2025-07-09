@@ -25,6 +25,7 @@
     "razorpay": "^2.9.6",
     "redis": "^5.5.6",
     "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "upstox-js-sdk": "^2.17.0",
     "zod": "^3.24.1"
   },

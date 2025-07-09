@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { PrismaClient } = require('@prisma/client');
+
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const {  authorizeRoles, authenticateToken } = require('../../utils/verify');

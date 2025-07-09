@@ -42,6 +42,10 @@ const API_RATE_LIMITER = {
 // Global state management for API calls
 const globalApiState = new Map();
 
+// Add at the top of the file
+let nextAllowedApiCallTime = 0;
+const API_BACKOFF_MS = 2 * 60 * 1000; // 5 minutes
+
 // Enhanced data storage functions
 async function saveOptionChainToRedis(instrumentKey, expiryDate, optionChainData) {
   try {
@@ -160,7 +164,7 @@ async function saveOptionChainToRedis(instrumentKey, expiryDate, optionChainData
     // Execute all operations
     await pipeline.exec();
 
-    console.log(`✅ Option chain data saved to Redis for ${instrumentKey} ${expiryDate}`);
+    // console.log(`✅ Option chain data saved to Redis for ${instrumentKey} ${expiryDate}`);
     
     // Also save to backup storage (optional)
     // await saveToBackupStorage(instrumentKey, expiryDate, optionChainData);
@@ -593,6 +597,12 @@ function canMakeApiCall(instrumentKey) {
 // Enhanced API call function
 async function fetchOptionChainFromAPI(instrumentKey, expiryDate) {
   try {
+    // Backoff logic: skip API call if in backoff period
+    if (Date.now() < nextAllowedApiCallTime) {
+      console.warn(`⏳ Skipping API call for ${instrumentKey} due to rate limit backoff`);
+      return null;
+    }
+
     const url = `https://api.upstox.com/v2/option/chain?instrument_key=${encodeURIComponent(instrumentKey)}&expiry_date=${expiryDate}`;
     const headers = {
       Accept: "application/json",
@@ -614,7 +624,13 @@ async function fetchOptionChainFromAPI(instrumentKey, expiryDate) {
     return processedData;
 
   } catch (error) {
-    console.error(`❌ API call failed for ${instrumentKey}:`, error.message);
+    if (error.response && error.response.status === 429) {
+      // Set backoff time
+      nextAllowedApiCallTime = Date.now() + API_BACKOFF_MS;
+      console.error(`❌ API call failed for ${instrumentKey}: 429 Too Many Requests. Backing off for 5 minutes.`);
+    } else {
+      console.error(`❌ API call failed for ${instrumentKey}:`, error.message);
+    }
     return null;
   }
 }
@@ -907,7 +923,7 @@ async function setupOptionChainUpdateCron() {
         for (const expiryDate of expiries) {
           // Only process if expiry date is in the future
           if (new Date(expiryDate) > new Date()) {
-            console.log(`Updating option chain for ${instrumentKey} - ${expiryDate}`);
+            // console.log(`Updating option chain for ${instrumentKey} - ${expiryDate}`);
             
             // Fetch fresh data from API
             const optionChainData = await fetchOptionChainFromAPI(instrumentKey, expiryDate);
@@ -939,16 +955,16 @@ async function setupOptionChainUpdateCron() {
                   `option_chain_update:${instrumentKey}:${expiryDate}`,
                   JSON.stringify(optionChainData)
                 );
-                console.log(`✅ Updated option chain for ${instrumentKey} - ${expiryDate}`);
+              // console.log(`✅ Updated option chain for ${instrumentKey} - ${expiryDate}`);
               } else {
-                console.log(`⏩ No change for ${instrumentKey} - ${expiryDate}, skipping save.`);
+                // console.log(`⏩ No change for ${instrumentKey} - ${expiryDate}, skipping save.`);
               }
             }
           }
         }
       }
     } catch (error) {
-      console.error('❌ Error in option chain update cron:', error);
+      console.error('❌ Error in option chain ocron:', error);
     }
   };
 

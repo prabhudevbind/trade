@@ -635,7 +635,7 @@ const io = new SocketIOServer(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
 });
-
+global.io = io; // <--- Add this line
 // Option Chain streaming
 const {
   registerOptionChainSocket,
@@ -866,31 +866,6 @@ io.on("connection", (socket) => {
   });
 });
 
-// Add periodic health check for subscriptions
-setInterval(() => {
-  // console.log(`📊 Subscription Health Check:`);
-  // console.log(`   • Active subscriptions: ${instrumentSubscriptions.size}`);
-  // console.log(`   • Pending subscriptions: ${pendingSubscriptions.size}`);
-  // console.log(`   • Active timers: ${subscriptionTimers.size}`);
-  // console.log(
-  //   `   • Upstox connected: ${
-  //     upstoxWs && upstoxWs.readyState === WebSocket.OPEN
-  //   }`
-  // );
-
-  // Log all active subscriptions
-  if (instrumentSubscriptions.size > 0) {
-    // console.log(
-    //   `   • Subscribed instruments:`,
-    //   Array.from(instrumentSubscriptions.keys())
-    // );
-  }
-
-  // Log pending subscriptions
-  if (pendingSubscriptions.size > 0) {
-    // console.log(`   • Pending instruments:`, Array.from(pendingSubscriptions));
-  }
-}, 60000); // Every minute
 
 // Periodically send heartbeat to connected clients
 setInterval(() => {
