@@ -713,7 +713,7 @@ export function OptionDetailsDrawer({
                 <Button
                   onClick={handleBuyClick}
                   className="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 sm:py-4 rounded-xl shadow-lg"
-                //  disabled={isLoading || !isConnected || !isMarketOpen()}
+                 disabled={isLoading || !isConnected || !isMarketOpen()}
                 >
                   <TrendingUp className="w-4 h-4 mr-2" />
                   Buy
