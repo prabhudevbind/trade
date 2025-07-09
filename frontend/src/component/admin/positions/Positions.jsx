@@ -109,7 +109,7 @@ export default function PositionsPage({
     setTrades(activeTradesData.trades);
 
     // Connect to Socket.IO server
-    const socket = io(socketServerUrl, {
+    const socket = io("", {
       transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: 5,
