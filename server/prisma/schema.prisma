@@ -44,6 +44,7 @@ model User {
   walletTransactions   WalletTransaction[]
   leader Leaderboard[]
   contestWinners       ContestWinner[]
+  winHistory           WinningHistory[]
   referralsMade        Referral[]           @relation("Referrer")
   referralsReceived    Referral[]           @relation("Referred")
 }
@@ -135,6 +136,7 @@ model Contest {
   leader Leaderboard[]
   contestParticipants ContestParticipant[]
   contestWinners      ContestWinner[]
+  winHistory          WinningHistory[]
 
   price PrizeDistribution[]
 
@@ -330,4 +332,18 @@ enum TransactionStatus {
   APPROVED
   REJECTED
   COMPLETED
+}
+
+
+model WinningHistory {
+  id           Int      @id @default(autoincrement())
+  contestId    Int
+  userId       Int
+  rank         Int
+  amount       Decimal  @db.Decimal(15, 2)
+  awardedAt    DateTime @default(now())
+  contest      Contest  @relation(fields: [contestId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+  @@index([contestId])
+  @@index([userId])
 }

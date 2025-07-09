@@ -389,7 +389,7 @@ export default function DashboardSidebar() {
 
       dispatch(clearAllDetails());
       Cookies.remove("token");
-      toast.success("You have been successfully logged out.");
+      // toast.success("You have been successfully logged out.");
       router("/login");
     } catch (error) {
       console.error("Logout error:", error);
