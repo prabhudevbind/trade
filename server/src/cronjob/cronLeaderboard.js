@@ -1,282 +1,376 @@
 const cron = require("node-cron");
-const Redis = require("ioredis");
 const prisma = require("../utils/prisma");
+const io = require("socket.io-client");
 
-// Create a single Redis client instance that can be reused
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB || 0,
-  maxRetriesPerRequest: 3,
-  retryDelayOnFailover: 100,
-  enableReadyCheck: true,
-  lazyConnect: true,
-});
+// Socket.IO client for real-time option data
+let socketClient = null;
+let optionChainData = new Map(); // Temporary storage for current session only
+global.optionChainHistory = new Map(); // For tracking history of option chain data
 
-// Add Redis connection event handlers
-redisClient.on('connect', () => {
-  console.log('✅ Redis client connected');
-});
+// Initialize Socket.IO connection
+function initializeSocketConnection() {
+  if (socketClient) {
+    socketClient.disconnect();
+  }
 
-redisClient.on('ready', () => {
-  console.log('✅ Redis client ready');
-});
+  socketClient = io("http://localhost:5001", {
+    transports: ["websocket"],
+    reconnection: true,
+    reconnectionDelay: 500,
+    reconnectionAttempts: 10,
+    timeout: 5000,
+    forceNew: true,
+  });
 
-redisClient.on('error', (err) => {
-  console.error('❌ Redis client error:', err);
-});
+  socketClient.on("connect", () => {
+    // console.log("🟢 Socket connected for cron job");
+  });
 
-redisClient.on('close', () => {
-  console.log('🔄 Redis client connection closed');
-});
+  socketClient.on("disconnect", () => {
+    // console.log("🔴 Socket disconnected");
+  });
 
-redisClient.on('reconnecting', () => {
-  console.log('🔄 Redis client reconnecting...');
-});
+  socketClient.on("optionChain:data", (data) => {
+    // console.log("📊 Received option chain data");
+    
+    // Store the data properly
+    const key = storeOptionChainData(data);
+    
+    // Log summary of received data
+    if (data.option_chain && Array.isArray(data.option_chain)) {
+      // console.log(`Received ${data.option_chain.length} strikes for ${key}`);
+      // console.log(`Spot price: ${data.underlying_info?.spot_price || 'N/A'}`);
+      
+      // Log first few strikes as sample
+      const sampleStrikes = data.option_chain.slice(0, 3);
+      sampleStrikes.forEach(strike => {
+        // console.log(`Strike ${strike.strike_price}: CE LTP=${strike.call_option?.ltp || 'N/A'}, PE LTP=${strike.put_option?.ltp || 'N/A'}`);
+      });
+    }
+  });
+
+  socketClient.on("error", (error) => {
+    // console.error("❌ Socket error:", error);
+  });
+
+  return socketClient;
+}
 
 function getInitialCash() {
   return 100000;
 }
 
-// Enhanced Redis connection validation
-async function validateRedisConnection() {
-  try {
-    const pong = await redisClient.ping();
-    return pong === 'PONG';
-  } catch (error) {
-    console.error('Redis connection validation failed:', error);
-    return false;
+// Enhanced function to store and manage option chain data
+function storeOptionChainData(data) {
+  // console.log("Storing option chain data...");
+  
+  // Create key from the data
+  const key = `${data.underlying_info?.instrument_key || data.instrument_key}:${data.underlying_info?.expiry_date || data.expiry_date}`;
+  
+  // Store in memory
+  optionChainData.set(key, data);
+  
+  // Also store with alternative key format for better matching
+  if (data.underlying_info) {
+    const altKey = data.underlying_info.instrument_key;
+    optionChainData.set(altKey, data);
   }
+  
+  // console.log(`Stored option chain data with key: ${key}`);
+  // console.log(`Total keys in memory: ${optionChainData.size}`);
+  
+  // Track history
+  if (!global.optionChainHistory.has(key)) {
+    global.optionChainHistory.set(key, []);
+  }
+  
+  global.optionChainHistory.get(key).push({
+    timestamp: data.timestamp || new Date().toISOString(),
+    option_chain: data.option_chain
+  });
+  
+  // Keep only last 20 snapshots
+  if (global.optionChainHistory.get(key).length > 20) {
+    global.optionChainHistory.get(key).shift();
+  }
+  
+  return key;
 }
 
-// Enhanced getLiveLTP function with proper Redis client validation
+// Fetch live LTP using Socket.IO real-time data
 async function getLiveLTP(option) {
-  console.log("Fetching live LTP for option:", {
-    id: option.id,
-    symbol: option.symbol,
-    strike_price: option.strike_price,
-    option_type: option.option_type,
-    current_ltp: option.ltp
-  });
+  // console.log("Getting LTP for option:", JSON.stringify(option, null, 2));
 
-  // Validate input parameters
-  if (!option || !option.symbol || !option.expiry_date) {
-    console.error("Invalid option data provided");
-    return Number(option?.ltp || 0);
-  }
-
-  // Validate Redis client connection
-  const isRedisConnected = await validateRedisConnection();
-  if (!isRedisConnected) {
-    console.error("Redis client is not available or connection failed");
-    return Number(option?.ltp || 0);
-  }
-
-  const instrumentKey = `NSE_INDEX|${option.symbol}`;
-  const expiryStr =
-    typeof option.expiry_date === "string"
-      ? option.expiry_date
-      : option.expiry_date?.toISOString?.() || "";
-  const expiryDateKey = expiryStr.split("T")[0];
-
-  console.log("Cache lookup params:", {
-    instrumentKey,
-    expiryDateKey,
-    strike_price: option.strike_price,
-    option_type: option.option_type
-  });
-
-  try {
-    // Try multiple cache keys in order of preference (most recent first)
-    const cacheKeys = [
-      `option_chain:current:NSE_INDEX|Nifty 50:${expiryDateKey}`,
-      `option_chain:strikes:NSE_INDEX|Nifty 50:${expiryDateKey}`,
-      `option_chain:summary:NSE_INDEX|Nifty 50:${expiryDateKey}`,
-      `option_chain:strike:NSE_INDEX|Nifty 50:${expiryDateKey}:${option.strike_price}`,
-    ];
-
-    console.log("Checking cache for keys:", cacheKeys);
+  // Create the key for this option's expiry
+  const optionKey = `${option.instrumentExpiryKey}`;
+  // console.log("Looking for option key:", optionKey);
+  
+  // Log all available keys in memory
+  // console.log("Available keys in optionChainData:", Array.from(optionChainData.keys()));
+  
+  // Try to find the option chain data for this expiry
+  let foundData = null;
+  
+  // Search through all stored option chain data
+  for (const [key, data] of optionChainData.entries()) {
+    // console.log(`Checking key: ${key}`);
     
-    for (const cacheKey of cacheKeys) {
-      try {
-        console.log(`Checking cache for key: ${cacheKey}`);
-        const cached = await redisClient.get(cacheKey);
-
-        if (cached) {
-          const data = JSON.parse(cached);
-          console.log(`Cached data found with key: ${cacheKey}`);
-
-          const ltp = extractLTPFromData(data, option);
-
-          if (ltp > 0) {
-            console.log(`Found LTP from cache: ${ltp} for ${option.option_type} ${option.strike_price}`);
+    // Check if this key matches our option's instrument and expiry
+    if (key.includes(option.instrumentExpiryKey) || 
+        (data.underlying_info && data.underlying_info.instrument_key && 
+         data.underlying_info.expiry_date && 
+         key.includes(data.underlying_info.instrument_key))) {
+      
+      foundData = data;
+      // console.log("Found matching data for key:", key);
+      break;
+    }
+  }
+  
+  if (!foundData) {
+    // console.log("No option chain data found for this expiry");
+    return null;
+  }
+  
+  // Now search through the option chain for the specific strike and type
+  if (foundData.option_chain && Array.isArray(foundData.option_chain)) {
+    // console.log(`Searching through ${foundData.option_chain.length} strikes`);
+    
+    for (const strike of foundData.option_chain) {
+      // console.log(`Checking strike: ${strike.strike_price}`);
+      
+      // Match strike price
+      if (strike.strike_price === parseInt(option.strike_price)) {
+        // console.log("Strike price matched!");
+        
+        // Check for Call Option (CE)
+        if (option.option_type === "CE" && strike.call_option) {
+          // console.log("Found CE option:", strike.call_option);
+          
+          // Check if instrument_key matches
+          if (strike.call_option.instrument_key === option.symbol) {
+            const ltp = Number(strike.call_option.ltp || 0);
+            // console.log(`Found matching CE LTP: ${ltp}`);
             return ltp;
           }
-        } else {
-          console.log(`No cached data found for key: ${cacheKey}`);
         }
-      } catch (parseError) {
-        console.error(
-          `Error parsing cached data for key ${cacheKey}:`,
-          parseError.message
-        );
-        continue;
+        
+        // Check for Put Option (PE)
+        if (option.option_type === "PE" && strike.put_option) {
+          // console.log("Found PE option:", strike.put_option);
+          
+          // Check if instrument_key matches
+          if (strike.put_option.instrument_key === option.symbol) {
+            const ltp = Number(strike.put_option.ltp || 0);
+            // console.log(`Found matching PE LTP: ${ltp}`);
+            return ltp;
+          }
+        }
       }
     }
+  }
+  
+  // console.log("No matching option found in option chain");
+  return null;
+}
+async function getLiveLTP(option) {
+  // console.log("Getting LTP for option:", JSON.stringify(option, null, 2));
 
-    // If no cached data found, try to get relative time data
-    console.log("Attempting to get relative time LTP...");
-    const relativeLTP = await getRelativeTimeLTP(
-      option,
-      instrumentKey,
-      expiryDateKey
-    );
-    if (relativeLTP > 0) {
-      console.log(`Found relative time LTP: ${relativeLTP}`);
-      return relativeLTP;
+  // Create search keys - multiple formats for better matching
+  const searchKeys = [
+    `${option.instrumentExpiryKey}`, // Primary key (e.g., "NSE_INDEX|Nifty 50:2025-07-10")
+    `${option.symbol}`,             // Just the instrument key (e.g., "NSE_INDEX|Nifty 50")
+    `${option.symbol}:${option.expiry_date}` // Alternative format
+  ];
+
+  // console.log("Searching with keys:", searchKeys);
+  // console.log("Available keys in optionChainData:", Array.from(optionChainData.keys()));
+
+  // Try each search key until we find matching data
+  let foundData = null;
+  for (const key of searchKeys) {
+    if (optionChainData.has(key)) {
+      foundData = optionChainData.get(key);
+      // console.log("Found data with key:", key);
+      break;
     }
-  } catch (error) {
-    console.error("Error fetching LTP from cache:", error);
   }
 
-  // Fallback to the LTP from the option object
-  const fallbackLtp = Number(option.ltp || 0);
-  console.log(`Using fallback LTP: ${fallbackLtp}`);
-  return fallbackLtp;
-}
-
-// Helper function to extract LTP from various data structures
-function extractLTPFromData(data, option) {
-  let ltp = 0;
-
-  try {
-    // Strategy 1: Check if data has direct call/put structure
-    if (data.call || data.put) {
-      if (option.option_type === "CE" && data.call) {
-        ltp = Number(data.call.ltp || 0);
-      } else if (option.option_type === "PE" && data.put) {
-        ltp = Number(data.put.ltp || 0);
-      }
-    }
-    // Strategy 2: Check if data is structured by strike price
-    else if (data[option.strike_price]) {
-      const strikeData = data[option.strike_price];
-      if (option.option_type === "CE" && strikeData.call) {
-        ltp = Number(strikeData.call.ltp || 0);
-      } else if (option.option_type === "PE" && strikeData.put) {
-        ltp = Number(strikeData.put.ltp || 0);
-      }
-    }
-    // Strategy 3: Check if data has option_chain array
-    else if (data.option_chain && Array.isArray(data.option_chain)) {
-      const strike = data.option_chain.find(
-        (s) => s.strike_price === option.strike_price
-      );
-      if (strike) {
-        if (option.option_type === "CE" && strike.call_option) {
-          ltp = Number(strike.call_option.ltp || 0);
-        } else if (option.option_type === "PE" && strike.put_option) {
-          ltp = Number(strike.put_option.ltp || 0);
-        }
-      }
-    }
-    // Strategy 4: Check if this is direct strike data
-    else if (data.call_option || data.put_option) {
-      if (option.option_type === "CE" && data.call_option) {
-        ltp = Number(data.call_option.ltp || 0);
-      } else if (option.option_type === "PE" && data.put_option) {
-        ltp = Number(data.put_option.ltp || 0);
-      }
-    }
-  } catch (error) {
-    console.error("Error extracting LTP from data:", error);
+  if (!foundData) {
+    // console.log("No option chain data found for any search key");
+    return null;
   }
 
-  return ltp;
-}
+  // Now search through the option chain for the specific strike and type
+  if (!foundData.option_chain || !Array.isArray(foundData.option_chain)) {
+    // console.log("No option chain array found in data");
+    return null;
+  }
 
-// Get relative time data (recent historical data if current is not available)
-async function getRelativeTimeLTP(option, instrumentKey, expiryDateKey) {
-  console.log("Attempting to get relative time LTP data...");
+  // console.log(`Searching through ${foundData.option_chain.length} strikes`);
 
-  try {
-    // Try to get time series data for the specific strike
-    const timeSeriesKey = `option_chain:strike_ts:${instrumentKey}:${expiryDateKey}:${option.strike_price}`;
-
-    // Get last 5 entries from the time series (most recent first)
-    const recentData = await redisClient.zrevrange(
-      timeSeriesKey,
-      0,
-      4,
-      "WITHSCORES"
-    );
-
-    if (recentData && recentData.length > 0) {
-      // Parse the most recent entry
-      const mostRecentData = JSON.parse(recentData[0]);
-      const timestamp = parseInt(recentData[1]);
-
-      // Check if data is recent (within last 5 minutes)
-      const now = Date.now();
-      const dataAge = now - timestamp;
-      const fiveMinutesInMs = 5 * 60 * 1000;
-
-      if (dataAge <= fiveMinutesInMs) {
-        const ltp =
-          option.option_type === "CE"
-            ? Number(mostRecentData.call_ltp || 0)
-            : Number(mostRecentData.put_ltp || 0);
-
-        if (ltp > 0) {
-          console.log(
-            `Found relative time LTP: ${ltp} (${Math.round(
-              dataAge / 1000
-            )}s ago)`
-          );
-          return ltp;
-        }
-      } else {
-        console.log(
-          `Time series data too old: ${Math.round(dataAge / 60000)} minutes`
-        );
-      }
+  for (const strike of foundData.option_chain) {
+    // Skip if strike doesn't match
+    if (parseInt(strike.strike_price) !== parseInt(option.strike_price)) {
+      continue;
     }
 
-    // Try to get general time series data
-    const generalTimeSeriesKey = `option_chain:timeseries:${instrumentKey}:${expiryDateKey}`;
-    const generalData = await redisClient.zrevrange(
-      generalTimeSeriesKey,
-      0,
-      2,
-      "WITHSCORES"
-    );
+    // console.log("Strike price matched:", strike.strike_price);
 
-    if (generalData && generalData.length > 0) {
-      console.log(
-        "Found general time series data, but need to fetch full option chain for strike-specific data"
-      );
-      // Additional logic could be implemented here to fetch full option chain
-    }
-
-    // Try historical data as last resort
-    const historicalKey = `option_chain:historical:${instrumentKey}:${expiryDateKey}`;
-    const historicalData = await redisClient.get(historicalKey);
-
-    if (historicalData) {
-      const data = JSON.parse(historicalData);
-      const ltp = extractLTPFromData(data, option);
-
-      if (ltp > 0) {
-        console.log(`Found LTP from historical data: ${ltp}`);
+    // Handle Call Option (CE)
+    if (option.option_type === "CE" && strike.call_option) {
+      // console.log("Checking CE option:", strike.call_option.instrument_key);
+      
+      // Match either by instrument_key or check if it's the correct strike
+      if (strike.call_option.instrument_key === option.symbol || 
+          strike.strike_price === parseInt(option.strike_price)) {
+        const ltp = Number(strike.call_option.ltp || 0);
+        // console.log(`Found matching CE LTP: ${ltp}`);
         return ltp;
       }
     }
-  } catch (error) {
-    console.error("Error getting relative time LTP:", error);
+
+    // Handle Put Option (PE)
+    if (option.option_type === "PE" && strike.put_option) {
+      // console.log("Checking PE option:", strike.put_option.instrument_key);
+      
+      // Match either by instrument_key or check if it's the correct strike
+      if (strike.put_option.instrument_key === option.symbol || 
+          strike.strike_price === parseInt(option.strike_price)) {
+        const ltp = Number(strike.put_option.ltp || 0);
+        // console.log(`Found matching PE LTP: ${ltp}`);
+        return ltp;
+      }
+    }
   }
 
-  return 0;
+  // console.log("No matching option found in option chain");
+  return null;
+}
+
+// Enhanced storeOptionChainData to better handle the incoming data structure
+function storeOptionChainData(data) {
+  if (!data || !data.underlying_info) {
+    // console.log("Invalid option chain data received");
+    return null;
+  }
+
+  const underlyingKey = data.underlying_info.instrument_key;
+  const expiryDate = data.underlying_info.expiry_date;
+  const spotPrice = data.underlying_info.spot_price;
+
+  // Create multiple keys for flexible lookup
+  const primaryKey = `${underlyingKey}:${expiryDate}`;
+  const secondaryKey = underlyingKey;
+  const timestampKey = `${underlyingKey}:${new Date().toISOString()}`;
+
+  // console.log(`Storing option chain for ${primaryKey}, Spot: ${spotPrice}`);
+
+  // Store with all key formats
+  optionChainData.set(primaryKey, data);
+  optionChainData.set(secondaryKey, data);
+  optionChainData.set(timestampKey, data);
+
+  // Track history
+  if (!global.optionChainHistory.has(primaryKey)) {
+    global.optionChainHistory.set(primaryKey, []);
+  }
+
+  // Keep only essential data in history to save memory
+  const snapshot = {
+    timestamp: data.timestamp || new Date().toISOString(),
+    spot_price: spotPrice,
+    strikes: data.option_chain.map(strike => ({
+      strike_price: strike.strike_price,
+      call_ltp: strike.call_option?.ltp,
+      put_ltp: strike.put_option?.ltp
+    }))
+  };
+
+  global.optionChainHistory.get(primaryKey).push(snapshot);
+
+  // Keep only last 20 snapshots
+  if (global.optionChainHistory.get(primaryKey).length > 20) {
+    global.optionChainHistory.get(primaryKey).shift();
+  }
+
+  return primaryKey;
+}
+
+// Utility function to print option chain summary in readable format
+function printOptionChainSummary(key) {
+  const data = optionChainData.get(key);
+  if (!data) {
+    // console.log(`No data found for key: ${key}`);
+    return;
+  }
+
+  const underlying = data.underlying_info;
+  // console.log(`\n📊 Option Chain Summary for ${underlying.instrument_key} @ ${underlying.expiry_date}`);
+  // console.log(`🕒 ${data.timestamp} | Spot: ${underlying.spot_price}`);
+  // console.log("Strike   | CE LTP   | PE LTP   | CE OI    | PE OI    | PCR");
+  // console.log("---------|----------|----------|----------|----------|----------");
+
+  data.option_chain.slice(0, 10).forEach(strike => {
+    const ce = strike.call_option || {};
+    const pe = strike.put_option || {};
+    // console.log(
+    //   `${strike.strike_price.toString().padStart(7)} | ` +
+    //   `${(ce.ltp || '-').toString().padStart(8)} | ` +
+    //   `${(pe.ltp || '-').toString().padStart(8)} | ` +
+    //   `${(ce.oi_quantity || '-').toString().padStart(8)} | ` +
+    //   `${(pe.oi_quantity || '-').toString().padStart(8)} | ` +
+    //   `${strike.pcr ? strike.pcr.toFixed(2) : '-'}`
+    // );
+  });
+
+  if (data.summary) {
+    // console.log("\n📈 Summary:");
+    // console.log(`Total Strikes: ${data.summary.total_strikes}`);
+    // console.log(`Call OI (lots): ${data.summary.total_call_oi_lots}`);
+    // console.log(`Put OI (lots): ${data.summary.total_put_oi_lots}`);
+    // console.log(`PCR: ${data.summary.overall_pcr}`);
+  }
+}
+// Function to clear old data periodically
+function clearOldOptionData() {
+  // console.log("Clearing old option chain data...");
+  
+  // Keep only recent data (last 5 minutes)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+  
+  for (const [key, data] of optionChainData.entries()) {
+    const dataTimestamp = new Date(data.timestamp || 0);
+    if (dataTimestamp < fiveMinutesAgo) {
+      optionChainData.delete(key);
+      // console.log(`Deleted old data for key: ${key}`);
+    }
+  }
+  
+  // console.log(`Remaining keys in memory: ${optionChainData.size}`);
+}
+
+// Debug function to show what's in memory
+function debugOptionChainData() {
+  // console.log("\n=== DEBUG: Option Chain Data in Memory ===");
+  // console.log(`Total keys: ${optionChainData.size}`);
+  
+  for (const [key, data] of optionChainData.entries()) {
+    // console.log(`\nKey: ${key}`);
+    // console.log(`Timestamp: ${data.timestamp}`);
+    // console.log(`Underlying: ${data.underlying_info?.instrument_key || 'N/A'}`);
+    // console.log(`Expiry: ${data.underlying_info?.expiry_date || 'N/A'}`);
+    // console.log(`Spot: ${data.underlying_info?.spot_price || 'N/A'}`);
+    // console.log(`Strikes: ${data.option_chain?.length || 0}`);
+    
+    if (data.option_chain && data.option_chain.length > 0) {
+      // console.log("Sample strikes:");
+      data.option_chain.slice(0, 2).forEach(strike => {
+        // console.log(`  ${strike.strike_price}: CE=${strike.call_option?.ltp || 'N/A'} PE=${strike.put_option?.ltp || 'N/A'}`);
+      });
+    }
+  }
+  // console.log("=== END DEBUG ===\n");
 }
 
 function calculateRealizedPnL(trades) {
@@ -345,8 +439,10 @@ function calculateUnrealizedPnL(positions) {
   return totalUnrealizedPnL;
 }
 
+let latestLeaderboardData = null;
+
 async function generateLeaderboard() {
-  console.log("Starting leaderboard generation...");
+  // console.log("Starting leaderboard generation...");
   
   try {
     const activeContest = await prisma.contest.findFirst({
@@ -354,11 +450,11 @@ async function generateLeaderboard() {
     });
 
     if (!activeContest) {
-      console.log("No active contest found");
+      // console.log("No active contest found");
       return null;
     }
 
-    console.log(`Found active contest: ${activeContest.id}`);
+    // console.log(`Found active contest: ${activeContest.id}`);
 
     const participants = await prisma.contestParticipant.findMany({
       where: { contest_id: activeContest.id },
@@ -381,12 +477,36 @@ async function generateLeaderboard() {
       },
     });
 
-    console.log(`Found ${participants.length} participants`);
+    // console.log(`Found ${participants.length} participants`);
 
     const leaderboard = [];
 
+    // Get unique instrumentExpiryKeys to subscribe to
+    const subscriptions = new Set();
+    participants.forEach(participant => {
+      participant.positions.forEach(pos => {
+        if (pos.option.instrumentExpiryKey) {
+          subscriptions.add(pos.option.instrumentExpiryKey);
+        }
+      });
+    });
+
+    // Subscribe to all required option chains
+    if (socketClient && socketClient.connected) {
+      subscriptions.forEach(sub => {
+        const [instrument_key, expiry_date] = sub.split(':');
+        socketClient.emit("optionChain:subscribe", {
+          instrument_key,
+          expiry_date,
+        });
+      });
+      
+      // Wait for data to arrive
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
     for (const participant of participants) {
-      console.log(`Processing participant: ${participant.user.username}`);
+      // console.log(`Processing participant: ${participant.user.username}`);
       
       const positionsWithLive = [];
       for (const pos of participant.positions) {
@@ -501,22 +621,13 @@ async function generateLeaderboard() {
       rates_summary: Array.from(ratesSummary.entries()),
     };
 
-    // Cache the leaderboard data
-    try {
-      await redisClient.setex(
-        `leaderboard:contest:${activeContest.id}`,
-        60, // 1 minute cache
-        JSON.stringify(leaderboardData)
-      );
-      console.log("Leaderboard cached successfully");
+    // Update the in-memory variable
+    latestLeaderboardData = leaderboardData;
 
-      // Emit to WebSocket if available
-      if (global.io) {
-        global.io.emit("leaderboardUpdate", leaderboardData);
-        console.log("Leaderboard broadcasted via WebSocket");
-      }
-    } catch (cacheError) {
-      console.error("Error caching leaderboard:", cacheError);
+    // Emit to WebSocket if available
+    if (global.io) {
+      global.io.emit("leaderboardUpdate", leaderboardData);
+      // console.log("Leaderboard broadcasted via WebSocket");
     }
 
     // Save to database
@@ -556,16 +667,27 @@ async function generateLeaderboard() {
           },
         });
       } catch (dbError) {
-        console.error(`Error saving leaderboard for user ${participant.userId}:`, dbError);
+        // console.error(`Error saving leaderboard for user ${participant.userId}:`, dbError);
       }
     }
 
-    console.log(`Leaderboard generation completed. Total participants: ${leaderboard.length}`);
+    // console.log(`Leaderboard generation completed. Total participants: ${leaderboard.length}`);
     return leaderboardData;
   } catch (error) {
-    console.error("Error generating leaderboard:", error);
+    // console.error("Error generating leaderboard:", error);
     throw error;
   }
+}
+
+// Get leaderboard data from memory
+async function getLeaderboardData(contestId) {
+  if (
+    latestLeaderboardData &&
+    latestLeaderboardData.contest_id == contestId
+  ) {
+    return latestLeaderboardData;
+  }
+  return null;
 }
 
 function getMarketStatus() {
@@ -592,87 +714,136 @@ function getMarketStatus() {
 }
 
 async function triggerLeaderboardGeneration() {
-  console.log("Manual leaderboard generation triggered");
+  // console.log("Manual leaderboard generation triggered");
   return await generateLeaderboard();
 }
 
-async function getLeaderboardData(contestId) {
-  try {
-    const cachedData = await redisClient.get(
-      `leaderboard:contest:${contestId}`
-    );
-
-    if (cachedData) {
-      console.log(`Retrieved cached leaderboard for contest ${contestId}`);
-      return JSON.parse(cachedData);
-    } else {
-      console.log(`No cached leaderboard found for contest ${contestId}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`Error retrieving leaderboard for contest ${contestId}:`, error);
-    return null;
-  }
+// Function to print a summary of the latest option prices for all strikes
+function printOptionChainSummary(key) {
+  const data = optionChainData.get(key);
+  if (!data || !data.option_chain) return;
+  // console.log(`\nOption Chain Summary for ${key} (Spot: ${data.underlying_info?.spot_price || "-"})`);
+  // console.log("Strike\tCE LTP\tPE LTP\tCE Vol\tPE Vol\tCE OI\tPE OI");
+  data.option_chain.forEach(strike => {
+    const ce = strike.call_option || {};
+    const pe = strike.put_option || {};
+    // console.log(`${strike.strike_price}\t${ce.ltp ?? "-"}\t${pe.ltp ?? "-"}\t${ce.volume ?? "-"}\t${pe.volume ?? "-"}\t${ce.oi_quantity ?? "-"}\t${pe.oi_quantity ?? "-"}`);
+  });
 }
 
+// Function to print a table of option symbol, buy price, and current market price (live) for traded options only
+function printOptionBuyVsMarketTable(participants) {
+  const rows = [];
+  participants.forEach(participant => {
+    // Collect unique traded option keys for this participant
+    const tradedOptionKeys = new Set();
+    participant.trades.forEach(trade => {
+      if (trade.option) {
+        const key = `${trade.option.symbol}_${trade.option.strike_price}_${trade.option.option_type}`;
+        tradedOptionKeys.add(key);
+      }
+    });
+    // For each open position, print only if it was traded
+    participant.positions.forEach(pos => {
+      const key = `${pos.option.symbol}_${pos.option.strike_price}_${pos.option.option_type}`;
+      if (tradedOptionKeys.has(key)) {
+        const symbol = pos.option.symbol;
+        const strike = pos.option.strike_price;
+        const type = pos.option.option_type;
+        const buyPrice = Number(pos.average_entry_price);
+        const livePrice = Number(pos.option.ltp);
+        rows.push({
+          symbol: `${symbol} ${strike} ${type}`,
+          buyPrice,
+          livePrice
+        });
+      }
+    });
+  });
+  if (rows.length === 0) {
+    // console.log("No traded open positions to display.");
+    return;
+  }
+  // console.log("\nOption Symbol         | Buy Price   | Market Price (Live)");
+  // console.log("----------------------|-------------|---------------------");
+  rows.forEach(row => {
+    // console.log(
+    //   `${row.symbol.padEnd(22)}| ${row.buyPrice.toFixed(2).padEnd(11)}| ${row.livePrice.toFixed(2).padEnd(19)}`
+    // );
+  });
+}
 
+// Initialize socket connection
+initializeSocketConnection();
 
-// Schedule the cron job to run every minute
-cron.schedule("* * * * *", async () => {
-  console.log("Cron job triggered - generating leaderboard...");
+// Schedule the cron job to run every 1 minute
+cron.schedule("*/1 * * * *", async () => {
+  // console.log("Cron job triggered - generating leaderboard...");
   try {
     const marketStatus = getMarketStatus();
-    console.log(`Market status: ${marketStatus}`);
+    // console.log(`Market status: ${marketStatus}`);
     
-    // Generate leaderboard regardless of market status for demo purposes
-    // You can modify this logic based on your requirements
+    // Clear old data first
+    clearOldOptionData();
+    
+    // Generate leaderboard with real-time Socket.IO data
     await generateLeaderboard();
-    console.log("Leaderboard generation completed successfully");
+    // console.log("Leaderboard generation completed successfully");
   } catch (error) {
-    console.error("Error in scheduled leaderboard generation:", error);
+    // console.error("Error in scheduled leaderboard generation:", error);
   }
 });
 
 // Graceful shutdown
 process.on("SIGTERM", async () => {
-  console.log("Received SIGTERM, shutting down gracefully...");
+  // console.log("Received SIGTERM, shutting down gracefully...");
   try {
-    await redisClient.quit();
-    console.log("Redis client disconnected");
+    if (socketClient) {
+      socketClient.disconnect();
+      // console.log("Socket.IO client disconnected");
+    }
+    optionChainData.clear();
   } catch (error) {
-    console.error("Error during shutdown:", error);
+    // console.error("Error during shutdown:", error);
   }
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
-  console.log("Received SIGINT, shutting down gracefully...");
+  // console.log("Received SIGINT, shutting down gracefully...");
   try {
-    await redisClient.quit();
-    console.log("Redis client disconnected");
+    if (socketClient) {
+      socketClient.disconnect();
+      // console.log("Socket.IO client disconnected");
+    }
+    optionChainData.clear();
   } catch (error) {
-    console.error("Error during shutdown:", error);
+    // console.error("Error during shutdown:", error);
   }
   process.exit(0);
 });
 
 // Handle uncaught exceptions
 process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
+  // console.error("Uncaught Exception:", error);
   process.exit(1);
 });
 
 process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  // console.error("Unhandled Rejection at:", promise, "reason:", reason);
   process.exit(1);
 });
 
-console.log("Leaderboard cron job service started");
+console.log("Leaderboard cron job service started with Socket.IO real-time data");
 
 module.exports = {
   generateLeaderboard,
   triggerLeaderboardGeneration,
   getLeaderboardData,
   getMarketStatus,
-  redisClient, // Export the new utility
+  socketClient,
+  debugOptionChainData,
+  printOptionChainSummary,
+  printOptionBuyVsMarketTable,
+  clearOldOptionData,
 };

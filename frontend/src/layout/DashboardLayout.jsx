@@ -21,13 +21,26 @@ import {
   Moon,
   Ticket,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
 
 export default function DashboardLayout({ children }) {
-  const [activeTab, setActiveTab] = useState("options");
+  // Load active tab from localStorage if available
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("dashboardActiveTab") || "options";
+    }
+    return "options";
+  });
   const [isDark, setIsDark] = useState(false);
+
+  // Save active tab to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("dashboardActiveTab", activeTab);
+    }
+  }, [activeTab]);
 
   const handleThemeToggle = () => {
     setIsDark((prev) => !prev);

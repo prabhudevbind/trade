@@ -102,11 +102,23 @@ export default function Leaderboard() {
     )
   }
 
+  // Map backend keys to frontend keys
+  const mappedLeaderboard = leaderboardData.leaderboard.map(entry => ({
+    ...entry,
+    totalPnL: Number(entry.total_pnl),
+    unrealizedPnL: Number(entry.unrealized_pnl),
+    realizedPnL: Number(entry.realized_pnl),
+    roi: Number(entry.roi),
+    userName: entry.user?.username,
+    userImg: entry.user?.img,
+    userId: entry.user_id,
+  }))
+
   // Profit/Loss summary
-  const profitCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) > 0).length
-  const lossCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) < 0).length
-  const breakEvenCount = leaderboardData.leaderboard.filter(e => (e.totalPnL || 0) === 0).length
-  const totalParticipants = leaderboardData.leaderboard.length
+  const profitCount = mappedLeaderboard.filter(e => (e.totalPnL || 0) > 0).length
+  const lossCount = mappedLeaderboard.filter(e => (e.totalPnL || 0) < 0).length
+  const breakEvenCount = mappedLeaderboard.filter(e => (e.totalPnL || 0) === 0).length
+  const totalParticipants = mappedLeaderboard.length
 
   // Get rank icon based on position
   const getRankIcon = (rank) => {
@@ -223,7 +235,7 @@ export default function Leaderboard() {
 
       {/* Mobile Leaderboard Cards */}
       <div className="px-4 pb-6 space-y-3">
-        {leaderboardData.leaderboard.map((entry, index) => {
+        {mappedLeaderboard.map((entry, index) => {
           const pnl = entry.totalPnL || 0
           const roi = entry.roi || 0
           
@@ -311,7 +323,7 @@ export default function Leaderboard() {
       </div>
 
       {/* Prize Distribution Section */}
-      {prizeLoading && prizeDistributions?.length > 0 && 
+      { prizeDistributions?.length > 0 && 
      
       <div className="px-4 pb-6">
         <h2 className="text-lg font-bold text-blue-700 mb-2">Prize Distribution</h2>

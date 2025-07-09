@@ -308,6 +308,10 @@ export const contestApi = apiSlice.injectEndpoints({
       query: (userId) => `/leaderboard/user/${userId}`,
       providesTags: ['Leaderboard'],
     }),
+    getLeaderboardme: builder.query({
+      query: (contestId) => `leaderboard/me`,
+      providesTags: ['Leaderboard'],
+    }),
     // Prize Distribution Endpoints
     createPrizeDistribution: builder.mutation({
       query: ({ contestId, fromRank, toRank, amount }) => ({
@@ -407,6 +411,7 @@ export const {
   useGetLeaderboardQuery,
   useGetLeaderboardHistoryQuery,
   useGetUserLeaderboardQuery,
+  useGetLeaderboardmeQuery,
   // Prize Distribution Hooks
   useCreatePrizeDistributionMutation,
   useGetPrizeDistributionsQuery,
