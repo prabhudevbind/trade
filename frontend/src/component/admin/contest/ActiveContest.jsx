@@ -252,23 +252,23 @@ export default function ActiveContests() {
 
       try {
         // Step 2: Join contest (backend will handle removing from current contest)
-        const participantData = {
-          contest_id: contestId,
-          virtual_cash: 100000.0,
-        }
+        // const participantData = {
+        //   contest_id: contestId,
+        //   virtual_cash: 100000.0,
+        // }
 
-        const participantResponse = await createContestParticipant(participantData).unwrap()
+        // const participantResponse = await createContestParticipant(participantData).unwrap()
 
-        // Step 3: Mark transaction as completed
-        await updateWalletTransaction({
-          ...transactionData,
-          id: transactionResponse.transaction.id,
-          status: "COMPLETED"
-        }).unwrap()
+        // // Step 3: Mark transaction as completed
+        // await updateWalletTransaction({
+        //   ...transactionData,
+        //   id: transactionResponse.transaction.id,
+        //   status: "COMPLETED"
+        // }).unwrap()
 
-        // Success message based on whether user was switched
-        const message = participantResponse.message || `Successfully joined ${contestName}!`
-        setTransactionSuccess(`${message} (Transaction ID: ${transactionResponse.id})`)
+        // // Success message based on whether user was switched
+        // const message = participantResponse.message || `Successfully joined ${contestName}!`
+        // setTransactionSuccess(`${message} (Transaction ID: ${transactionResponse.id})`)
         
         // Refresh data
         refetchContests()
@@ -288,8 +288,23 @@ export default function ActiveContests() {
       //   throw new Error(participantError?.data?.error || "Failed to join contest")
       }
     } catch (err) {
-      setTransactionError(err?.message || "Failed to join contest. Your money has been refunded.")
-      console.error("Join contest error:", err)
+      // If error is from RTK Query (unwrap), it will be in err.data
+      let msg = "Failed to join contest.";
+      if (err?.data) {
+        // Backend error shape
+        if (err.data.details) {
+          msg = err.data.details;
+        } else if (err.data.error) {
+          msg = err.data.error;
+        }
+        if (err.data.refund) {
+          msg += " Your money has been refunded.";
+        }
+      } else if (err?.message) {
+        msg = err.message;
+      }
+      setTransactionError(msg);
+      console.error("Join contest error:", err);
     } finally {
       setProcessingContestId(null)
       setShowSwitchDialog(false)
@@ -551,7 +566,27 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground font-medium">Contest Period</p>
-              <p className="font-semibold text-sm">{contest.start_time} - {contest.end_time}</p>
+              <p className="font-semibold text-sm">
+                {new Date(contest.start_time).toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+                {" - "}
+                {new Date(contest.end_time).toLocaleString("en-IN", {
+                  timeZone: "Asia/Kolkata",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </p>
               <p className="text-xs text-muted-foreground flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 Daily: 9:15 AM - 3:15 PM

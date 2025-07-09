@@ -1947,8 +1947,7 @@ async createTrade(req, res) {
     if (!optionId || !contestId || !action || !quantity || !price) {
       return res.status(400).json({
         error: "Missing required fields",
-        details:
-          "All fields are required: optionId, contestId, action, quantity, price",
+        details: "All fields are required: optionId, contestId, action, quantity, price",
       });
     }
 
@@ -2208,96 +2207,207 @@ async createTrade(req, res) {
 // WalletTransaction Controller
 const walletTransactionController = {
   // Create a new wallet transaction
-  async createWalletTransaction(req, res) {
+async createWalletTransaction(req, res) {
+    const prisma = require("../utils/prisma");
+    const {
+      amount,
+      type,
+      status,
+      transaction_id,
+      payment_method,
+      upi_ref_no,
+      contest_id,
+      virtual_cash,
+    } = req.body;
+    const user_id = req.user.userId;
+
     try {
-      const {
-        amount,
-        type,
-        status,
-        transaction_id,
-        payment_method,
-        upi_ref_no,
-      } = req.body;
-      console.log(upi_ref_no);
-      // Validate input
+      // Input validation
       if (!amount || !type || !status) {
-        return res.status(400).json({ error: "Missing required fields" });
+        return res.status(400).json({
+          error: "Missing required fields: amount, type, status",
+        });
       }
 
-      // Validate transaction_id for CREDIT transactions
       if (type === "CREDIT" && !transaction_id && !upi_ref_no) {
         return res.status(400).json({
-          error: "Transaction ID is required for credit transactions",
+          error: "Transaction ID or UPI reference is required for credit transactions",
         });
       }
 
-      const parsedUserId = parseInt(req.user.userId);
+      const parsedUserId = parseInt(user_id);
       const parsedAmount = parseFloat(amount);
+
       if (isNaN(parsedUserId) || isNaN(parsedAmount) || parsedAmount <= 0) {
-        return res.status(400).json({ error: "Invalid user_id or amount" });
-      }
-
-      // Check for duplicate transaction_id
-      if (transaction_id) {
-        const existingTransaction = await prisma.walletTransaction.findMany({
-          where: { transaction_id: transaction_id },
+        return res.status(400).json({
+          error: "Invalid user_id or amount",
         });
-        if (existingTransaction.transaction_id === transaction_id) {
-          return res.status(400).json({ error: "Duplicate transaction ID" });
+      }
+
+      // Execute transaction
+      const result = await prisma.$transaction(async (tx) => {
+        // Check for duplicate transaction_id
+        if (transaction_id) {
+          const existingTransaction = await tx.walletTransaction.findFirst({
+            where: { transaction_id: transaction_id },
+          });
+          if (existingTransaction) {
+            throw new Error("Duplicate transaction ID");
+          }
         }
-      }
 
-      // Find user
-      const user = await prisma.user.findUnique({
-        where: { id: parsedUserId },
+        // Find and validate user
+        const user = await tx.user.findUnique({
+          where: { id: parsedUserId },
+        });
+        if (!user) {
+          throw new Error("User not found");
+        }
+
+        const currentBalance = user.amount !== null ? parseFloat(user.amount) : 0;
+        
+        // Check sufficient balance for debit
+        if (type === "DEBIT" && currentBalance < parsedAmount) {
+          throw new Error("Insufficient balance");
+        }
+
+        // Update user balance
+        const newBalance = type === "CREDIT" 
+          ? currentBalance + parsedAmount 
+          : currentBalance - parsedAmount;
+
+        const updatedUser = await tx.user.update({
+          where: { id: parsedUserId },
+          data: { amount: newBalance },
+        });
+
+        // Create wallet transaction
+        const transaction = await tx.walletTransaction.create({
+          data: {
+            user_id: parsedUserId,
+            amount: parsedAmount,
+            type,
+            status,
+            upi_ref_no: upi_ref_no ? parseInt(upi_ref_no) : null,
+            transaction_id: transaction_id || null,
+            payment_method: payment_method || null,
+            created_at: new Date(),
+          },
+        });
+
+        let participant = null;
+        let existingParticipation = null;
+        let newContest = null;
+
+        // Contest participation logic
+        if (contest_id) {
+          const contestId = parseInt(contest_id);
+          
+          // Validate contest
+          newContest = await tx.contest.findUnique({
+            where: { id: contestId },
+          });
+          if (!newContest) {
+            throw new Error("Contest not found");
+          }
+
+          // Check if contest is still active
+          const contestEndTime = new Date(newContest.end_time);
+          if (contestEndTime < new Date()) {
+            throw new Error("Contest has already ended");
+          }
+
+          // Check if user is already participating in this contest
+          const alreadyParticipant = await tx.contestParticipant.findFirst({
+            where: {
+              user_id: parsedUserId,
+              contest_id: contestId,
+            },
+          });
+          if (alreadyParticipant) {
+            throw new Error("You have already joined this contest");
+          }
+
+          // Remove from any other active contest
+          const currentTimeString = new Date().toISOString();
+          existingParticipation = await tx.contestParticipant.findFirst({
+            where: {
+              user_id: parsedUserId,
+              contest: { 
+                end_time: { gt: currentTimeString } 
+              },
+            },
+            include: { contest: true },
+          });
+
+          if (existingParticipation) {
+            await tx.contestParticipant.delete({
+              where: { id: existingParticipation.id },
+            });
+          }
+
+          // Create new participant
+          participant = await tx.contestParticipant.create({
+            data: {
+              user_id: parsedUserId,
+              contest_id: contestId,
+              virtual_cash: parseFloat(virtual_cash) || 100000.0,
+              joined_at: new Date(),
+            },
+          });
+
+          // Verify participant was created successfully
+          const verifyParticipant = await tx.contestParticipant.findUnique({
+            where: { id: participant.id },
+          });
+          if (!verifyParticipant) {
+            throw new Error("Failed to create contest participant");
+          }
+        }
+
+        return {
+          transaction,
+          updatedUser,
+          participant,
+          existingParticipation,
+          newContest,
+        };
       });
-      if (!user) {
-        return res.status(404).json({ error: "User not found" });
-      }
 
-      // Handle null amount
-      const currentBalance = user.amount !== null ? parseFloat(user.amount) : 0;
-
-      // Check balance for DEBIT
-      if (type === "DEBIT" && currentBalance < parsedAmount) {
-        return res.status(400).json({ error: "Insufficient balance" });
-      }
-
-      // Update user's amount
-      const updatedUser = await prisma.user.update({
-        where: { id: parsedUserId },
-        data: {
-          amount:
-            type === "CREDIT"
-              ? currentBalance + parsedAmount
-              : currentBalance - parsedAmount,
-        },
-      });
-
-      // Create wallet transaction
-      const transaction = await prisma.walletTransaction.create({
-        data: {
-          user_id: parsedUserId,
-          amount: parsedAmount,
-          type,
-          status,
-          upi_ref_no: parseInt(upi_ref_no),
-          transaction_id: transaction_id || null,
-          payment_method: payment_method || null,
-          created_at: new Date(),
-        },
-      });
-
-      res.status(201).json({
+      // Prepare response
+      const response = {
         message: "Transaction created successfully",
-        transaction,
-        updatedBalance: updatedUser.amount,
-      });
+        transaction: result.transaction,
+        updatedBalance: result.updatedUser.amount,
+      };
+
+      if (result.participant) {
+        response.participant = result.participant;
+        response.contestMessage = result.existingParticipation
+          ? `Removed from "${result.existingParticipation.contest.name}" and joined "${result.newContest.name}"`
+          : `Successfully joined "${result.newContest.name}"`;
+      }
+
+      return res.status(201).json(response);
+
     } catch (error) {
-      console.error("Error creating transaction:", error);
-      res.status(400).json({
+      console.error("createWalletTransaction error:", error);
+      
+      // Handle specific Prisma errors
+      let errorMessage = error.message;
+      let statusCode = 400;
+
+      if (error.code === 'P2002') {
+        errorMessage = "Duplicate entry found";
+      } else if (error.code === 'P2003') {
+        errorMessage = "Foreign key constraint failed";
+      } else if (error.code === 'P2025') {
+        errorMessage = "Record not found";
+      }
+
+      return res.status(statusCode).json({
         error: "Failed to create transaction",
-        details: error.message,
+        details: errorMessage,
       });
     }
   },
@@ -2450,6 +2560,7 @@ const walletTransactionController = {
   async getAllWithdrawalTransactions(req, res) {
     try {
       const isAdmin = req.user.role === "admin";
+     
       let transactions;
       if (isAdmin) {
         // Admin: fetch all withdrawal transactions
