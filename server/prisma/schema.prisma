@@ -326,6 +326,7 @@ enum TransactionType {
   WITHDRAWAL
   DEBIT
   CREDIT
+  CONTEST_WIN
 }
 
 enum TransactionStatus {
@@ -333,6 +334,8 @@ enum TransactionStatus {
   APPROVED
   REJECTED
   COMPLETED
+  CONTEST_WIN
+  SUCCESS
 }
 
 
@@ -341,6 +344,7 @@ model WinningHistory {
   winDate        DateTime?
   contestId      Int
   userId         Int
+  walletCredited Boolean?
   leaderboardId  Int @unique
   rank           Int
   amount         Decimal     @db.Decimal(15, 2)
