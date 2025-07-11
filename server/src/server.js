@@ -19,6 +19,7 @@ require("./cronjob/cronContestReset");
 require("./cronjob/cronLeaderboard");
 require("./cronjob/cronrefer");
 require("./cronjob/cronPrizeDistribution");
+require("./cronjob/cronPrizeWalletCredit");
 // --- REDIS CLIENT SETUP ---
 const Redis = require("ioredis");
 const redisClient = new Redis({

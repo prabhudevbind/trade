@@ -227,6 +227,12 @@ const navigation = [
             url: "/admin/price",
             permission: "manage-price",
           },
+           {
+            title: "Winner List",
+            icon: TrophyIcon,
+            url: "/admin/winner-list",
+            permission: "manage-winner-list",
+          },
         ],
       },
       {

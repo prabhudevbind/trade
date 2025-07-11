@@ -176,11 +176,12 @@ model Leaderboard {
   profit_loss_status String?
   contest         Contest   @relation(fields: [contest_id], references: [id])
   user            User      @relation(fields: [user_id], references: [id])
-
+  winHisty        WinningHistory?
   @@index([contest_id])
   @@index([user_id])
   @@unique([contest_id, user_id, snapshot_time])
 }
+
 // Option market data
 model Option {
   id           Int        @id @default(autoincrement())
@@ -336,16 +337,18 @@ enum TransactionStatus {
 
 
 model WinningHistory {
-  id           Int      @id @default(autoincrement())
-  contestId    Int
-  userId       Int
-  rank         Int
-  amount       Decimal  @db.Decimal(15, 2)
-  awardedAt    DateTime @default(now())
-  contest      Contest  @relation(fields: [contestId], references: [id])
-  user         User     @relation(fields: [userId], references: [id])
-  
+  id             Int         @id @default(autoincrement())
+  winDate        DateTime?
+  contestId      Int
+  userId         Int
+  leaderboardId  Int @unique
+  rank           Int
+  amount         Decimal     @db.Decimal(15, 2)
+  awardedAt      DateTime    @default(now())
+  contest        Contest     @relation(fields: [contestId], references: [id])
+  user           User        @relation(fields: [userId], references: [id])
+  leaderboard    Leaderboard? @relation(fields: [leaderboardId], references: [id])
   @@index([contestId])
   @@index([userId])
-  @@unique([contestId, userId]) // Add this line
+  @@unique([contestId, userId])
 }

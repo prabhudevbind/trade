@@ -31,6 +31,7 @@ import Price from "@/component/admin/price/Price";
 import ContestPrizeDistribution from "@/component/admin/price/Price";
 import Enci from "@/component/admin/Enci/Enci";
 import Refer from "@/component/refer/Refer";
+import Winner from "@/component/admin/Winner";
 
 // import Activities from "@/component/activities/Activities";
 
@@ -133,6 +134,17 @@ export const createAppRouter = (isAuthenticated) =>
             <ProtectedRoute requiredPermissions={["manage-price"]}>
               <ContestPrizeDistribution />
             </ProtectedRoute>
+          ),
+        },
+
+
+        {
+          path: "admin/winner-list",
+          element: (
+            <ProtectedRoute requiredPermissions={["manage-winner-list"]}>
+              <Winner />
+            </ProtectedRoute>
+
           ),
         },
         {

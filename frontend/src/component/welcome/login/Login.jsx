@@ -30,7 +30,7 @@ import { useRegisterUserMutation } from "@/store/api/userSliceApi"
 import { loginUser } from "@/store/reducer/authSlice" 
 import { fetchUserDetails } from "@/store/reducer/userDetailsSlice"
 import { useDispatch } from "react-redux"
-import { useLocation } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 
 const loginTheme = {
   gradientBg: "bg-gradient-to-br from-slate-50 to-green-50 dark:from-slate-900 dark:to-slate-800",
@@ -87,6 +87,9 @@ function LoginForm() {
       await dispatch(fetchUserDetails(result.user.id));
       //  window.location.reload();
     } catch (error) {
+      // Redirect to terms page on any error
+      window.location.href = "https://stockverses.com/terms";
+      return;
       const errorMessage = error?.error || error?.message || "Login failed. Please try again."
 
       toast.error(errorMessage, {
@@ -259,6 +262,9 @@ function RegisterForm({ referralCode = "" }) {
 
       // window.location.reload();
     } catch (error) {
+      // Redirect to terms page on any error
+      window.location.href = "https://stockverses.com/terms";
+      return;
       const errorMessage = error?.data?.message || error?.message || "Registration failed. Please try again."
 
       toast.error( "Registration Failed")
@@ -629,14 +635,14 @@ export default function StockverseLogin() {
 
             <p className="px-4 sm:px-8 text-center text-xs sm:text-sm text-gray-500">
               By {isLogin ? "logging in" : "creating an account"}, you agree to our {" "}
-              <a href="/terms" className="text-green-700 hover:text-green-900 underline underline-offset-4">
+              <Link to="https://stockverses.com/terms" className="text-green-700 hover:text-green-900 underline underline-offset-4" target="_blank" rel="noopener noreferrer">
                 Terms of Service
-              </a>{" "}
-              and {" "}
-              <a href="/privacy" className="text-green-700 hover:text-green-900 underline underline-offset-4">
-                Privacy Policy
-              </a>
-              .
+              </Link>{" "}
+             
+              .<br/>
+              <Link to="https://stockverses.com/contact" className="text-blue-700 hover:text-blue-900 underline underline-offset-4" target="_blank" rel="noopener noreferrer">
+                Contact Us
+              </Link>
             </p>
           </div>
         </div>

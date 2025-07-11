@@ -248,6 +248,15 @@ export function OptionDetailsDrawer({
       if (err?.data?.error?.includes("Maximum trades limit")) {
         setTradeLimitReached(true);
         toast.warn(`Trade Limit Reached: ${err.data.maxAllowed} trades used`);
+      } else if (err?.data?.error === "Insufficient virtual cash") {
+        // Show detailed insufficient cash error
+        const { available, required, deficit } = err.data;
+        toast.error(
+          `Insufficient virtual cash.\nAvailable: ₹${available?.toLocaleString()}\nRequired: ₹${required?.toLocaleString()}\nDeficit: ₹${deficit?.toLocaleString()}`
+        );
+        setError(
+          `Insufficient virtual cash. Available: ₹${available?.toLocaleString()}, Required: ₹${required?.toLocaleString()}, Deficit: ₹${deficit?.toLocaleString()}`
+        );
       } else {
         toast.error(`Trade Failed: ${err.error || "Something went wrong"}`);
       }

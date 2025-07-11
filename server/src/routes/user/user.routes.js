@@ -420,6 +420,7 @@ router.get('/',
           amount:true,
           createdAt: true,
           img: true,
+          winHistory:true,
           referralsMade:true,
           referralsReceived:true,
           role: {
