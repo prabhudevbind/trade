@@ -334,82 +334,73 @@ export default function Leaderboard() {
         </div>
 
         {/* Top 3 Podium */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">Top Performers</h2>
-
-          <div className="flex items-end justify-center space-x-8 mb-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-4 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">Top Performers</h2>
+          <div className="flex items-end justify-center space-x-2 md:space-x-8 mb-6 md:mb-8">
             {/* Second Place */}
             {leaderboard_topWinners[1] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-20 h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
+              <div className="flex flex-col items-center w-20 md:w-28">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
                     {getUserAvatar(leaderboard_topWinners[1].user)}
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm">2</span>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 md:w-8 md:h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-sm">2</span>
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                >
-                  <Medal className="h-6 w-6 text-gray-600" />
+                <div className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-12 md:w-24 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-lg`}>
+                  <Medal className="h-4 w-4 md:h-6 md:w-6 text-gray-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 capitalize">{leaderboard_topWinners[1].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[1].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[1].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 capitalize text-xs md:text-base">{leaderboard_topWinners[1].userName}</p>
+                  <p className="text-xs md:text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[1].totalPnL)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(leaderboard_topWinners[1].roi)}% ROI</p>
                 </div>
               </div>
             )}
-
             {/* First Place */}
             {leaderboard_topWinners[0] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-24 h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
+              <div className="flex flex-col items-center w-24 md:w-36">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
                     {getUserAvatar(leaderboard_topWinners[0].user)}
                   </div>
-                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
-                    <Crown className="h-5 w-5 text-yellow-800" />
+                  <div className="absolute -top-3 -right-3 w-7 h-7 md:w-10 md:h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
+                    <Crown className="h-4 w-4 md:h-5 md:w-5 text-yellow-800" />
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-28 rounded-t-lg flex items-end justify-center pb-2 shadow-xl`}
-                >
-                  <Trophy className="h-8 w-8 text-yellow-600" />
+                <div className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-16 md:w-28 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-xl`}>
+                  <Trophy className="h-5 w-5 md:h-8 md:w-8 text-yellow-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 text-lg capitalize">{leaderboard_topWinners[0].userName}</p>
-                  <p className="text-xl font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[0].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[0].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 text-sm md:text-lg capitalize">{leaderboard_topWinners[0].userName}</p>
+                  <p className="text-base md:text-xl font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[0].totalPnL)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(leaderboard_topWinners[0].roi)}% ROI</p>
                   <div className="flex items-center justify-center mt-1">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                    <Star className="h-3 w-3 md:h-4 md:w-4 text-yellow-500 mr-1" />
                     <span className="text-xs text-yellow-600 font-medium">Champion</span>
                   </div>
                 </div>
               </div>
             )}
-
             {/* Third Place */}
             {leaderboard_topWinners[2] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
+              <div className="flex flex-col items-center w-20 md:w-28">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
                     {getUserAvatar(leaderboard_topWinners[2].user)}
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm">3</span>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 md:w-8 md:h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-sm">3</span>
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                >
-                  <Award className="h-6 w-6 text-amber-600" />
+                <div className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-12 md:w-24 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-lg`}>
+                  <Award className="h-4 w-4 md:h-6 md:w-6 text-amber-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 capitalize">{leaderboard_topWinners[2].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[2].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[2].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 capitalize text-xs md:text-base">{leaderboard_topWinners[2].userName}</p>
+                  <p className="text-xs md:text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[2].totalPnL)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(leaderboard_topWinners[2].roi)}% ROI</p>
                 </div>
               </div>
             )}
@@ -640,82 +631,73 @@ export default function Leaderboard() {
         </div>
 
         {/* Top 3 Podium */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">Top Performers</h2>
-
-          <div className="flex items-end justify-center space-x-8 mb-8">
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-4 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">Top Performers</h2>
+          <div className="flex items-end justify-center space-x-2 md:space-x-8 mb-6 md:mb-8">
             {/* Second Place */}
             {winners_topWinners[1] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-20 h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
+              <div className="flex flex-col items-center w-20 md:w-28">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
                     {getUserAvatar(winners_topWinners[1].user)}
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm">2</span>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 md:w-8 md:h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-sm">2</span>
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                >
-                  <Medal className="h-6 w-6 text-gray-600" />
+                <div className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-12 md:w-24 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-lg`}>
+                  <Medal className="h-4 w-4 md:h-6 md:w-6 text-gray-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 capitalize">{winners_topWinners[1].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[1].amount)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[1].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 capitalize text-xs md:text-base">{winners_topWinners[1].userName}</p>
+                  <p className="text-xs md:text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[1].amount)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(winners_topWinners[1].roi)}% ROI</p>
                 </div>
               </div>
             )}
-
             {/* First Place */}
             {winners_topWinners[0] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-24 h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
+              <div className="flex flex-col items-center w-24 md:w-36">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-16 h-16 md:w-24 md:h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
                     {getUserAvatar(winners_topWinners[0].user)}
                   </div>
-                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
-                    <Crown className="h-5 w-5 text-yellow-800" />
+                  <div className="absolute -top-3 -right-3 w-7 h-7 md:w-10 md:h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
+                    <Crown className="h-4 w-4 md:h-5 md:w-5 text-yellow-800" />
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-28 rounded-t-lg flex items-end justify-center pb-2 shadow-xl`}
-                >
-                  <Trophy className="h-8 w-8 text-yellow-600" />
+                <div className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-16 md:w-28 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-xl`}>
+                  <Trophy className="h-5 w-5 md:h-8 md:w-8 text-yellow-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 text-lg capitalize">{winners_topWinners[0].userName}</p>
-                  <p className="text-xl font-bold text-emerald-600">₹{formatPnL(winners_topWinners[0].amount)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[0].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 text-sm md:text-lg capitalize">{winners_topWinners[0].userName}</p>
+                  <p className="text-base md:text-xl font-bold text-emerald-600">₹{formatPnL(winners_topWinners[0].amount)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(winners_topWinners[0].roi)}% ROI</p>
                   <div className="flex items-center justify-center mt-1">
-                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                    <Star className="h-3 w-3 md:h-4 md:w-4 text-yellow-500 mr-1" />
                     <span className="text-xs text-yellow-600 font-medium">Champion</span>
                   </div>
                 </div>
               </div>
             )}
-
             {/* Third Place */}
             {winners_topWinners[2] && (
-              <div className="flex flex-col items-center">
-                <div className="relative mb-4">
-                  <div className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
+              <div className="flex flex-col items-center w-20 md:w-28">
+                <div className="relative mb-2 md:mb-4">
+                  <div className="w-12 h-12 md:w-20 md:h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
                     {getUserAvatar(winners_topWinners[2].user)}
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
-                    <span className="text-white font-bold text-sm">3</span>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 md:w-8 md:h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-xs md:text-sm">3</span>
                   </div>
                 </div>
-                <div
-                  className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                >
-                  <Award className="h-6 w-6 text-amber-600" />
+                <div className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-12 md:w-24 rounded-t-lg flex items-end justify-center pb-1 md:pb-2 shadow-lg`}>
+                  <Award className="h-4 w-4 md:h-6 md:w-6 text-amber-600" />
                 </div>
-                <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 capitalize">{winners_topWinners[2].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[2].amount)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[2].roi)}% ROI</p>
+                <div className="text-center mt-2 md:mt-3">
+                  <p className="font-bold text-gray-900 capitalize text-xs md:text-base">{winners_topWinners[2].userName}</p>
+                  <p className="text-xs md:text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[2].amount)}</p>
+                  <p className="text-xs md:text-sm text-gray-600">{formatROI(winners_topWinners[2].roi)}% ROI</p>
                 </div>
               </div>
             )}
