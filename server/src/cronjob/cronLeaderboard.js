@@ -776,8 +776,8 @@ function printOptionBuyVsMarketTable(participants) {
 // Initialize socket connection
 initializeSocketConnection();
 
-// Schedule the cron job to run every 1 minute
-cron.schedule("*/1 * * * *", async () => {
+// Schedule the cron job to run every 2 minutes
+cron.schedule("*/2 * * * *", async () => {
   // console.log("Cron job triggered - generating leaderboard...");
   try {
     const marketStatus = getMarketStatus();

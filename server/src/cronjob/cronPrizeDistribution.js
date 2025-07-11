@@ -56,49 +56,59 @@ cron.schedule("30 15 * * *",
           
           if (prize) {
             try {
-              // Check if prize already awarded for this contest and user
-              const existingWin = await prisma.winningHistory.findFirst({
+              // Upsert winning history to handle unique constraint
+              await prisma.winningHistory.upsert({
                 where: {
-                  contestId: contest.id,
-                  userId: entry.user_id,
-                },
-              });
-
-              if (existingWin) {
-                // Update existing record
-                await prisma.winningHistory.update({
-                  where: { id: existingWin.id },
-                  data: {
-                    amount: prize.amount,
-                    rank: entry.rank,
-                    awardedAt: now,
-                  },
-                });
-                console.log(`Updated prize for user ${entry.user_id} for rank ${entry.rank}`);
-              } else {
-                // Create new record
-                await prisma.winningHistory.create({
-                  data: {
+                  contestId_userId: {
                     contestId: contest.id,
                     userId: entry.user_id,
-                    rank: entry.rank,
-                    amount: prize.amount,
-                    awardedAt: now,
                   },
-                });
-                console.log(`Created new prize record for user ${entry.user_id} for rank ${entry.rank}`);
-              }
+                },
+                update: {
+                  amount: prize.amount,
+                  rank: entry.rank,
+                  awardedAt: now,
+                  winDate: now,
+                  leaderboardId: entry.id,
+                },
+                create: {
+                  contestId: contest.id,
+                  userId: entry.user_id,
+                  rank: entry.rank,
+                  amount: prize.amount,
+                  awardedAt: now,
+                  winDate: now,
+                  leaderboardId: entry.id,
+                },
+              });
+              console.log(`Upserted prize for user ${entry.user_id} for rank ${entry.rank}`);
+
+              // Add winning amount to user's wallet and create WalletTransaction
+              await prisma.$transaction([
+                prisma.walletTransaction.create({
+                  data: {
+                    user_id: entry.user_id,
+                    amount: prize.amount,
+                    type: "CONTEST_WIN", // Use your TransactionType enum value
+                    status: "SUCCESS",   // Use your TransactionStatus enum value
+                    payment_method: "CONTEST_PRIZE",
+                  },
+                }),
+                prisma.user.update({
+                  where: { id: entry.user_id },
+                  data: {
+                    amounts: { increment: prize.amount },
+                  },
+                }),
+              ]);
+              console.log(`Credited ₹${prize.amount} to user ${entry.user_id} wallet`);
             } catch (error) {
               console.error(`Error processing user ${entry.user_id}:`, error);
             }
           }
         }
 
-        // Update contest status to completed after processing
-        // await prisma.contest.update({
-        //   where: { id: contest.id },
-        //   data: { status: "completed" },
-        // });
+      
         
         console.log(`Contest ${contest.id} marked as completed`);
       }

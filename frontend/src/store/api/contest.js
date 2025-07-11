@@ -1,4 +1,4 @@
-import { get } from 'react-hook-form';
+
 import { apiSlice } from './apiSlice';
 
 export const contestApi = apiSlice.injectEndpoints({

@@ -36,7 +36,7 @@ const CACHE_CONFIG = {
 const API_RATE_LIMITER = {
   calls: 0,
   resetTime: Date.now() + 60000, // Reset every minute
-  maxCalls: 60, // 60 calls per minute per instrument
+  maxCalls: 100, // 100 calls per minute per instrument
 };
 
 // Global state management for API calls

@@ -3,7 +3,7 @@ const prisma = require("../utils/prisma");
 // cron.schedule("*/5 * * * *",
 // --- CRON JOB: Reset all ongoing contests every night at 12:00 AM IST ---
 cron.schedule(
-  "0 0 * * *",
+  "0 0 * * *", // This runs at 12:00 AM every day (midnight) IST
   async () => {
     try {
       // Fetch all ongoing contests
@@ -94,7 +94,7 @@ cron.schedule(
     }
   },
   {
-    timezone: "Asia/Kolkata",
+    timezone: "Asia/Kolkata", // Ensures the cron runs at 12:00 AM IST
   }
 );
 
