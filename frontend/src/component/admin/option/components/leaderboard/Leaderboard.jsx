@@ -13,13 +13,31 @@ import { useGetWinningHistoryQuery } from "@/store/api/win.api"
 export default function Leaderboard() {
   const userId = 1 // Replace with actual user_id from auth context/store
   const [refreshKey, setRefreshKey] = useState(0)
+  const [currentTime, setCurrentTime] = useState(new Date())
+  const [showWinners, setShowWinners] = useState(false)
 
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().slice(0, 10)
   const { data: winningData, isLoading: winningHistoryLoading } = useGetWinningHistoryQuery({ startDate: today, endDate: today })
   const { data: userData, isLoading: userLoading } = useGetUserByIdQuery(userId)
 
-  // Auto-refresh every 30 seconds
+  // Check if current time is after 3:30 PM India time
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date()
+      setCurrentTime(now)
+      
+      // India time is UTC+5:30, so we need to check if it's 10:00 UTC (3:30 PM IST)
+      const indiaTime = new Date(now.getTime() + (0 * 60 * 60 * 1000))
+      const isAfter330PM = indiaTime.getHours() > 15 || (indiaTime.getHours() === 15 && indiaTime.getMinutes() >= 30)
+      
+      setShowWinners(isAfter330PM)
+    }, 1000) // Update every second to be precise
+
+    return () => clearInterval(interval)
+  }, [])
+
+  // Auto-refresh data every 30 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setRefreshKey((prev) => prev + 1)
@@ -66,8 +84,12 @@ export default function Leaderboard() {
     }
   }, [refreshKey, refetchParticipant, refetchLeaderboard, contestId])
 
-  // Check if winning data is available
-  const hasWinningData = winningData && winningData.success && winningData.data && winningData.data.length > 0
+  // Check if winning data is available (must be non-empty array)
+  const hasWinningData =
+    winningData &&
+    ((Array.isArray(winningData.data) && winningData.data.length > 0) ||
+    (Array.isArray(winningData) && winningData.length > 0)
+)
 
   // Helper functions
   const formatROI = (roi) => {
@@ -127,6 +149,59 @@ export default function Leaderboard() {
     }
   }
 
+  // Format time display for India timezone
+  const formatIndiaTime = (date) => {
+    return new Date(date.getTime() + (0 * 60 * 60 * 1000)).toLocaleTimeString("en-IN", {
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Kolkata'
+    })
+  }
+
+  // --- Data mapping for leaderboard and winners ---
+  // Map leaderboard data
+  const mappedLeaderboard = (Array.isArray(leaderboardData?.leaderboard) ? leaderboardData.leaderboard : []).map((entry) => ({
+    ...entry,
+    totalPnL: Number(entry.total_pnl),
+    unrealizedPnL: Number(entry.unrealized_pnl),
+    realizedPnL: Number(entry.realized_pnl),
+    roi: Number(entry.roi),
+    userName: entry.user?.username,
+    userImg: entry.user?.img,
+    userId: entry.user_id, // normalize to userId
+    user: entry.user,
+    rank: entry.rank,
+  }))
+  const leaderboard_totalParticipants = mappedLeaderboard.length
+  const leaderboard_profitCount = mappedLeaderboard.filter(w => Number(w.totalPnL) > 0).length
+  const leaderboard_lossCount = mappedLeaderboard.filter(w => Number(w.totalPnL) < 0).length
+  const leaderboard_breakEvenCount = mappedLeaderboard.filter(w => Number(w.totalPnL) === 0).length
+  const leaderboard_topWinners = mappedLeaderboard.slice(0, 3)
+  const leaderboard_remainingWinners = mappedLeaderboard.slice(3)
+  const leaderboard_currentUserWin = mappedLeaderboard.find((entry) => entry.userId === userId)
+
+  // Map winners data
+  const mappedWinners = (Array.isArray(winningData?.data) ? winningData.data : []).map((entry) => ({
+    ...entry,
+    totalPnL: Number(entry.leaderboard?.total_pnl),
+    unrealizedPnL: Number(entry.leaderboard?.unrealized_pnl),
+    realizedPnL: Number(entry.leaderboard?.realized_pnl),
+    roi: Number(entry.leaderboard?.roi),
+    userName: entry.user?.username,
+    userImg: entry.user?.img,
+    userId: entry.userId, // normalize to userId
+    user: entry.user,
+    amount: Number(entry.amount),
+    rank: entry.rank,
+  }))
+  const winners_totalParticipants = mappedWinners.length
+  const winners_profitCount = mappedWinners.filter(w => Number(w.totalPnL) > 0).length
+  const winners_lossCount = mappedWinners.filter(w => Number(w.totalPnL) < 0).length
+  const winners_breakEvenCount = mappedWinners.filter(w => Number(w.totalPnL) === 0).length
+  const winners_topWinners = mappedWinners.slice(0, 3)
+  const winners_remainingWinners = mappedWinners.slice(3)
+  const winners_currentUserWin = mappedWinners.find((entry) => entry.userId === userId)
+
   // Loading state
   if (participantLoading || leaderboardLoading) {
     return (
@@ -171,355 +246,17 @@ export default function Leaderboard() {
     )
   }
 
-  // If winning data is available, show winners
-  if (hasWinningData) {
-    // Map backend winnerdata to frontend keys using leaderboard and user objects
-    // Map backend keys to frontend keys for winners
-    const mappedWinners = winningData.data.map((entry) => ({
-      ...entry,
-      totalPnL: Number(entry.leaderboard?.total_pnl),
-      unrealizedPnL: Number(entry.leaderboard?.unrealized_pnl),
-      realizedPnL: Number(entry.leaderboard?.realized_pnl),
-      roi: Number(entry.leaderboard?.roi),
-      userName: entry.user?.username,
-      userImg: entry.user?.img,
-      userId: entry.user_id,
-      user: entry.user, // keep for avatar
-    }))
-
-    const totalParticipants = mappedWinners.length;
-    const profitCount = mappedWinners.filter(w => Number(w.totalPnL) > 0).length;
-    const lossCount = mappedWinners.filter(w => Number(w.totalPnL) < 0).length;
-    const breakEvenCount = mappedWinners.filter(w => Number(w.totalPnL) === 0).length;
-
-    const topWinners = mappedWinners.slice(0, 3);
-    const remainingWinners = mappedWinners.slice(3);
-    const currentUserWin = mappedWinners.find((entry) => entry.userId === userId);
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
-        {/* Header */}
-        <div className="bg-white shadow-lg border-b border-gray-200">
-          <div className="max-w-7xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4">
-                <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
-                  <Trophy className="h-7 w-7 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
-                  <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
-                </div>
-              </div>
-              <button
-                onClick={handleRefresh}
-                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Refresh</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Section */}
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <Users className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">{totalParticipants}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Profit</p>
-                  <p className="text-2xl font-bold text-emerald-600">{profitCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                  <TrendingDown className="h-5 w-5 text-red-500" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Loss</p>
-                  <p className="text-2xl font-bold text-red-500">{lossCount}</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
-              <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                  <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600 font-medium">Break Even</p>
-                  <p className="text-2xl font-bold text-gray-600">{breakEvenCount}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Top 3 Podium */}
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">Top Performers</h2>
-
-            <div className="flex items-end justify-center space-x-8 mb-8">
-              {/* Second Place */}
-              {topWinners[1] && (
-                <div className="flex flex-col items-center">
-                  <div className="relative mb-4">
-                    <div className="w-20 h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
-                      {getUserAvatar(topWinners[1].user)}
-                    </div>
-                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
-                      <span className="text-white font-bold text-sm">2</span>
-                    </div>
-                  </div>
-                  <div
-                    className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                  >
-                    <Medal className="h-6 w-6 text-gray-600" />
-                  </div>
-                  <div className="text-center mt-3">
-                    <p className="font-bold text-gray-900  uppercase">{topWinners[1].userName}</p>
-                    <p className="text-lg font-bold text-emerald-600">₹{formatPnL(topWinners[1].amount)}</p>
-                    <p className="text-sm text-gray-600">{formatROI(topWinners[1].roi)}% ROI</p>
-                  </div>
-                </div>
-              )}
-
-              {/* First Place */}
-              {topWinners[0] && (
-                <div className="flex flex-col items-center">
-                  <div className="relative mb-4">
-                    <div className="w-24 h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
-                      {getUserAvatar(topWinners[0].user)}
-                    </div>
-                    <div className="absolute -top-3 -right-3 w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
-                      <Crown className="h-5 w-5 text-yellow-800" />
-                    </div>
-                  </div>
-                  <div
-                    className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-28 rounded-t-lg flex items-end justify-center pb-2 shadow-xl`}
-                  >
-                    <Trophy className="h-8 w-8 text-yellow-600" />
-                  </div>
-                  <div className="text-center mt-3">
-                    <p className="font-bold text-gray-900 text-lg uppercase">{topWinners[0].userName}</p>
-                    <p className="text-xl font-bold text-emerald-600">₹{formatPnL(topWinners[0].amount)}</p>
-                    <p className="text-sm text-gray-600">{formatROI(topWinners[0].roi)}% ROI</p>
-                    <div className="flex items-center justify-center mt-1">
-                      <Star className="h-4 w-4 text-yellow-500 mr-1" />
-                      <span className="text-xs text-yellow-600 font-medium">Champion</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Third Place */}
-              {topWinners[2] && (
-                <div className="flex flex-col items-center">
-                  <div className="relative mb-4">
-                    <div className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
-                      {getUserAvatar(topWinners[2].user)}
-                    </div>
-                    <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
-                      <span className="text-white font-bold text-sm">3</span>
-                    </div>
-                  </div>
-                  <div
-                    className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
-                  >
-                    <Award className="h-6 w-6 text-amber-600" />
-                  </div>
-                  <div className="text-center mt-3">
-                    <p className="font-bold text-gray-900 uppercase">{topWinners[2].userName}</p>
-                    <p className="text-lg font-bold text-emerald-600">₹{formatPnL(topWinners[2].amount)}</p>
-                    <p className="text-sm text-gray-600">{formatROI(topWinners[2].roi)}% ROI</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Current User Position (if not in top 3) */}
-          {currentUserWin && currentUserWin.rank > 3 && (
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-6 mb-8 text-white">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <User className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-blue-100 text-sm font-medium">Your Position</p>
-                    <p className="text-xl font-bold">Rank #{currentUserWin.rank}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold">₹{formatPnL(currentUserWin.totalPnL)}</p>
-                  <p className="text-blue-100">{formatROI(currentUserWin.roi)}% ROI</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Remaining Participants */}
-          {remainingWinners.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-              <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                <h3 className="text-lg font-bold text-gray-900">All Participants</h3>
-              </div>
-              <div className="divide-y divide-gray-100">
-                {remainingWinners.map((entry) => {
-                  const pnl = entry.totalPnL || 0;
-                  const roi = entry.roi || 0;
-                  const isCurrentUser = entry.userId === userId;
-
-                  return (
-                    <div
-                      key={entry.userId}
-                      className={`p-6 hover:bg-gray-50 transition-colors duration-200 ${
-                        isCurrentUser ? "bg-blue-50 border-l-4 border-blue-500" : ""
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex-shrink-0">
-                            <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                              <span className="text-gray-600 font-bold text-sm">#{entry.rank}</span>
-                            </div>
-                          </div>
-                          <div className="w-12 h-12 rounded-full overflow-hidden shadow-md">
-                            {getUserAvatar(entry.user)}
-                          </div>
-                          <div>
-                            <p className="font-bold text-gray-900 flex items-center">
-                              {entry.userName}
-                              {isCurrentUser && (
-                                <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
-                                  You
-                                </span>
-                              )}
-                            </p>
-                            <p className="text-sm text-gray-600">Rank #{entry.rank}</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="flex items-center space-x-2 justify-end mb-1">
-                            <span
-                              className={`font-bold text-lg ${
-                                pnl > 0 ? "text-emerald-600" : pnl < 0 ? "text-red-500" : "text-gray-500"
-                              }`}
-                            >
-                              ₹{formatPnL(pnl)}
-                            </span>
-                            {pnl > 0 && <TrendingUp className="h-4 w-4 text-emerald-600" />}
-                            {pnl < 0 && <TrendingDown className="h-4 w-4 text-red-500" />}
-                          </div>
-                          <p
-                            className={`text-sm font-medium ${
-                              roi > 0 ? "text-emerald-600" : roi < 0 ? "text-red-500" : "text-gray-500"
-                            }`}
-                          >
-                            {roi > 0 ? "+" : ""}
-                            {formatROI(roi)}% ROI
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Prize Distribution */}
-          {prizeDistributions && prizeDistributions.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-200 mt-8 overflow-hidden">
-              <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
-                <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                  <Trophy className="h-5 w-5 text-green-600 mr-2" />
-                  Prize Distribution
-                </h3>
-              </div>
-              <div className="p-6">
-                {prizeLoading ? (
-                  <div className="text-gray-500 text-sm">Loading prizes...</div>
-                ) : (
-                  <div className="grid gap-3">
-                    {prizeDistributions.map((prize) => (
-                      <div
-                        key={prize.id}
-                        className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200"
-                      >
-                        <span className="font-medium text-green-900">
-                          Rank {prize.fromRank}
-                          {prize.fromRank !== prize.toRank ? ` - ${prize.toRank}` : ""}
-                        </span>
-                        <span className="font-bold text-green-700 text-lg">
-                          ₹{Number(prize.amount).toLocaleString("en-IN")}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="text-center mt-8 py-6">
-            <p className="text-sm text-gray-600 font-medium mb-1">
-              Last updated:{" "}
-              {new Date().toLocaleTimeString("en-IN", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </p>
-            <p className="text-xs text-gray-500">Auto-refresh every 30 seconds</p>
-          </div>
-        </div>
-      </div>
-    );
+  // Main render function
+  const renderContent = () => {
+    if (showWinners && hasWinningData) {
+      return renderWinners()
+    } else {
+      return renderLeaderboard()
+    }
   }
 
-  // No winning data, show regular leaderboard
-  // Map backend keys to frontend keys
-  const mappedLeaderboard = leaderboardData.leaderboard.map((entry) => ({
-    ...entry,
-    totalPnL: Number(entry.total_pnl),
-    unrealizedPnL: Number(entry.unrealized_pnl),
-    realizedPnL: Number(entry.realized_pnl),
-    roi: Number(entry.roi),
-    userName: entry.user?.username,
-    userImg: entry.user?.img,
-    userId: entry.user_id,
-  }))
-
-  const topThree = mappedLeaderboard.slice(0, 3)
-  const remainingParticipants = mappedLeaderboard.slice(3)
-  const currentUserEntry = mappedLeaderboard.find((entry) => entry.userId === userId)
-
-  // Stats
-  const profitCount = mappedLeaderboard.filter((e) => (e.totalPnL || 0) > 0).length
-  const lossCount = mappedLeaderboard.filter((e) => (e.totalPnL || 0) < 0).length
-  const breakEvenCount = mappedLeaderboard.filter((e) => (e.totalPnL || 0) === 0).length
-  const totalParticipants = mappedLeaderboard.length
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+  const renderLeaderboard = () => (
+    <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="bg-white shadow-lg border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 py-6">
@@ -533,13 +270,322 @@ export default function Leaderboard() {
                 <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
               </div>
             </div>
-            <button
-              onClick={handleRefresh}
-              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Refresh</span>
-            </button>
+            <div className="flex items-center space-x-4">
+            
+              <button
+                onClick={handleRefresh}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Refresh</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats Section */}
+      <div className="max-w-7xl mx-auto px-2 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                <Users className="h-5 w-5 text-blue-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Total</p>
+                <p className="text-2xl font-bold text-gray-900">{leaderboard_totalParticipants}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                <TrendingUp className="h-5 w-5 text-emerald-600" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Profit</p>
+                <p className="text-2xl font-bold text-emerald-600">{leaderboard_profitCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
+                <TrendingDown className="h-5 w-5 text-red-500" />
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Loss</p>
+                <p className="text-2xl font-bold text-red-500">{leaderboard_lossCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-xl p-4 shadow-md border border-gray-100">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                <div className="w-4 h-4 bg-gray-400 rounded-full"></div>
+              </div>
+              <div>
+                <p className="text-sm text-gray-600 font-medium">Break Even</p>
+                <p className="text-2xl font-bold text-gray-600">{leaderboard_breakEvenCount}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Top 3 Podium */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-8">Top Performers</h2>
+
+          <div className="flex items-end justify-center space-x-8 mb-8">
+            {/* Second Place */}
+            {leaderboard_topWinners[1] && (
+              <div className="flex flex-col items-center">
+                <div className="relative mb-4">
+                  <div className="w-20 h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
+                    {getUserAvatar(leaderboard_topWinners[1].user)}
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-sm">2</span>
+                  </div>
+                </div>
+                <div
+                  className={`${getPodiumColor(2)} ${getPodiumHeight(2)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
+                >
+                  <Medal className="h-6 w-6 text-gray-600" />
+                </div>
+                <div className="text-center mt-3">
+                  <p className="font-bold text-gray-900 capitalize">{leaderboard_topWinners[1].userName}</p>
+                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[1].totalPnL)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[1].roi)}% ROI</p>
+                </div>
+              </div>
+            )}
+
+            {/* First Place */}
+            {leaderboard_topWinners[0] && (
+              <div className="flex flex-col items-center">
+                <div className="relative mb-4">
+                  <div className="w-24 h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
+                    {getUserAvatar(leaderboard_topWinners[0].user)}
+                  </div>
+                  <div className="absolute -top-3 -right-3 w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
+                    <Crown className="h-5 w-5 text-yellow-800" />
+                  </div>
+                </div>
+                <div
+                  className={`${getPodiumColor(1)} ${getPodiumHeight(1)} w-28 rounded-t-lg flex items-end justify-center pb-2 shadow-xl`}
+                >
+                  <Trophy className="h-8 w-8 text-yellow-600" />
+                </div>
+                <div className="text-center mt-3">
+                  <p className="font-bold text-gray-900 text-lg capitalize">{leaderboard_topWinners[0].userName}</p>
+                  <p className="text-xl font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[0].totalPnL)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[0].roi)}% ROI</p>
+                  <div className="flex items-center justify-center mt-1">
+                    <Star className="h-4 w-4 text-yellow-500 mr-1" />
+                    <span className="text-xs text-yellow-600 font-medium">Champion</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Third Place */}
+            {leaderboard_topWinners[2] && (
+              <div className="flex flex-col items-center">
+                <div className="relative mb-4">
+                  <div className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
+                    {getUserAvatar(leaderboard_topWinners[2].user)}
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
+                    <span className="text-white font-bold text-sm">3</span>
+                  </div>
+                </div>
+                <div
+                  className={`${getPodiumColor(3)} ${getPodiumHeight(3)} w-24 rounded-t-lg flex items-end justify-center pb-2 shadow-lg`}
+                >
+                  <Award className="h-6 w-6 text-amber-600" />
+                </div>
+                <div className="text-center mt-3">
+                  <p className="font-bold text-gray-900 capitalize">{leaderboard_topWinners[2].userName}</p>
+                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(leaderboard_topWinners[2].totalPnL)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(leaderboard_topWinners[2].roi)}% ROI</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Current User Position (if not in top 3) */}
+        {leaderboard_currentUserWin && leaderboard_currentUserWin.rank > 3 && (
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-6 mb-8 text-white">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
+                  <User className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-blue-100 text-sm font-medium">Your Position</p>
+                  <p className="text-xl font-bold">Rank #{leaderboard_currentUserWin.rank}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-bold">₹{formatPnL(leaderboard_currentUserWin.totalPnL)}</p>
+                <p className="text-blue-100">{formatROI(leaderboard_currentUserWin.roi)}% ROI</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Remaining Participants */}
+        {leaderboard_remainingWinners.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900">All Participants</h3>
+            </div>
+            <div className="divide-y divide-gray-100">
+              {leaderboard_remainingWinners.map((entry) => {
+                const pnl = entry.totalPnL || 0
+                const roi = entry.roi || 0
+                const isCurrentUser = entry.userId === userId
+
+                return (
+                  <div
+                    key={entry.userId}
+                    className={`p-6 hover:bg-gray-50 transition-colors duration-200 ${
+                      isCurrentUser ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex-shrink-0">
+                          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
+                            <span className="text-gray-600 font-bold text-sm">#{entry.rank}</span>
+                          </div>
+                        </div>
+                        <div className="w-12 h-12 rounded-full overflow-hidden shadow-md">
+                          {getUserAvatar(entry.user)}
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 flex items-center">
+                            {entry.userName}
+                            {isCurrentUser && (
+                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                                You
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-600">Rank #{entry.rank}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center space-x-2 justify-end mb-1">
+                          <span
+                            className={`font-bold text-lg ${
+                              pnl > 0 ? "text-emerald-600" : pnl < 0 ? "text-red-500" : "text-gray-500"
+                            }`}
+                          >
+                            ₹{formatPnL(pnl)}
+                          </span>
+                          {pnl > 0 && <TrendingUp className="h-4 w-4 text-emerald-600" />}
+                          {pnl < 0 && <TrendingDown className="h-4 w-4 text-red-500" />}
+                        </div>
+                        <p
+                          className={`text-sm font-medium ${
+                            roi > 0 ? "text-emerald-600" : roi < 0 ? "text-red-500" : "text-gray-500"
+                          }`}
+                        >
+                          {roi > 0 ? "+" : ""}
+                          {formatROI(roi)}% ROI
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Prize Distribution */}
+        {prizeDistributions && prizeDistributions.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 mt-8 overflow-hidden">
+            <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                <Trophy className="h-5 w-5 text-green-600 mr-2" />
+                Prize Distribution
+              </h3>
+            </div>
+            <div className="p-6">
+              {prizeLoading ? (
+                <div className="text-gray-500 text-sm">Loading prizes...</div>
+              ) : (
+                <div className="grid gap-3">
+                  {prizeDistributions.map((prize) => (
+                    <div
+                      key={prize.id}
+                      className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200"
+                    >
+                      <span className="font-medium text-green-900">
+                        Rank {prize.fromRank}
+                        {prize.fromRank !== prize.toRank ? ` - ${prize.toRank}` : ""}
+                      </span>
+                      <span className="font-bold text-green-700 text-lg">
+                        ₹{Number(prize.amount).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="text-center mt-8 py-6">
+          <p className="text-sm text-gray-600 font-medium mb-1">
+            Last updated:{" "}
+            {new Date().toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </p>
+          <p className="text-xs text-gray-500">Auto-refresh every 30 seconds</p>
+          {!showWinners && (
+            <p className="text-sm text-blue-600 mt-2">
+              Winners will be announced after 3:30 PM India Time
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderWinners = () => (
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* Header */}
+      <div className="bg-white shadow-lg border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 py-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+                <Trophy className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Winners</h1>
+                <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+            
+              <button
+                onClick={handleRefresh}
+                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+              >
+                <RefreshCw className="h-4 w-4" />
+                <span>Refresh</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -554,7 +600,7 @@ export default function Leaderboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 font-medium">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{totalParticipants}</p>
+                <p className="text-2xl font-bold text-gray-900">{winners_totalParticipants}</p>
               </div>
             </div>
           </div>
@@ -565,7 +611,7 @@ export default function Leaderboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 font-medium">Profit</p>
-                <p className="text-2xl font-bold text-emerald-600">{profitCount}</p>
+                <p className="text-2xl font-bold text-emerald-600">{winners_profitCount}</p>
               </div>
             </div>
           </div>
@@ -576,7 +622,7 @@ export default function Leaderboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 font-medium">Loss</p>
-                <p className="text-2xl font-bold text-red-500">{lossCount}</p>
+                <p className="text-2xl font-bold text-red-500">{winners_lossCount}</p>
               </div>
             </div>
           </div>
@@ -587,7 +633,7 @@ export default function Leaderboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600 font-medium">Break Even</p>
-                <p className="text-2xl font-bold text-gray-600">{breakEvenCount}</p>
+                <p className="text-2xl font-bold text-gray-600">{winners_breakEvenCount}</p>
               </div>
             </div>
           </div>
@@ -599,11 +645,11 @@ export default function Leaderboard() {
 
           <div className="flex items-end justify-center space-x-8 mb-8">
             {/* Second Place */}
-            {topThree[1] && (
+            {winners_topWinners[1] && (
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
                   <div className="w-20 h-20 rounded-full border-4 border-gray-300 shadow-lg overflow-hidden">
-                    {getUserAvatar(topThree[1].user)}
+                    {getUserAvatar(winners_topWinners[1].user)}
                   </div>
                   <div className="absolute -top-2 -right-2 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center shadow-lg">
                     <span className="text-white font-bold text-sm">2</span>
@@ -615,19 +661,19 @@ export default function Leaderboard() {
                   <Medal className="h-6 w-6 text-gray-600" />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900">{topWinners[1].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(topWinners[1].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(topWinners[1].roi)}% ROI</p>
+                  <p className="font-bold text-gray-900 capitalize">{winners_topWinners[1].userName}</p>
+                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[1].amount)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[1].roi)}% ROI</p>
                 </div>
               </div>
             )}
 
             {/* First Place */}
-            {topThree[0] && (
+            {winners_topWinners[0] && (
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
                   <div className="w-24 h-24 rounded-full border-4 border-yellow-400 shadow-xl overflow-hidden">
-                    {getUserAvatar(topThree[0].user)}
+                    {getUserAvatar(winners_topWinners[0].user)}
                   </div>
                   <div className="absolute -top-3 -right-3 w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center shadow-lg">
                     <Crown className="h-5 w-5 text-yellow-800" />
@@ -639,9 +685,9 @@ export default function Leaderboard() {
                   <Trophy className="h-8 w-8 text-yellow-600" />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900 text-lg">{topThree[0].userName}</p>
-                  <p className="text-xl font-bold text-emerald-600">₹{formatPnL(topThree[0].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(topThree[0].roi)}% ROI</p>
+                  <p className="font-bold text-gray-900 text-lg capitalize">{winners_topWinners[0].userName}</p>
+                  <p className="text-xl font-bold text-emerald-600">₹{formatPnL(winners_topWinners[0].amount)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[0].roi)}% ROI</p>
                   <div className="flex items-center justify-center mt-1">
                     <Star className="h-4 w-4 text-yellow-500 mr-1" />
                     <span className="text-xs text-yellow-600 font-medium">Champion</span>
@@ -651,11 +697,11 @@ export default function Leaderboard() {
             )}
 
             {/* Third Place */}
-            {topThree[2] && (
+            {winners_topWinners[2] && (
               <div className="flex flex-col items-center">
                 <div className="relative mb-4">
                   <div className="w-20 h-20 rounded-full border-4 border-amber-400 shadow-lg overflow-hidden">
-                    {getUserAvatar(topThree[2].user)}
+                    {getUserAvatar(winners_topWinners[2].user)}
                   </div>
                   <div className="absolute -top-2 -right-2 w-8 h-8 bg-amber-500 rounded-full flex items-center justify-center shadow-lg">
                     <span className="text-white font-bold text-sm">3</span>
@@ -667,9 +713,9 @@ export default function Leaderboard() {
                   <Award className="h-6 w-6 text-amber-600" />
                 </div>
                 <div className="text-center mt-3">
-                  <p className="font-bold text-gray-900">{topThree[2].userName}</p>
-                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(topThree[2].totalPnL)}</p>
-                  <p className="text-sm text-gray-600">{formatROI(topThree[2].roi)}% ROI</p>
+                  <p className="font-bold text-gray-900 capitalize">{winners_topWinners[2].userName}</p>
+                  <p className="text-lg font-bold text-emerald-600">₹{formatPnL(winners_topWinners[2].amount)}</p>
+                  <p className="text-sm text-gray-600">{formatROI(winners_topWinners[2].roi)}% ROI</p>
                 </div>
               </div>
             )}
@@ -677,7 +723,7 @@ export default function Leaderboard() {
         </div>
 
         {/* Current User Position (if not in top 3) */}
-        {currentUserEntry && currentUserEntry.rank > 3 && (
+        {winners_currentUserWin && winners_currentUserWin.rank > 3 && (
           <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-6 mb-8 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
@@ -686,25 +732,25 @@ export default function Leaderboard() {
                 </div>
                 <div>
                   <p className="text-blue-100 text-sm font-medium">Your Position</p>
-                  <p className="text-xl font-bold">Rank #{currentUserEntry.rank}</p>
+                  <p className="text-xl font-bold">Rank #{winners_currentUserWin.rank}</p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold">₹{formatPnL(currentUserEntry.totalPnL)}</p>
-                <p className="text-blue-100">{formatROI(currentUserEntry.roi)}% ROI</p>
+                <p className="text-2xl font-bold">₹{formatPnL(winners_currentUserWin.amount)}</p>
+                <p className="text-blue-100">{formatROI(winners_currentUserWin.roi)}% ROI</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Remaining Participants */}
-        {remainingParticipants.length > 0 && (
+        {winners_remainingWinners.length > 0 && (
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
             <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
               <h3 className="text-lg font-bold text-gray-900">All Participants</h3>
             </div>
             <div className="divide-y divide-gray-100">
-              {remainingParticipants.map((entry) => {
+              {winners_remainingWinners.map((entry) => {
                 const pnl = entry.totalPnL || 0
                 const roi = entry.roi || 0
                 const isCurrentUser = entry.userId === userId
@@ -813,6 +859,12 @@ export default function Leaderboard() {
           <p className="text-xs text-gray-500">Auto-refresh every 30 seconds</p>
         </div>
       </div>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      {renderContent()}
     </div>
   )
 }
