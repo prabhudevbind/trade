@@ -1183,7 +1183,7 @@ app.post("/api/v1/env", async (req, res) => {
       // Running under PM2
       const { exec } = require("child_process");
       // const pmId = process.env.pm_id;
-      exec(`pm2 restart 2`, (error, stdout, stderr) => {
+      exec(`pm2 restart 0`, (error, stdout, stderr) => {
         if (error) {
           console.error(`Failed to restart via PM2: ${error.message}`);
           process.exit(0);

@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const prisma = require("../utils/prisma");
 
 // Every minute, check for winningHistory entries to credit wallet after 10 minutes
-cron.schedule("* * * * *", async () => {
+cron.schedule("30 15 * * *", async () => {
   try {
     const now = new Date();
     // Find all winningHistory entries not yet credited, and awardedAt > 10 min ago

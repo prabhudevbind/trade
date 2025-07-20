@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useGetWalletTransactionsQuery } from "@/store/api/contest";
+import Loader from "../option/Loader";
 
 export default function DepositPage() {
   const { toast } = useToast();
@@ -424,6 +425,9 @@ export default function DepositPage() {
     setExpandedRows(newExpanded);
   };
 
+  if(txLoading){
+    return<Loader/>
+  }
   return (
     <>
       <div className="max-w-7xl mx-auto space-y-6">

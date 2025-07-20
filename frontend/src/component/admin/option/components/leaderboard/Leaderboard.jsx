@@ -178,7 +178,7 @@ export default function Leaderboard() {
   const leaderboard_breakEvenCount = mappedLeaderboard.filter(w => Number(w.totalPnL) === 0).length
   const leaderboard_topWinners = mappedLeaderboard.slice(0, 3)
   const leaderboard_remainingWinners = mappedLeaderboard.slice(3)
-  const leaderboard_currentUserWin = mappedLeaderboard.find((entry) => entry.userId === userId)
+  const leaderboard_currentUserWin = mappedLeaderboard.find((entry) => entry.userId === userData.id)
 
   // Map winners data
   const mappedWinners = (Array.isArray(winningData?.data) ? winningData.data : []).map((entry) => ({
@@ -200,7 +200,7 @@ export default function Leaderboard() {
   const winners_breakEvenCount = mappedWinners.filter(w => Number(w.totalPnL) === 0).length
   const winners_topWinners = mappedWinners.slice(0, 3)
   const winners_remainingWinners = mappedWinners.slice(3)
-  const winners_currentUserWin = mappedWinners.find((entry) => entry.userId === userId)
+  const winners_currentUserWin = mappedWinners.find((entry) => entry.userId === userData.id)
 
   // Loading state
   if (participantLoading || leaderboardLoading) {
@@ -438,7 +438,7 @@ export default function Leaderboard() {
               {leaderboard_remainingWinners.map((entry) => {
                 const pnl = entry.totalPnL || 0
                 const roi = entry.roi || 0
-                const isCurrentUser = entry.userId === userId
+                const isCurrentUser = entry.userId === userData.id
 
                 return (
                   <div
@@ -735,7 +735,7 @@ export default function Leaderboard() {
               {winners_remainingWinners.map((entry) => {
                 const pnl = entry.totalPnL || 0
                 const roi = entry.roi || 0
-                const isCurrentUser = entry.userId === userId
+                const isCurrentUser = entry.userId === userData.id
 
                 return (
                   <div
