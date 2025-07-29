@@ -97,7 +97,7 @@ cron.schedule("30 15 * * *",
                 prisma.user.update({
                   where: { id: entry.user_id },
                   data: {
-                    amounts: { increment: prize.amount },
+                    amount: { increment: prize.amount },
                   },
                 }),
               ]);
