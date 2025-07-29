@@ -512,7 +512,7 @@ const navigate=useNavigate();
 
         {/* Warning for unverified payment */}
         {hasUnverifiedPayment && (
-          <Alert variant="info" className="mb-4 mx-2 w-[90vw]">
+          <Alert variant="info" className="mb-4 mx-2 w-full">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Information</AlertTitle>
             <AlertDescription className="text-wrap">
@@ -548,7 +548,7 @@ const navigate=useNavigate();
               </select>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="">
             {transactionsLoading ? (
               <div className="py-8 text-center text-gray-400">Loading...</div>
             ) : transactionsError ? (

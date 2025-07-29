@@ -6,7 +6,7 @@ import {
   useGetLeaderboardQuery,
   useGetPrizeDistributionsQuery,
 } from "@/store/api/contest"
-import { Trophy, TrendingUp, TrendingDown, Users, RefreshCw, Crown, Medal, Award, Star, User } from "lucide-react"
+import { Trophy, TrendingUp, TrendingDown, Users, RefreshCw, Crown, Medal, Award, Star, User, Gift } from "lucide-react"
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
 import { useGetWinningHistoryQuery } from "@/store/api/win.api"
 
@@ -15,6 +15,7 @@ export default function Leaderboard() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [showWinners, setShowWinners] = useState(false)
+  const [activeTab, setActiveTab] = useState("leaderboard") // New state for active tab
 
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().slice(0, 10)
@@ -200,7 +201,7 @@ export default function Leaderboard() {
   const winners_breakEvenCount = mappedWinners.filter(w => Number(w.totalPnL) === 0).length
   const winners_topWinners = mappedWinners.slice(0, 3)
   const winners_remainingWinners = mappedWinners.slice(3)
-  const winners_currentUserWin = mappedWinners.find((entry) => entry.userId === userData.id)
+  const winners_currentUserWin = mappedWinners.find((entry) => entry?.userId === userData?.id)
 
   // Loading state
   if (participantLoading || leaderboardLoading) {
@@ -248,42 +249,71 @@ export default function Leaderboard() {
 
   // Main render function
   const renderContent = () => {
-    if (showWinners && hasWinningData) {
+    if (activeTab === "winners") {
       return renderWinners()
     } else {
       return renderLeaderboard()
     }
   }
 
-  const renderLeaderboard = () => (
-    <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
-                <Trophy className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Leaderboard</h1>
-                <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
-              </div>
+  // Tab component
+  const TabNavigation = () => (
+    <div className="bg-white shadow-lg border-b border-gray-200">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
+              <Trophy className="h-7 w-7 text-white" />
             </div>
-            <div className="flex items-center space-x-4">
-            
-              <button
-                onClick={handleRefresh}
-                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Refresh</span>
-              </button>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Contest Results</h1>
+              <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
             </div>
           </div>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleRefresh}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Refresh</span>
+            </button>
+          </div>
         </div>
+        
+        {/* Tab Navigation */}
+        {showWinners && hasWinningData && (
+          <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+            <button
+              onClick={() => setActiveTab("leaderboard")}
+              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                activeTab === "leaderboard"
+                  ? "bg-white text-blue-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <Trophy className="h-4 w-4" />
+              <span>Leaderboard</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("winners")}
+              className={`flex-1 flex items-center justify-center space-x-2 px-4 py-2 rounded-md font-medium transition-all duration-200 ${
+                activeTab === "winners"
+                  ? "bg-white text-green-600 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              <Gift className="h-4 w-4" />
+              <span>Winners</span>
+            </button>
+          </div>
+        )}
       </div>
+    </div>
+  )
 
+  const renderLeaderboard = () => (
+    <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Stats Section */}
       <div className="max-w-7xl mx-auto px-2 py-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -554,33 +584,6 @@ export default function Leaderboard() {
 
   const renderWinners = () => (
     <div className="max-w-7xl mx-auto px-4 py-6">
-      {/* Header */}
-      <div className="bg-white shadow-lg border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg">
-                <Trophy className="h-7 w-7 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Winners</h1>
-                <p className="text-gray-600 font-medium">{ongoingContest.contest?.name}</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-            
-              <button
-                onClick={handleRefresh}
-                className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors duration-200"
-              >
-                <RefreshCw className="h-4 w-4" />
-                <span>Refresh</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Stats Section */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -632,7 +635,7 @@ export default function Leaderboard() {
 
         {/* Top 3 Podium */}
         <div className="bg-white rounded-2xl shadow-xl border border-gray-200 p-4 mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">Top Performers</h2>
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">Top Winners</h2>
           <div className="flex items-end justify-center space-x-2 md:space-x-8 mb-6 md:mb-8">
             {/* Second Place */}
             {winners_topWinners[1] && (
@@ -706,30 +709,33 @@ export default function Leaderboard() {
 
         {/* Current User Position (if not in top 3) */}
         {winners_currentUserWin && winners_currentUserWin.rank > 3 && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl shadow-xl p-6 mb-8 text-white">
+          <div className="bg-gradient-to-r from-green-600 to-emerald-700 rounded-2xl shadow-xl p-6 mb-8 text-white">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                  <User className="h-6 w-6 text-white" />
+                  <Gift className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <p className="text-blue-100 text-sm font-medium">Your Position</p>
+                  <p className="text-green-100 text-sm font-medium">Your Prize</p>
                   <p className="text-xl font-bold">Rank #{winners_currentUserWin.rank}</p>
                 </div>
               </div>
               <div className="text-right">
                 <p className="text-2xl font-bold">₹{formatPnL(winners_currentUserWin.amount)}</p>
-                <p className="text-blue-100">{formatROI(winners_currentUserWin.roi)}% ROI</p>
+                <p className="text-green-100">{formatROI(winners_currentUserWin.roi)}% ROI</p>
               </div>
             </div>
           </div>
         )}
 
-        {/* Remaining Participants */}
+        {/* Remaining Winners */}
         {winners_remainingWinners.length > 0 && (
           <div className="bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900">All Participants</h3>
+            <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                <Gift className="h-5 w-5 text-green-600 mr-2" />
+                All Winners
+              </h3>
             </div>
             <div className="divide-y divide-gray-100">
               {winners_remainingWinners.map((entry) => {
@@ -741,14 +747,14 @@ export default function Leaderboard() {
                   <div
                     key={entry.userId}
                     className={`p-6 hover:bg-gray-50 transition-colors duration-200 ${
-                      isCurrentUser ? "bg-blue-50 border-l-4 border-blue-500" : ""
+                      isCurrentUser ? "bg-green-50 border-l-4 border-green-500" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-4">
                         <div className="flex-shrink-0">
-                          <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                            <span className="text-gray-600 font-bold text-sm">#{entry.rank}</span>
+                          <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                            <span className="text-green-600 font-bold text-sm">#{entry.rank}</span>
                           </div>
                         </div>
                         <div className="w-12 h-12 rounded-full overflow-hidden shadow-md">
@@ -758,7 +764,7 @@ export default function Leaderboard() {
                           <p className="font-bold text-gray-900 flex items-center">
                             {entry.userName}
                             {isCurrentUser && (
-                              <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+                              <span className="ml-2 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
                                 You
                               </span>
                             )}
@@ -768,63 +774,19 @@ export default function Leaderboard() {
                       </div>
                       <div className="text-right">
                         <div className="flex items-center space-x-2 justify-end mb-1">
-                          <span
-                            className={`font-bold text-lg ${
-                              pnl > 0 ? "text-emerald-600" : pnl < 0 ? "text-red-500" : "text-gray-500"
-                            }`}
-                          >
-                            ₹{formatPnL(pnl)}
+                          <span className="font-bold text-lg text-green-600">
+                            ₹{formatPnL(entry.amount)}
                           </span>
-                          {pnl > 0 && <TrendingUp className="h-4 w-4 text-emerald-600" />}
-                          {pnl < 0 && <TrendingDown className="h-4 w-4 text-red-500" />}
+                          <Gift className="h-4 w-4 text-green-600" />
                         </div>
-                        <p
-                          className={`text-sm font-medium ${
-                            roi > 0 ? "text-emerald-600" : roi < 0 ? "text-red-500" : "text-gray-500"
-                          }`}
-                        >
-                          {roi > 0 ? "+" : ""}
-                          {formatROI(roi)}% ROI
+                        <p className="text-sm text-gray-600">
+                          Performance: ₹{formatPnL(pnl)} ({roi > 0 ? "+" : ""}{formatROI(roi)}% ROI)
                         </p>
                       </div>
                     </div>
                   </div>
                 )
               })}
-            </div>
-          </div>
-        )}
-
-        {/* Prize Distribution */}
-        {prizeDistributions && prizeDistributions.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-xl border border-gray-200 mt-8 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-200">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <Trophy className="h-5 w-5 text-green-600 mr-2" />
-                Prize Distribution
-              </h3>
-            </div>
-            <div className="p-6">
-              {prizeLoading ? (
-                <div className="text-gray-500 text-sm">Loading prizes...</div>
-              ) : (
-                <div className="grid gap-3">
-                  {prizeDistributions.map((prize) => (
-                    <div
-                      key={prize.id}
-                      className="flex items-center justify-between p-4 bg-green-50 rounded-lg border border-green-200"
-                    >
-                      <span className="font-medium text-green-900">
-                        Rank {prize.fromRank}
-                        {prize.fromRank !== prize.toRank ? ` - ${prize.toRank}` : ""}
-                      </span>
-                      <span className="font-bold text-green-700 text-lg">
-                        ₹{Number(prize.amount).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -846,6 +808,7 @@ export default function Leaderboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      <TabNavigation />
       {renderContent()}
     </div>
   )

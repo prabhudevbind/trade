@@ -263,7 +263,7 @@ function RegisterForm({ referralCode = "" }) {
       // window.location.reload();
     } catch (error) {
       // Redirect to terms page on any error
-      window.location.href = "https://stockverses.com/terms";
+      // window.location.href = "https://stockverses.com/terms";
       return;
       const errorMessage = error?.data?.message || error?.message || "Registration failed. Please try again."
 
