@@ -1,5 +1,5 @@
 const express = require("express");
-const Redis = require("ioredis");
+
 const leaderboardController = require("../controller/leaderboard.controller");
 const { authenticateToken } = require("../utils/verify");
 const {
@@ -13,13 +13,7 @@ const prisma = require("../utils/prisma");
 const router = express.Router();
 
 // Redis client configuration
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB || 0,
-  maxRetriesPerRequest: null,
-});
+
 
 // Get latest leaderboard for a contest
 router.get(

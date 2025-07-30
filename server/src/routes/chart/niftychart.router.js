@@ -1,16 +1,7 @@
 const express = require("express");
 const axios = require("axios");
-const Redis = require("ioredis");
 const router = express.Router();
-
-// Enhanced Redis client with connection pooling and clustering support
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB || 0,
-  maxRetriesPerRequest: null,
-});
+const redisClient=require('../../utils/redisutil')
 
 // Redis pub/sub client for real-time updates
 const redisPublisher = redisClient.duplicate();
@@ -28,7 +19,7 @@ const CACHE_CONFIG = {
   PROCESSED_DATA_TTL: 5, // 5 seconds for processed data
   RATE_LIMIT_TTL: 60, // 1 minute for rate limiting
   EXPIRY_DATES_TTL: 3600, // 1 hour for expiry dates
-  HISTORICAL_DATA_TTL: 86400, // 24 hours for historical data
+  HISTORICAL_DATA_TTL: 46400, // 24 hours for historical data
   TICK_DATA_TTL: 300, // 5 minutes for tick data
 };
 

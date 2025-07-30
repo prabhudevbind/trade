@@ -176,7 +176,7 @@ export default function PositionsPage({
       setSellModal({ open: false, position: null });
       setSellQty(0);
       setSellPrice(0);
-      window.location.reload();
+      // window.location.reload();
     } catch (err) {
       setSellError(err.response?.data?.error || "Sell failed");
     } finally {

@@ -1,15 +1,7 @@
 const prisma = require("../utils/prisma");
-const Redis = require("ioredis");
+const redisClient=require('../utils/redisutil')
 
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB || 0,
-  maxRetriesPerRequest: null,
-});
-
-const CACHE_TTL = 10; // seconds
+const CACHE_TTL = 60; // seconds
 
 const leaderboardController = {
   // Get leaderboard for a contest (latest snapshot)

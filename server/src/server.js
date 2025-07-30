@@ -10,10 +10,9 @@ const {
   initializeMarketDataService,
 } = require("./services/marketData.service");
 const os = require("os");
-const cron = require("node-cron");
-const axios = require("axios");
 const fs = require("fs");
-const redis = require("redis");
+const redisClient=require('./utils/redisutil')
+
 require("./cronjob/cronExpiryDates");
 require("./cronjob/cronContestReset");
 require("./cronjob/cronLeaderboard");
@@ -21,14 +20,7 @@ require("./cronjob/cronrefer");
 require("./cronjob/cronPrizeDistribution");
 require("./cronjob/cronPrizeWalletCredit");
 // --- REDIS CLIENT SETUP ---
-const Redis = require("ioredis");
-const redisClient = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: process.env.REDIS_PORT || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
-  db: process.env.REDIS_DB || 0,
-  maxRetriesPerRequest: null,
-});
+
 redisClient.on("connect", () => console.log("✅ Redis connected"));
 redisClient.on("error", (err) => console.error("❌ Redis error:", err));
 

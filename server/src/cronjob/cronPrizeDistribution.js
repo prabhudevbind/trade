@@ -107,8 +107,6 @@ cron.schedule("30 15 * * *",
             }
           }
         }
-
-      
         
         console.log(`Contest ${contest.id} marked as completed`);
       }
