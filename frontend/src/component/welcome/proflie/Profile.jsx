@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useSelector } from "react-redux"
+import { useDispatch, useSelector } from "react-redux"
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
 import {
   User,
@@ -20,8 +20,10 @@ import {
   IndianRupee
 } from "lucide-react"
 import WithDrawUpiId from "@/component/admin/wallet/WithDrawUpiId"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import ImageUploader from "./ImageUploader"
+import { clearAllDetails } from "@/store/reducer/authSlice"
+import { cn } from "@/lib/utils"
 
 export default function Profile() {
   const [activeTab, setActiveTab] = useState("overview")
@@ -30,6 +32,9 @@ export default function Profile() {
   const auth = useSelector((state) => state.auth)
   const user = auth?.user
 
+    const dispatch = useDispatch();
+    const router = useNavigate();
+    const [isLoadings, setIsLoading] = useState(false);
   const {
     data: userData,
     isLoading,
@@ -178,6 +183,35 @@ export default function Profile() {
     </div>
   )
 
+
+    const handleLogout = async () => {
+      setIsLoading(true);
+      try {
+        dispatch(clearAllDetails());
+        const token = Cookies.get("token");
+  
+        await axios.post(
+          "/api/v1/sessions/logout",
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+  
+        dispatch(clearAllDetails());
+        Cookies.remove("token");
+        // toast.success("You have been successfully logged out.");
+        router("/login");
+      } catch (error) {
+        console.error("Logout error:", error);
+        toast.error("Unable to log out. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+  
   // Handle loading state
   if (!user?.isActive) {
     return (
@@ -191,7 +225,7 @@ export default function Profile() {
     )
   }
 
-  if (isLoading) {
+  if (isLoading || isLoadings) {
     return <LoadingSpinner />
   }
 
@@ -217,16 +251,28 @@ export default function Profile() {
           </div>
           <div className="flex space-x-1">
             <Link to="/refer">
-          
+
+              <Button
+                variant="ghost"
+                size="sm"
+                className=" text-orange-500 text-nowrap hover:bg-orange-500 hover:text-white px-3 py-1"
+              // onClick={() => window.open('https://example.com/refer', '_blank')}
+              >
+                <IndianRupee /> Refer & Earn
+              </Button>
+            </Link>
             <Button
               variant="ghost"
-              size="sm"
-              className=" text-orange-500 hover:bg-orange-500 hover:text-white px-3 py-1"
-              // onClick={() => window.open('https://example.com/refer', '_blank')}
+              onClick={handleLogout}
+              disabled={isLoading}
+              className={cn(
+                "w-full justify-start text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors",
+                isLoading && "opacity-50 cursor-not-allowed"
+              )}
             >
-              <IndianRupee /> Refer & Earn
+              <LogOut className="mr-3 h-4 w-4" />
+              {isLoading ? "Logging out..." : "Log out"}
             </Button>
-              </Link>
           </div>
         </div>
 
@@ -234,7 +280,7 @@ export default function Profile() {
         <div className="px-4 pb-6">
           <div className="flex items-center space-x-3 mb-4">
             <Avatar className="h-16 w-16 border-3 border-white">
-              <AvatarImage src={ userData.img} alt={userData.firstName} />
+              <AvatarImage src={userData.img} alt={userData.firstName} />
 
             </Avatar>
             <div className="flex-1 min-w-0">
