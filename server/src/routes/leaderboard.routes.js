@@ -50,7 +50,7 @@ router.get("/winning-history", async (req, res) => {
 
     const data = await prisma.winningHistory.findMany({
       where,
-      orderBy: { winDate: "desc" },
+      orderBy: {rank: "asc"},
       include: {
         user: true,
         // contest: true,

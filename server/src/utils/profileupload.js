@@ -1,13 +1,13 @@
 const { authenticateToken } = require('./verify');
-
+const prisma =require('./prisma');
 const multer = require('multer');
 const path = require('path');
 
 const express = require('express');
 
 
+
 const router = express.Router();
-const {prisma} = require("../utils/prisma");
 
 
 // Configure multer storage
@@ -47,14 +47,13 @@ router.patch('/update-profile-image',
         try {
             const userId = req.user.userId;
     
-            console.log('User ID:', userId);
-            console.log('Uploaded file:', req.user);
             // Check if file was uploaded
             if (!req.file) {
                 return res.status(400).json({
                     message: 'No image uploaded'
                 });
             }
+            console.log(req.user);
 
             // Construct file path
             const imagePath = `/uploads/profile-images/${req.file.filename}`;

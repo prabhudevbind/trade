@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "apple-touch-icon.png", "mask-icon.svg"],
       manifest: {
-        name: "Shantipatra Plastics Pvt Ltd", // Update manifest name
-        short_name: "Shantipatra",
+        name: "stockverses", // Update manifest name
+        short_name: "stockverses",
         theme_color: "#ffffff",
         icons: [
           {
@@ -20,12 +20,12 @@ export default defineConfig({
             type: "image/png",
           },
           {
-            src: "pwa-192x192.png",
+            src: "android-chrome-192x192.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "pwa-512x512.png",
+            src: "android-chrome-512x512.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
@@ -49,8 +49,8 @@ export default defineConfig({
             options: {
               cacheName: "large-assets",
               expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 7 * 24 * 60 * 60,
+                maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 // 24 hours
               },
             },
           },

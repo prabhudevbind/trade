@@ -69,8 +69,8 @@ const ACTIVE_SUBS_KEY = "active_instrument_keys";
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use("/uploads", express.static("uploads"));
-
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/api/file/uploads", require("./utils/fileRouter"));
 // Routes
 app.use("/api/v1", require("./routes/chart/niftychart.router"));
 app.use("/api/v1", require("./routes/contest/payment.routes"));
@@ -100,6 +100,7 @@ app.use("/api/v1", require("./utils/profileupload"));
 app.use("/api/v1", require("./routes/contest/bulk.router"));
 app.use("/api/v1", require("./routes/user/price.router"));
 app.use("/api/v1", require("./routes/dashboard/dashboard.router"));
+
 app.use("/api/v1/leaderboard", autoleader);
 // Error handling middleware
 app.use(errorHandler);
@@ -392,7 +393,7 @@ const connectUpstoxWebSocket = async (wsUrl) => {
 
     ws.on("error", (error) => {
       clearTimeout(connectionTimeout);
-      console.error("❌ Upstox WebSocket error:", error.message);
+      console.error("❌ Upstox WebSocket error:", error);
       isConnecting = false;
       connectionAttempts++;
       reject(error);

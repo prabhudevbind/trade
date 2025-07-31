@@ -20,10 +20,12 @@ import {
   Sun,
   Moon,
   Ticket,
+  User2,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Link } from "react-router-dom";
+import { useSelector } from "react-redux";
 
 export default function DashboardLayout({ children }) {
   // Load active tab from localStorage if available
@@ -34,7 +36,7 @@ export default function DashboardLayout({ children }) {
     return "options";
   });
   const [isDark, setIsDark] = useState(false);
-
+ const role = useSelector((state) => state.auth?.user?.role);
   // Save active tab to localStorage whenever it changes
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -54,6 +56,7 @@ export default function DashboardLayout({ children }) {
         { icon: Sliders, label: "Option", id: "options", path: "/option-chain" },
     { icon: Trophy, label: "Leaderboard", id: "leaderboard", path: "/leaderboard" },
     { icon: Ticket, label: "Contest", id: "mycontest", path: "/contests" },
+    { icon: User2, label: "Profile", id: "profile", path: "/profile" },
 
     // { icon: MoreHorizontal, label: "Other", id: "other" },
   ];
@@ -108,6 +111,8 @@ export default function DashboardLayout({ children }) {
             );
           })}
           {/* Additional Navigation Items */}
+          {role?.name =="Admin" && 
+        
           <button
             onClick={toggleSidebar}
             className="flex items-center gap-2 justify-center flex-col focus:outline-none"
@@ -118,7 +123,7 @@ export default function DashboardLayout({ children }) {
               <span>More</span>
             </div>
           </button>
-
+  }
           {/* Theme Toggle Button */}
         </div>
       </nav>

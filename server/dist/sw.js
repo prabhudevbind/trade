@@ -78,23 +78,23 @@ define(['./workbox-f001acab'], (function (workbox) { 'use strict';
    * See https://goo.gl/S9QRab
    */
   workbox.precacheAndRoute([{
-    "url": "assets/main-BFJ9Ssiq-2025-07-30T01-44-48-633Z.js",
+    "url": "assets/main-DcGdkgHQ-2025-07-31T20-22-43-425Z.css",
     "revision": null
   }, {
-    "url": "assets/main-DOxfPp56-2025-07-30T01-44-49-176Z.css",
+    "url": "assets/main-DfBUAAI--2025-07-31T20-22-42-922Z.js",
     "revision": null
   }, {
-    "url": "assets/pdf-lib-w74_435F-2025-07-30T01-44-48-634Z.js",
+    "url": "assets/pdf-lib-w74_435F-2025-07-31T20-22-42-923Z.js",
     "revision": null
   }, {
-    "url": "assets/service-worker-BGlgtLKe-2025-07-30T01-44-48-633Z.js",
+    "url": "assets/service-worker-BGlgtLKe-2025-07-31T20-22-42-923Z.js",
     "revision": null
   }, {
-    "url": "assets/vendor-CRXyGnbc-2025-07-30T01-44-48-682Z.js",
+    "url": "assets/vendor-3yetOdCJ-2025-07-31T20-22-42-965Z.js",
     "revision": null
   }, {
     "url": "index.html",
-    "revision": "d6c21ca8d55ce2a51619bce385b2bd1c"
+    "revision": "cb55996bb3f4c5bec676fc0d2ff42611"
   }, {
     "url": "registerSW.js",
     "revision": "1872c500de691dce40960bb85481de07"
@@ -102,19 +102,28 @@ define(['./workbox-f001acab'], (function (workbox) { 'use strict';
     "url": "service-worker.js",
     "revision": "27b3f248f55b3994256f41641ce8772d"
   }, {
+    "url": "android-chrome-192x192.png",
+    "revision": "abfa4f40eafa10d13e672a5657eae4b2"
+  }, {
+    "url": "android-chrome-512x512.png",
+    "revision": "6522425f378b68c1450a2ae5b62246e7"
+  }, {
+    "url": "apple-touch-icon.png",
+    "revision": "0e2fac3a3f278ceb6df2f5f97903dbb5"
+  }, {
     "url": "favicon.ico",
     "revision": "ae868df995b56a0171120cd067ffa06e"
   }, {
     "url": "manifest.webmanifest",
-    "revision": "fe2000d975b2d6d251a0bc9076c9cbc1"
+    "revision": "bc8ce72bf6beb810f691af1c6749f6dd"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("index.html")));
   workbox.registerRoute(/.*\.(?:png|jpg|jpeg|svg|gif|pdf)$/, new workbox.CacheFirst({
     "cacheName": "large-assets",
     plugins: [new workbox.ExpirationPlugin({
-      maxEntries: 10,
-      maxAgeSeconds: 604800
+      maxEntries: 100,
+      maxAgeSeconds: 86400
     })]
   }), 'GET');
   workbox.registerRoute(/.*\.(?:js|css)/, new workbox.NetworkFirst({

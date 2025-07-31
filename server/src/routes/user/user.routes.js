@@ -423,6 +423,8 @@ router.get('/',
           winHistory:true,
           referralsMade:true,
           referralsReceived:true,
+                  // sessions:true,
+                  // activityLogs:true,
           role: {
             select: {
               id: true,
@@ -440,28 +442,28 @@ router.get('/',
               }
             }
           },
-          // sessions: {
-          //   select: {
-          //     id: true,
-          //     createdAt: true,
-          //     ipAddress: true,
-          //     userAgent: true,
-          //     expiresAt: true
-          //   },
-          //   take: queryParams.sessionLimit,
-          //   orderBy: { id: 'desc' }
-          // },
-          // activityLogs: {
-          //   select: {
-          //     id: true,
-          //     activityType: true,
-          //     description: true,
-          //     ipAddress: true,
-          //     createdAt: true
-          //   },
-          //   take: queryParams.activityLimit,
-          //   orderBy: { id: 'desc' }
-          // }
+          sessions: {
+            select: {
+              id: true,
+              createdAt: true,
+              ipAddress: true,
+              userAgent: true,
+              expiresAt: true
+            },
+            take: 5,
+            orderBy: { id: 'desc' }
+          },
+          activityLogs: {
+            select: {
+              id: true,
+              activityType: true,
+              description: true,
+              ipAddress: true,
+              createdAt: true
+            },
+            take: 5,
+            orderBy: { id: 'desc' }
+          }
         }
       })
 

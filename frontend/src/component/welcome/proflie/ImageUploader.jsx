@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'react-toastify';
 import { useUpdateProfileImageMutation } from '@/store/api/apiSlice';
 import { updateUserImage } from '@/store/reducer/authSlice';
+import { Upload, Wallet } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 
 const ImageUploader = ({ onUploadSuccess }) => {
@@ -44,11 +46,20 @@ const ImageUploader = ({ onUploadSuccess }) => {
                 id="imageUpload"
             />
             <Button
+            className="text-sm"
+            size="sm"
                 onClick={() => document.getElementById('imageUpload')?.click()}
                 variant="outline"
             >
-                Update Profile Image
+              <Upload/>  Update Profile
             </Button>
+             <Link to="/withdrawals" className=' ml-4'>
+
+              <Button variant="outline" size="sm" className="bg-white text-blue-600 hover:bg-gray-100 text-xs px-3 py-1">
+                <Wallet className="h-3 w-3 mr-1" />
+                 Withdraw Amount
+              </Button>
+            </Link>
         </div>
     );
 };

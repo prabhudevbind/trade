@@ -7,6 +7,8 @@ import {
   useCreateContestParticipantMutation,
   useUpdateWalletTransactionMutation,
 } from "@/store/api/contest"
+import { toast } from 'react-toastify';
+
 import { useGetUserByIdQuery } from "@/store/api/userSliceApi"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -67,13 +69,13 @@ function EnhancedLoader({ message = "Loading...", size = "default" }) {
 }
 
 // Contest switching confirmation dialog
-function ContestSwitchDialog({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  currentContest, 
-  newContest, 
-  isLoading 
+function ContestSwitchDialog({
+  isOpen,
+  onClose,
+  onConfirm,
+  currentContest,
+  newContest,
+  isLoading
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -89,13 +91,13 @@ function ContestSwitchDialog({
               <p className="font-medium text-foreground">{currentContest?.name}</p>
               <p className="text-sm text-muted-foreground">Entry fee: {formatCurrency(currentContest?.entry_fee)}</p>
             </div>
-            
+
             <p>Do you want to leave this contest and join:</p>
             <div className="bg-primary/5 border border-primary/20 p-3 rounded-lg">
               <p className="font-medium text-foreground">{newContest?.name}</p>
               <p className="text-sm text-muted-foreground">Entry fee: {formatCurrency(newContest?.entry_fee)}</p>
             </div>
-            
+
             <Alert className="bg-amber-50 border-amber-200">
               <AlertCircle className="h-4 w-4 text-amber-600" />
               <AlertDescription className="text-amber-800">
@@ -142,7 +144,7 @@ export default function ActiveContests() {
   // Mutations
   const [createWalletTransaction, { isLoading: isTransactionLoading }] = useCreateWalletTransactionMutation()
   const [createContestParticipant, { isLoading: isParticipantLoading }] = useCreateContestParticipantMutation()
-  const [updateWalletTransaction]=useUpdateWalletTransactionMutation();
+  const [updateWalletTransaction] = useUpdateWalletTransactionMutation();
 
   useEffect(() => {
     // Refetch data when component mounts
@@ -172,7 +174,7 @@ export default function ActiveContests() {
     const isUserParticipant = contest.contestParticipants?.some(
       participant => participant.user_id === user?.id
     )
-    
+
     return {
       ...contest,
       hasJoined: isUserParticipant,
@@ -214,9 +216,9 @@ export default function ActiveContests() {
 
     // If user has active contest, show switch dialog
     if (hasActiveContest) {
-      setSwitchingContests({ 
-        current: currentActiveContest, 
-        new: targetContest 
+      setSwitchingContests({
+        current: currentActiveContest,
+        new: targetContest
       })
       setShowSwitchDialog(true)
       setProcessingContestId(null)
@@ -239,6 +241,7 @@ export default function ActiveContests() {
     try {
       setProcessingContestId(contestId)
 
+      console.log("Hello")
       // Step 1: Create pending transaction
       const transactionData = {
         amount: entry_fee,
@@ -248,7 +251,7 @@ export default function ActiveContests() {
         description: `Entry fee for ${contestName}`
       }
 
-      const transactionResponse = await createWalletTransaction(transactionData).unwrap()
+     const transactionResponse = await createWalletTransaction(transactionData).unwrap()
 
       try {
         // Step 2: Join contest (backend will handle removing from current contest)
@@ -256,7 +259,7 @@ export default function ActiveContests() {
         //   contest_id: contestId,
         //   virtual_cash: 100000.0,
         // }
-
+ 
         // const participantResponse = await createContestParticipant(participantData).unwrap()
 
         // // Step 3: Mark transaction as completed
@@ -269,27 +272,32 @@ export default function ActiveContests() {
         // // Success message based on whether user was switched
         // const message = participantResponse.message || `Successfully joined ${contestName}!`
         // setTransactionSuccess(`${message} (Transaction ID: ${transactionResponse.id})`)
-        
+  console.log(transactionResponse)
         // Refresh data
         refetchContests()
         refetchUser()
+      
 
       } catch (participantError) {
         // Step 4: Refund on failure
-      //   const refundData = {
-      //     amount: entry_fee,
-      //     type: "CREDIT",
-      //     status: "COMPLETED",
-      //     contest_id: contestId,
-      //     description: `Refund for failed contest join: ${contestName}`
-      //   }
+        //   const refundData = {
+        //     amount: entry_fee,
+        //     type: "CREDIT",
+        //     status: "COMPLETED",
+        //     contest_id: contestId,
+        //     description: `Refund for failed contest join: ${contestName}`
+        //   }
 
-      //   await createWalletTransaction(refundData).unwrap()
-      //   throw new Error(participantError?.data?.error || "Failed to join contest")
+        //   await createWalletTransaction(refundData).unwrap()
+        //   throw new Error(participantError?.data?.error || "Failed to join contest")
+        toast.error(participantError.message);
       }
+
+      console.log(transactionResponse)
     } catch (err) {
       // If error is from RTK Query (unwrap), it will be in err.data
       let msg = "Failed to join contest.";
+toast.error(err?.message);
       if (err?.data) {
         // Backend error shape
         if (err.data.details) {
@@ -301,9 +309,12 @@ export default function ActiveContests() {
           msg += " Your money has been refunded.";
         }
       } else if (err?.message) {
+        
         msg = err.message;
       }
+      toast.error(msg);
       setTransactionError(msg);
+    
       console.error("Join contest error:", err);
     } finally {
       setProcessingContestId(null)
@@ -387,7 +398,7 @@ export default function ActiveContests() {
               </div>
             </CardContent>
           </Card>
-          
+
           <Link to="/wallet">
             <Button variant="outline" className="flex items-center gap-2 hover:bg-primary/5">
               <Wallet className="h-4 w-4" />
@@ -485,15 +496,17 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
   const now = new Date()
   const isOngoing = now >= startDate && now <= endDate
   const isUpcoming = now < startDate
-  
+
   const contestStatus = isOngoing ? 'Live' : 'Upcoming'
   const statusVariant = isOngoing ? 'default' : 'outline'
 
   const handleButtonClick = () => {
     if (canAfford) {
-      handleJoinContest(contest.id, entry_fee, contest.name)
+      // toast.success("Joining contest...");
+      handleJoinContest(contest.id, entry_fee, contest.name);
     } else {
-      navigate('/wallet')
+      toast.warning("Insufficient balance. Redirecting to wallet...");
+      navigate('/wallet');
     }
   }
 
@@ -506,7 +519,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
         </div>
       )
     }
-    
+
     if (!canAfford) {
       return (
         <div className="flex items-center gap-2">
@@ -515,7 +528,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
         </div>
       )
     }
-    
+
     if (hasActiveContest) {
       return (
         <div className="flex items-center gap-2">
@@ -524,7 +537,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
         </div>
       )
     }
-    
+
     return (
       <div className="flex items-center gap-2">
         <Trophy className="h-4 w-4" />
@@ -541,7 +554,7 @@ function ContestCard({ contest, userBalance, handleJoinContest, isLoading, hasAc
             <div className="flex-grow">
               <div className="flex items-start gap-3 mb-2">
                 <h3 className="text-xl font-bold text-gray-800 leading-tight">{contest.name}</h3>
-             
+
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <LineChart className="h-4 w-4" />

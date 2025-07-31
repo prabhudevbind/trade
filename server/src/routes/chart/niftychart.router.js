@@ -151,7 +151,7 @@ async function saveOptionChainToRedis(instrumentKey, expiryDate, optionChainData
     // Execute all operations
     await pipeline.exec();
 
-    console.log(`✅ Option chain data saved to Redis for ${instrumentKey} ${expiryDate}`);
+    // console.log(`✅ Option chain data saved to Redis for ${instrumentKey} ${expiryDate}`);
     
     // Also save to backup storage (optional)
     // await saveToBackupStorage(instrumentKey, expiryDate, optionChainData);
@@ -932,7 +932,7 @@ async function setupOptionChainUpdateCron() {
                 );
                 console.log(`✅ Updated option chain for ${instrumentKey} - ${expiryDate}`);
               } else {
-                console.log(`⏩ No change for ${instrumentKey} - ${expiryDate}, skipping save.`);
+                // console.log(`⏩ No change for ${instrumentKey} - ${expiryDate}, skipping save.`);
               }
             }
           }

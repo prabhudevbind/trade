@@ -39,6 +39,8 @@ import {
   useSellPositionMutation,
 } from "@/store/api/contest";
 import { socketServerUrl } from "@/lib/utidata";
+import Header from "./Header";
+import PortfolioHeader from "./Header";
 
 // Dummy data
 
@@ -562,12 +564,7 @@ export default function PositionsPage({
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="px-4 py-4">
-          <h1 className="text-xl font-semibold text-gray-900">Portfolio</h1>
-        </div>
-      </div>
-
+      <PortfolioHeader/>
       <div className="p-2 space-y-4">
         {/* Summary Section */}
         <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200">
