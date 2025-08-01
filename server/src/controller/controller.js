@@ -2296,15 +2296,15 @@ const walletTransactionController = {
           const currentTime = new Date();
           const contestStartTime = new Date(newContest.start_time);
           const contestEndTime = new Date(newContest.end_time);
-          
-          // Check if contest is active (started but not ended)
-          if (currentTime < contestStartTime) {
-            throw new Error("Contest has not started yet");
-          }
+          // console.log(currentTime,contestStartTime);
+          // // Check if contest is active (started but not ended)
+          // if (currentTime < contestStartTime) {
+          //   throw new Error("Contest has not started yet");
+          // }
 
-          if (currentTime > contestEndTime) {
-            throw new Error("Contest has already ended");
-          }
+          // if (currentTime > contestEndTime) {
+          //   throw new Error("Contest has already ended");
+          // }
 
           // Additional check: Verify contest status
           if (newContest.status !== "ongoing") {
