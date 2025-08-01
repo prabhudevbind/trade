@@ -730,8 +730,7 @@ function getLotSize(instrumentKey) {
 async function getAvailableExpiries(instrumentKey) {
   const expiries = {
     "NSE_INDEX|Nifty 50": [
-      "2025-07-03", "2025-07-10", "2025-07-17", "2025-07-24",
-      "2025-07-31", "2025-08-28", "2025-09-25", "2025-12-24"
+       "2025-08-07",  "2025-08-14", "2025-08-21","2025-08-28", "2025-09-25", "2025-12-24"
     ],
     "NSE_INDEX|Nifty Bank": [
       "2025-07-31", "2025-08-28", "2025-09-24", "2025-09-25",
