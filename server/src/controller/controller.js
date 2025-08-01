@@ -2238,7 +2238,7 @@ const tradeController = {
 // WalletTransaction Controller
 const walletTransactionController = {
   // Create a new wallet transaction
-  async createWalletTransaction(req, res) {
+async createWalletTransaction(req, res) {
     const prisma = require("../utils/prisma");
     const {
       amount,
@@ -2278,68 +2278,7 @@ const walletTransactionController = {
 
       // Execute transaction
       const result = await prisma.$transaction(async (tx) => {
-        let newContest = null;
-        let existingParticipation = null;
-
-        // FIRST: Contest validation (if contest_id is provided)
-        if (contest_id) {
-          const contestId = parseInt(contest_id);
-
-          // Validate contest exists
-          newContest = await tx.contest.findUnique({
-            where: { id: contestId },
-          });
-          if (!newContest) {
-            throw new Error("Contest not found");
-          }
-
-          const currentTime = new Date();
-          const contestStartTime = new Date(newContest.start_time);
-          const contestEndTime = new Date(newContest.end_time);
-          // console.log(currentTime,contestStartTime);
-          // // Check if contest is active (started but not ended)
-          // if (currentTime < contestStartTime) {
-          //   throw new Error("Contest has not started yet");
-          // }
-
-          // if (currentTime > contestEndTime) {
-          //   throw new Error("Contest has already ended");
-          // }
-
-          // Additional check: Verify contest status
-          if (newContest.status !== "ongoing") {
-            throw new Error(
-              `Contest is not active. Current status: ${newContest.status}`
-            );
-          }
-
-          // Check if user is already participating in this contest
-          const alreadyParticipant = await tx.contestParticipant.findFirst({
-            where: {
-              user_id: parsedUserId,
-              contest_id: contestId,
-            },
-          });
-          if (alreadyParticipant) {
-            throw new Error("You have already joined this contest");
-          }
-
-          // Check for existing participation in other active contests
-          const currentTimeString = new Date().toISOString();
-          existingParticipation = await tx.contestParticipant.findFirst({
-            where: {
-              user_id: parsedUserId,
-              contest: {
-                start_time: { lte: currentTimeString }, // Contest has started
-                end_time: { gt: currentTimeString }, // Contest hasn't ended
-                status: "ongoing", // Contest is active
-              },
-            },
-            include: { contest: true },
-          });
-        }
-
-        // SECOND: Check for duplicate transaction_id
+        // Check for duplicate transaction_id
         if (transaction_id) {
           const existingTransaction = await tx.walletTransaction.findFirst({
             where: { transaction_id: transaction_id },
@@ -2349,7 +2288,7 @@ const walletTransactionController = {
           }
         }
 
-        // THIRD: Find and validate user
+        // Find and validate user
         const user = await tx.user.findUnique({
           where: { id: parsedUserId },
         });
@@ -2360,12 +2299,12 @@ const walletTransactionController = {
         const currentBalance =
           user.amount !== null ? parseFloat(user.amount) : 0;
 
-        // FOURTH: Check sufficient balance for debit (including contest entry fee)
+        // Check sufficient balance for debit
         if (type === "DEBIT" && currentBalance < parsedAmount) {
           throw new Error("Insufficient balance");
         }
 
-        // FIFTH: Update user balance (withdraw money)
+        // Update user balance
         const newBalance =
           type === "CREDIT"
             ? currentBalance + parsedAmount
@@ -2376,7 +2315,7 @@ const walletTransactionController = {
           data: { amount: newBalance },
         });
 
-        // SIXTH: Create wallet transaction record
+        // Create wallet transaction
         const transaction = await tx.walletTransaction.create({
           data: {
             user_id: parsedUserId,
@@ -2391,12 +2330,50 @@ const walletTransactionController = {
         });
 
         let participant = null;
+        let existingParticipation = null;
+        let newContest = null;
 
-        // SEVENTH: Contest participation logic (after successful wallet transaction)
-        if (contest_id && newContest) {
+        // Contest participation logic
+        if (contest_id) {
           const contestId = parseInt(contest_id);
 
-          // Remove from existing contest if any
+          // Validate contest
+          newContest = await tx.contest.findUnique({
+            where: { id: contestId },
+          });
+          if (!newContest) {
+            throw new Error("Contest not found");
+          }
+
+          // Check if contest is still active
+          const contestEndTime = new Date(newContest.end_time);
+          if (contestEndTime < new Date()) {
+            throw new Error("Contest has already ended");
+          }
+
+          // Check if user is already participating in this contest
+          const alreadyParticipant = await tx.contestParticipant.findFirst({
+            where: {
+              user_id: parsedUserId,
+              contest_id: contestId,
+            },
+          });
+          if (alreadyParticipant) {
+            throw new Error("You have already joined this contest");
+          }
+
+          // Remove from any other active contest
+          const currentTimeString = new Date().toISOString();
+          existingParticipation = await tx.contestParticipant.findFirst({
+            where: {
+              user_id: parsedUserId,
+              contest: {
+                end_time: { gt: currentTimeString },
+              },
+            },
+            include: { contest: true },
+          });
+
           if (existingParticipation) {
             await tx.contestParticipant.delete({
               where: { id: existingParticipation.id },
@@ -2449,27 +2426,21 @@ const walletTransactionController = {
     } catch (error) {
       console.error("createWalletTransaction error:", error);
 
-      let errorMessage = "Something went wrong.";
+      // Handle specific Prisma errors
+      let errorMessage = error.message;
       let statusCode = 400;
 
-      // Known Prisma error codes
       if (error.code === "P2002") {
-        errorMessage =
-          "Duplicate entry found (e.g., transaction ID already used).";
+        errorMessage = "Duplicate entry found";
       } else if (error.code === "P2003") {
-        errorMessage = "Invalid reference to related data.";
+        errorMessage = "Foreign key constraint failed";
       } else if (error.code === "P2025") {
-        errorMessage = "Requested record does not exist.";
-      }
-
-      // Custom errors thrown manually using `throw new Error(...)`
-      if (typeof error.message === "string") {
-        errorMessage = error.message;
+        errorMessage = "Record not found";
       }
 
       return res.status(statusCode).json({
-        success: false,
-        error: errorMessage,
+        error: "Failed to create transaction",
+        details: errorMessage,
       });
     }
   },
