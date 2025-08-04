@@ -730,13 +730,12 @@ function getLotSize(instrumentKey) {
 async function getAvailableExpiries(instrumentKey) {
   const expiries = {
     "NSE_INDEX|Nifty 50": [
-       "2025-08-07",  "2025-08-14", "2025-08-21","2025-08-28", "2025-09-25", "2025-12-24"
+       "2025-08-07", "2025-07-14"
     ],
     "NSE_INDEX|Nifty Bank": [
-      "2025-07-31", "2025-08-28", "2025-09-24", "2025-09-25",
-      "2025-12-24", "2025-12-31"
+      "2025-08-28",
     ],
-    "NSE_INDEX|Nifty Fin Service": ["2025-07-31", "2025-08-28"]
+    "NSE_INDEX|Nifty Fin Service": ["2025-08-28"]
   };
   return expiries[instrumentKey] || [];
 }
@@ -816,23 +815,14 @@ router.get("/available-expiry-dates", async (req, res) => {
     // Static expiry dates (in production, you might fetch these from API)
     if (instrument_key === "NSE_INDEX|Nifty 50") {
       expiry_dates = [
-        "2025-07-03",
-        "2025-07-10",
-        "2025-07-17",
-        "2025-07-24",
-        "2025-07-31",
-        "2025-08-28",
-        "2025-09-25",
-        "2025-12-24",
+        "2025-08-07",
+        "2025-08-14",
       ];
     } else if (instrument_key === "NSE_INDEX|Nifty Bank") {
       expiry_dates = [
-        "2025-07-31",
+       
         "2025-08-28",
-        "2025-09-24",
-        "2025-09-25",
-        "2025-12-24",
-        "2025-12-31",
+      
       ];
     } else if (instrument_key === "NSE_INDEX|Nifty Fin Service") {
       expiry_dates = ["2025-07-31", "2025-08-28"];
