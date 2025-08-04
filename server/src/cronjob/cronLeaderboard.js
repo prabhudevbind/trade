@@ -13,7 +13,7 @@ function initializeSocketConnection() {
     socketClient.disconnect();
   }
 
-  socketClient = io("", {
+  socketClient = io("http://localhost:5001", {
     transports: ["websocket"],
     reconnection: true,
     reconnectionDelay: 500,
